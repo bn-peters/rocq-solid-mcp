@@ -1,0 +1,30 @@
+[project]
+name = "rocq-lsp-mcp-prototype"
+version = "0.1.0"
+description = "Prototype MCP server for cached Rocq compilation via rocq-lsp"
+license = "Apache-2.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastmcp>=3.2.0",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.25",
+]
+
+[project.scripts]
+rocq-lsp-mcp = "rocq_lsp_mcp.server:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
