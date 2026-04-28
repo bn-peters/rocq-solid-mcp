@@ -1,0 +1,25 @@
+{
+  "steps": [
+    {
+      "label": "compile imported library",
+      "action": "compile",
+      "file": "theories/Core.v"
+    },
+    {
+      "label": "compile client with import",
+      "action": "compile",
+      "file": "clients/UseCore.v"
+    },
+    {
+      "label": "append client error",
+      "action": "append",
+      "file": "clients/UseCore.v",
+      "text": "\nCheck missing_project_import_name.\n"
+    },
+    {
+      "label": "recompile edited client",
+      "action": "compile",
+      "file": "clients/UseCore.v"
+    }
+  ]
+}

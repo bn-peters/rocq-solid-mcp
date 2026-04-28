@@ -1,0 +1,232 @@
+from __future__ import annotations
+
+import difflib
+import json
+import shutil
+import subprocess
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from rocq_lsp_mcp.config import RocqLspConfig
+from rocq_lsp_mcp.manager import RocqLspManager
+from rocq_lsp_mcp.models import CompileResult, Diagnostic
+
+CASES_DIR = Path(__file__).parent / "cases"
+
+
+def scenario_cases() -> list[Path]:
+    return sorted(
+        path for path in CASES_DIR.iterdir() if (path / "scenario.json").is_file()
+    )
+
+
+async def run_case(case_dir: Path, tmp_path: Path, *, promote: bool) -> None:
+    scenario = _read_json(case_dir / "scenario.json")
+    project_root = tmp_path / "project"
+    shutil.copytree(case_dir / "project", project_root)
+    transcript = _run_setup(project_root, scenario.get("setup", []))
+
+    manager = RocqLspManager(
+        RocqLspConfig(
+            binary="coq-lsp",
+            timeout=30,
+            hard_timeout_grace=5,
+            max_errors=1000000,
+            workspace=None,
+        )
+    )
+    try:
+        transcript.extend(await _run_steps(manager, project_root, scenario["steps"]))
+    finally:
+        await manager.close()
+
+    _check_or_promote(case_dir / "expected.json", transcript, promote=promote)
+
+
+def _run_setup(project_root: Path, steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    transcript: list[dict[str, Any]] = []
+    for step in steps:
+        action = step["action"]
+        if action == "coqc":
+            _run_coqc(project_root, step)
+            transcript.append(_step_record(step))
+            continue
+
+        raise AssertionError(f"unknown e2e setup action: {action}")
+    return transcript
+
+
+def _run_coqc(project_root: Path, step: dict[str, Any]) -> None:
+    coqc = shutil.which("coqc")
+    if coqc is None:
+        pytest.skip("install coqc to run e2e scenarios with compiled dependencies")
+
+    file = step["file"]
+    try:
+        subprocess.run(
+            [coqc, *step.get("args", []), file],
+            cwd=project_root,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        output = "\n".join(part for part in (exc.stdout, exc.stderr) if part)
+        raise AssertionError(f"coqc failed for {file}\n{output}") from exc
+
+
+async def _run_steps(
+    manager: RocqLspManager,
+    project_root: Path,
+    steps: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    transcript: list[dict[str, Any]] = []
+    for step in steps:
+        action = step["action"]
+        file = step["file"]
+        path = project_root / file
+
+        if action == "append":
+            path.write_text(
+                path.read_text(encoding="utf-8") + step["text"],
+                encoding="utf-8",
+            )
+            transcript.append(_step_record(step))
+            continue
+
+        if action == "replace":
+            old = step["old"]
+            content = path.read_text(encoding="utf-8")
+            count = content.count(old)
+            if count != 1:
+                raise AssertionError(
+                    f"{file}: expected one occurrence of {old!r}, found {count}"
+                )
+            path.write_text(content.replace(old, step["new"], 1), encoding="utf-8")
+            transcript.append(_step_record(step))
+            continue
+
+        if action == "compile":
+            result = await manager.compile_file(str(path))
+            transcript.append(
+                {
+                    **_step_record(step),
+                    "result": _result_record(result, project_root),
+                }
+            )
+            continue
+
+        raise AssertionError(f"unknown e2e action: {action}")
+    return transcript
+
+
+def _step_record(step: dict[str, Any]) -> dict[str, Any]:
+    record = {
+        "step": step["label"],
+        "action": step["action"],
+    }
+    if "file" in step:
+        record["file"] = step["file"]
+    return record
+
+
+def _result_record(result: CompileResult, project_root: Path) -> dict[str, Any]:
+    record: dict[str, Any] = {
+        "status": result.status,
+        "workspace": _scrub_value(result.workspace, project_root),
+        "version": result.version,
+        "counts": {
+            "errors": result.error_count,
+            "warnings": result.warning_count,
+            "infos": result.info_count,
+        },
+        "diagnostics": [
+            _diagnostic_record(diagnostic, project_root)
+            for diagnostic in result.diagnostics
+        ],
+    }
+    if result.timed_out:
+        record["timed_out"] = True
+    if result.restarted:
+        record["restarted"] = True
+    if result.message is not None:
+        record["message"] = _scrub_value(result.message, project_root)
+    return record
+
+
+def _diagnostic_record(
+    diagnostic: Diagnostic,
+    project_root: Path,
+) -> dict[str, Any]:
+    record: dict[str, Any] = {
+        "severity": diagnostic.severity,
+        "message": diagnostic.message,
+        "range": _scrub_value(diagnostic.range, project_root),
+    }
+    if diagnostic.code is not None:
+        record["code"] = diagnostic.code
+    if diagnostic.source is not None:
+        record["source"] = diagnostic.source
+    if isinstance(diagnostic.data, dict) and isinstance(
+        diagnostic.data.get("sentenceRange"), dict
+    ):
+        record["sentence_range"] = _scrub_value(
+            diagnostic.data["sentenceRange"],
+            project_root,
+        )
+    if diagnostic.proof_state is not None:
+        record["proof_state"] = _scrub_value(diagnostic.proof_state, project_root)
+    return record
+
+
+def _scrub_value(value: Any, project_root: Path) -> Any:
+    if isinstance(value, str):
+        return value.replace(project_root.as_uri(), "file://$PROJECT").replace(
+            str(project_root),
+            "$PROJECT",
+        )
+    if isinstance(value, list):
+        return [_scrub_value(item, project_root) for item in value]
+    if isinstance(value, dict):
+        return {key: _scrub_value(item, project_root) for key, item in value.items()}
+    return value
+
+
+def _check_or_promote(
+    expected_path: Path,
+    actual: list[dict[str, Any]],
+    *,
+    promote: bool,
+) -> None:
+    actual_text = _json_text(actual)
+    if promote:
+        expected_path.write_text(actual_text, encoding="utf-8")
+        return
+
+    if not expected_path.exists():
+        pytest.fail(f"missing {expected_path}; run `make promote` to create it")
+
+    expected_text = expected_path.read_text(encoding="utf-8")
+    if expected_text == actual_text:
+        return
+
+    diff = "\n".join(
+        difflib.unified_diff(
+            expected_text.splitlines(),
+            actual_text.splitlines(),
+            fromfile=str(expected_path),
+            tofile="actual",
+            lineterm="",
+        )
+    )
+    pytest.fail(f"e2e transcript changed; run `make promote` if intended\n{diff}")
+
+
+def _read_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _json_text(value: Any) -> str:
+    return json.dumps(value, indent=2) + "\n"

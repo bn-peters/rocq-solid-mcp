@@ -1,0 +1,25 @@
+{
+  "steps": [
+    {
+      "label": "compile base file",
+      "action": "compile",
+      "file": "src/base.v"
+    },
+    {
+      "label": "compile modes file",
+      "action": "compile",
+      "file": "src/lang/modes.v"
+    },
+    {
+      "label": "append late errors",
+      "action": "append",
+      "file": "src/lang/modes.v",
+      "text": "\nCheck missing_late_multifile_name_1.\nCheck missing_late_multifile_name_2.\n"
+    },
+    {
+      "label": "recompile edited modes file",
+      "action": "compile",
+      "file": "src/lang/modes.v"
+    }
+  ]
+}

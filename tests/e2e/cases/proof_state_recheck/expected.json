@@ -1,0 +1,163 @@
+[
+  {
+    "step": "compile support file",
+    "action": "compile",
+    "file": "src/support.v",
+    "result": {
+      "status": "complete",
+      "workspace": "$PROJECT",
+      "version": 1,
+      "counts": {
+        "errors": 0,
+        "warnings": 0,
+        "infos": 0
+      },
+      "diagnostics": []
+    }
+  },
+  {
+    "step": "compile failing proof",
+    "action": "compile",
+    "file": "src/proof.v",
+    "result": {
+      "status": "complete",
+      "workspace": "$PROJECT",
+      "version": 1,
+      "counts": {
+        "errors": 2,
+        "warnings": 0,
+        "infos": 0
+      },
+      "diagnostics": [
+        {
+          "severity": 1,
+          "message": "Tactic failure.",
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 19
+            },
+            "end": {
+              "line": 0,
+              "character": 24
+            }
+          },
+          "sentence_range": {
+            "start": {
+              "line": 0,
+              "character": 19
+            },
+            "end": {
+              "line": 0,
+              "character": 24
+            }
+          },
+          "proof_state": {
+            "textDocument": {
+              "uri": "file://$PROJECT/src/proof.v",
+              "version": 1
+            },
+            "position": {
+              "line": 0,
+              "character": 19
+            },
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 19
+              },
+              "end": {
+                "line": 0,
+                "character": 24
+              }
+            },
+            "goals": {
+              "goals": [
+                {
+                  "name": null,
+                  "hyps": [],
+                  "ty": "0 = 0"
+                }
+              ],
+              "stack": [],
+              "bullet": null,
+              "shelf": [],
+              "given_up": []
+            },
+            "program": [],
+            "messages": [],
+            "error": "Tactic failure."
+          }
+        },
+        {
+          "severity": 1,
+          "message": " (in proof Unnamed_thm): Attempt to save an incomplete proof\n(there are remaining open goals).",
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 25
+            },
+            "end": {
+              "line": 0,
+              "character": 29
+            }
+          },
+          "sentence_range": {
+            "start": {
+              "line": 0,
+              "character": 25
+            },
+            "end": {
+              "line": 0,
+              "character": 29
+            }
+          },
+          "proof_state": {
+            "textDocument": {
+              "uri": "file://$PROJECT/src/proof.v",
+              "version": 1
+            },
+            "position": {
+              "line": 0,
+              "character": 25
+            },
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 25
+              },
+              "end": {
+                "line": 0,
+                "character": 29
+              }
+            },
+            "program": [],
+            "messages": [],
+            "error": " (in proof Unnamed_thm): Attempt to save an incomplete proof\n(there are remaining open goals)."
+          }
+        }
+      ]
+    }
+  },
+  {
+    "step": "fix proof tactic",
+    "action": "replace",
+    "file": "src/proof.v"
+  },
+  {
+    "step": "recompile fixed proof",
+    "action": "compile",
+    "file": "src/proof.v",
+    "result": {
+      "status": "complete",
+      "workspace": "$PROJECT",
+      "version": 2,
+      "counts": {
+        "errors": 0,
+        "warnings": 0,
+        "infos": 0
+      },
+      "diagnostics": []
+    }
+  }
+]

@@ -1,0 +1,92 @@
+[
+  {
+    "step": "compile dependency before lsp",
+    "action": "coqc",
+    "file": "theories/Base.v"
+  },
+  {
+    "step": "compile dependent client",
+    "action": "compile",
+    "file": "clients/UseBase.v",
+    "result": {
+      "status": "complete",
+      "workspace": "$PROJECT",
+      "version": 1,
+      "counts": {
+        "errors": 0,
+        "warnings": 0,
+        "infos": 0
+      },
+      "diagnostics": []
+    }
+  },
+  {
+    "step": "append dependent client error",
+    "action": "append",
+    "file": "clients/UseBase.v"
+  },
+  {
+    "step": "recompile edited dependent client",
+    "action": "compile",
+    "file": "clients/UseBase.v",
+    "result": {
+      "status": "complete",
+      "workspace": "$PROJECT",
+      "version": 2,
+      "counts": {
+        "errors": 1,
+        "warnings": 0,
+        "infos": 0
+      },
+      "diagnostics": [
+        {
+          "severity": 1,
+          "message": "The reference missing_interfile_dependency_name was not found in the current\nenvironment.",
+          "range": {
+            "start": {
+              "line": 7,
+              "character": 6
+            },
+            "end": {
+              "line": 7,
+              "character": 39
+            }
+          },
+          "sentence_range": {
+            "start": {
+              "line": 7,
+              "character": 0
+            },
+            "end": {
+              "line": 7,
+              "character": 40
+            }
+          },
+          "proof_state": {
+            "textDocument": {
+              "uri": "file://$PROJECT/clients/UseBase.v",
+              "version": 2
+            },
+            "position": {
+              "line": 7,
+              "character": 0
+            },
+            "range": {
+              "start": {
+                "line": 7,
+                "character": 0
+              },
+              "end": {
+                "line": 7,
+                "character": 40
+              }
+            },
+            "program": [],
+            "messages": [],
+            "error": "The reference\nmissing_interfile_dependency_name\nwas not found\nin the current\nenvironment."
+          }
+        }
+      ]
+    }
+  }
+]

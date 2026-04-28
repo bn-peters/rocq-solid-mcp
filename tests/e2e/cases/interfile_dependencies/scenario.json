@@ -1,0 +1,28 @@
+{
+  "setup": [
+    {
+      "label": "compile dependency before lsp",
+      "action": "coqc",
+      "file": "theories/Base.v",
+      "args": ["-Q", "theories", "dependency_demo"]
+    }
+  ],
+  "steps": [
+    {
+      "label": "compile dependent client",
+      "action": "compile",
+      "file": "clients/UseBase.v"
+    },
+    {
+      "label": "append dependent client error",
+      "action": "append",
+      "file": "clients/UseBase.v",
+      "text": "\nCheck missing_interfile_dependency_name.\n"
+    },
+    {
+      "label": "recompile edited dependent client",
+      "action": "compile",
+      "file": "clients/UseBase.v"
+    }
+  ]
+}

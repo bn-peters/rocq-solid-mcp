@@ -1,0 +1,26 @@
+{
+  "steps": [
+    {
+      "label": "compile support file",
+      "action": "compile",
+      "file": "src/support.v"
+    },
+    {
+      "label": "compile failing proof",
+      "action": "compile",
+      "file": "src/proof.v"
+    },
+    {
+      "label": "fix proof tactic",
+      "action": "replace",
+      "file": "src/proof.v",
+      "old": "fail.",
+      "new": "reflexivity."
+    },
+    {
+      "label": "recompile fixed proof",
+      "action": "compile",
+      "file": "src/proof.v"
+    }
+  ]
+}

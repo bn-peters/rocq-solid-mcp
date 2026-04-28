@@ -24,10 +24,25 @@ The server exposes one MCP tool:
 
 ## Tests
 
-Tests that require a real `coq-lsp` are skipped unless enabled:
+Run the full suite with:
 
 ```bash
 make test
 ```
+
+Run narrower suites by directory:
+
+```bash
+make unit
+make integration
+make e2e
+```
+
+These targets run tests in parallel with `pytest-xdist` by default. Override the
+worker count with a Make variable, for example `make test PYTEST_WORKERS=4`.
+
+Integration and e2e tests skip themselves when `coq-lsp` is unavailable.
+Use `make promote` to refresh promoted e2e transcripts after intentional output
+changes; promotion runs serially because it rewrites golden files.
 
 Use `make clean` to remove test artifacts.

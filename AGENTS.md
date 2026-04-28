@@ -75,11 +75,19 @@ Run commands from this directory.
 
 ```bash
 make test
+make unit
+make integration
+make e2e
+make promote
 make clean
 ```
 
-`make test` runs the whole pytest suite with integration and end-to-end gates
-enabled. Tests that need a real `coq-lsp` skip themselves if it is unavailable.
+`make test` runs the whole pytest suite in parallel via `pytest-xdist`. Select
+narrower suites by directory via `make unit`, `make integration`, or `make e2e`;
+do not use environment variables to select test classes. Override parallelism
+with a Make variable such as `make test PYTEST_WORKERS=4`. Tests that need a
+real `coq-lsp` skip themselves if it is unavailable. `make promote` refreshes
+promoted e2e transcripts and runs serially because it rewrites golden files.
 `make clean` removes pytest caches, Python bytecode caches, and egg-info
 directories while preserving `.venv/`.
 
@@ -88,17 +96,17 @@ The local virtual environment is expected at `.venv/`. Use
 
 ## Test Suite
 
-- `tests/test_manager.py` uses fakes to cover manager behavior, versioning,
+- `tests/unit/test_manager.py` uses fakes to cover manager behavior, versioning,
   workspace inference, language IDs, and hard-timeout reset logic.
-- `tests/test_pretty.py` covers readable rendering of rocq-lsp Pp structures
+- `tests/unit/test_pretty.py` covers readable rendering of rocq-lsp Pp structures
   and proof-state normalization.
-- `tests/test_integration.py` talks to a real `coq-lsp`. It checks clean files,
+- `tests/integration/test_integration.py` talks to a real `coq-lsp`. It checks clean files,
   multiple errors, and file-change behavior where a failing proof
   `Goal 0 = 0. Proof. fail. Qed.` reports proof state, then recompiles cleanly
   after changing `fail` to `reflexivity`.
-- `tests/test_e2e_multifile_project.py` creates a temporary multi-file Rocq
-  project, compiles it, appends late errors, and verifies the cached LSP
-  session reports the new errors.
+- `tests/e2e/test_scenarios.py` runs promoted scenario fixtures that copy whole
+  Rocq projects, compile files through one cached manager, edit files, and check
+  concise agent-facing transcripts.
 
 When changing output shape, update exact-output tests rather than weakening
 assertions. The MCP output should be useful to agents and humans; raw Rocq

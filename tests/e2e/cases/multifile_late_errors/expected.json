@@ -1,0 +1,150 @@
+[
+  {
+    "step": "compile base file",
+    "action": "compile",
+    "file": "src/base.v",
+    "result": {
+      "status": "complete",
+      "workspace": "$PROJECT",
+      "version": 1,
+      "counts": {
+        "errors": 0,
+        "warnings": 0,
+        "infos": 0
+      },
+      "diagnostics": []
+    }
+  },
+  {
+    "step": "compile modes file",
+    "action": "compile",
+    "file": "src/lang/modes.v",
+    "result": {
+      "status": "complete",
+      "workspace": "$PROJECT",
+      "version": 1,
+      "counts": {
+        "errors": 0,
+        "warnings": 0,
+        "infos": 0
+      },
+      "diagnostics": []
+    }
+  },
+  {
+    "step": "append late errors",
+    "action": "append",
+    "file": "src/lang/modes.v"
+  },
+  {
+    "step": "recompile edited modes file",
+    "action": "compile",
+    "file": "src/lang/modes.v",
+    "result": {
+      "status": "complete",
+      "workspace": "$PROJECT",
+      "version": 2,
+      "counts": {
+        "errors": 2,
+        "warnings": 0,
+        "infos": 0
+      },
+      "diagnostics": [
+        {
+          "severity": 1,
+          "message": "The reference missing_late_multifile_name_1 was not found in the current\nenvironment.",
+          "range": {
+            "start": {
+              "line": 24,
+              "character": 6
+            },
+            "end": {
+              "line": 24,
+              "character": 35
+            }
+          },
+          "sentence_range": {
+            "start": {
+              "line": 24,
+              "character": 0
+            },
+            "end": {
+              "line": 24,
+              "character": 36
+            }
+          },
+          "proof_state": {
+            "textDocument": {
+              "uri": "file://$PROJECT/src/lang/modes.v",
+              "version": 2
+            },
+            "position": {
+              "line": 24,
+              "character": 0
+            },
+            "range": {
+              "start": {
+                "line": 24,
+                "character": 0
+              },
+              "end": {
+                "line": 24,
+                "character": 36
+              }
+            },
+            "program": [],
+            "messages": [],
+            "error": "The reference\nmissing_late_multifile_name_1\nwas not found\nin the current\nenvironment."
+          }
+        },
+        {
+          "severity": 1,
+          "message": "The reference missing_late_multifile_name_2 was not found in the current\nenvironment.",
+          "range": {
+            "start": {
+              "line": 25,
+              "character": 6
+            },
+            "end": {
+              "line": 25,
+              "character": 35
+            }
+          },
+          "sentence_range": {
+            "start": {
+              "line": 25,
+              "character": 0
+            },
+            "end": {
+              "line": 25,
+              "character": 36
+            }
+          },
+          "proof_state": {
+            "textDocument": {
+              "uri": "file://$PROJECT/src/lang/modes.v",
+              "version": 2
+            },
+            "position": {
+              "line": 25,
+              "character": 0
+            },
+            "range": {
+              "start": {
+                "line": 25,
+                "character": 0
+              },
+              "end": {
+                "line": 25,
+                "character": 36
+              }
+            },
+            "program": [],
+            "messages": [],
+            "error": "The reference\nmissing_late_multifile_name_2\nwas not found\nin the current\nenvironment."
+          }
+        }
+      ]
+    }
+  }
+]

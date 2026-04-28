@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import shutil
 from pathlib import Path
 
@@ -12,8 +11,8 @@ from rocq_lsp_mcp.manager import RocqLspManager
 
 
 pytestmark = pytest.mark.skipif(
-    not os.environ.get("RUN_ROCQ_LSP_INTEGRATION") or shutil.which("coq-lsp") is None,
-    reason="set RUN_ROCQ_LSP_INTEGRATION=1 and install coq-lsp to run",
+    shutil.which("coq-lsp") is None,
+    reason="install coq-lsp to run integration tests",
 )
 
 
