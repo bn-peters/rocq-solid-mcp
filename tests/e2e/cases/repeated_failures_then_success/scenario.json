@@ -1,0 +1,9 @@
+{
+  "steps": [
+    {
+      "label": "compile repeated failing tactics",
+      "action": "compile",
+      "file": "src/repeated_failures.v"
+    }
+  ]
+}

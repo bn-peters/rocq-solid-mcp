@@ -11,13 +11,13 @@
       "file": "src/lang/modes.v"
     },
     {
-      "label": "append late errors",
+      "label": "append late tactic failures",
       "action": "append",
       "file": "src/lang/modes.v",
-      "text": "\nCheck missing_late_multifile_name_1.\nCheck missing_late_multifile_name_2.\n"
+      "text": "\nLemma shared_rank_wrong : Modes.mode_rank Modes.Shared = 1.\nProof. reflexivity. Qed.\n\nLemma capsule_can_promote_wrong : Modes.can_promote Modes.Capsule = true.\nProof. reflexivity. Qed.\n"
     },
     {
-      "label": "recompile edited modes file",
+      "label": "recompile modes with tactic failures",
       "action": "compile",
       "file": "src/lang/modes.v"
     }

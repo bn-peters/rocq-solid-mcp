@@ -11,7 +11,7 @@
       "file": "clients/UseCore.v"
     },
     {
-      "label": "append client error",
+      "label": "append missing-name check",
       "action": "append",
       "file": "clients/UseCore.v",
       "text": "\nCheck missing_project_import_name.\n"

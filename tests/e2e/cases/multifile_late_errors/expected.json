@@ -32,12 +32,12 @@
     }
   },
   {
-    "step": "append late errors",
+    "step": "append late tactic failures",
     "action": "append",
     "file": "src/lang/modes.v"
   },
   {
-    "step": "recompile edited modes file",
+    "step": "recompile modes with tactic failures",
     "action": "compile",
     "file": "src/lang/modes.v",
     "result": {
@@ -45,32 +45,32 @@
       "workspace": "$PROJECT",
       "version": 2,
       "counts": {
-        "errors": 2,
+        "errors": 4,
         "warnings": 0,
         "infos": 0
       },
       "diagnostics": [
         {
           "severity": 1,
-          "message": "The reference missing_late_multifile_name_1 was not found in the current\nenvironment.",
+          "message": "Unable to unify \"1\" with \"Modes.mode_rank Modes.Shared\".",
           "range": {
             "start": {
-              "line": 24,
-              "character": 6
+              "line": 25,
+              "character": 7
             },
             "end": {
-              "line": 24,
-              "character": 35
+              "line": 25,
+              "character": 18
             }
           },
           "sentence_range": {
             "start": {
-              "line": 24,
-              "character": 0
+              "line": 25,
+              "character": 7
             },
             "end": {
-              "line": 24,
-              "character": 36
+              "line": 25,
+              "character": 19
             }
           },
           "proof_state": {
@@ -79,45 +79,58 @@
               "version": 2
             },
             "position": {
-              "line": 24,
-              "character": 0
+              "line": 25,
+              "character": 7
             },
             "range": {
               "start": {
-                "line": 24,
-                "character": 0
+                "line": 25,
+                "character": 7
               },
               "end": {
-                "line": 24,
-                "character": 36
+                "line": 25,
+                "character": 19
               }
+            },
+            "goals": {
+              "goals": [
+                {
+                  "name": null,
+                  "hyps": [],
+                  "ty": "Modes.mode_rank Modes.Shared = 1"
+                }
+              ],
+              "stack": [],
+              "bullet": null,
+              "shelf": [],
+              "given_up": []
             },
             "program": [],
             "messages": [],
-            "error": "The reference\nmissing_late_multifile_name_1\nwas not found\nin the current\nenvironment."
+            "error": "Unable to unify\n \"1\"\nwith\n \"Modes.mode_rank\nModes.Shared\"."
           }
         },
         {
           "severity": 1,
-          "message": "The reference missing_late_multifile_name_2 was not found in the current\nenvironment.",
+          "message": " (in proof shared_rank_wrong): Attempt to save an incomplete proof\n(there are remaining open goals).",
           "range": {
             "start": {
               "line": 25,
-              "character": 6
+              "character": 20
             },
             "end": {
               "line": 25,
-              "character": 35
+              "character": 24
             }
           },
           "sentence_range": {
             "start": {
               "line": 25,
-              "character": 0
+              "character": 20
             },
             "end": {
               "line": 25,
-              "character": 36
+              "character": 24
             }
           },
           "proof_state": {
@@ -127,21 +140,128 @@
             },
             "position": {
               "line": 25,
-              "character": 0
+              "character": 20
             },
             "range": {
               "start": {
                 "line": 25,
-                "character": 0
+                "character": 20
               },
               "end": {
                 "line": 25,
-                "character": 36
+                "character": 24
               }
             },
             "program": [],
             "messages": [],
-            "error": "The reference\nmissing_late_multifile_name_2\nwas not found\nin the current\nenvironment."
+            "error": " (in proof shared_rank_wrong): Attempt to save an incomplete proof\n(there are remaining open goals)."
+          }
+        },
+        {
+          "severity": 1,
+          "message": "Unable to unify \"true\" with \"Modes.can_promote Modes.Capsule\".",
+          "range": {
+            "start": {
+              "line": 28,
+              "character": 7
+            },
+            "end": {
+              "line": 28,
+              "character": 18
+            }
+          },
+          "sentence_range": {
+            "start": {
+              "line": 28,
+              "character": 7
+            },
+            "end": {
+              "line": 28,
+              "character": 19
+            }
+          },
+          "proof_state": {
+            "textDocument": {
+              "uri": "file://$PROJECT/src/lang/modes.v",
+              "version": 2
+            },
+            "position": {
+              "line": 28,
+              "character": 7
+            },
+            "range": {
+              "start": {
+                "line": 28,
+                "character": 7
+              },
+              "end": {
+                "line": 28,
+                "character": 19
+              }
+            },
+            "goals": {
+              "goals": [
+                {
+                  "name": null,
+                  "hyps": [],
+                  "ty": "Modes.can_promote Modes.Capsule = true"
+                }
+              ],
+              "stack": [],
+              "bullet": null,
+              "shelf": [],
+              "given_up": []
+            },
+            "program": [],
+            "messages": [],
+            "error": "Unable to unify\n \"true\"\nwith\n \"Modes.can_promote\nModes.Capsule\"."
+          }
+        },
+        {
+          "severity": 1,
+          "message": " (in proof capsule_can_promote_wrong): Attempt to save an incomplete proof\n(there are remaining open goals).",
+          "range": {
+            "start": {
+              "line": 28,
+              "character": 20
+            },
+            "end": {
+              "line": 28,
+              "character": 24
+            }
+          },
+          "sentence_range": {
+            "start": {
+              "line": 28,
+              "character": 20
+            },
+            "end": {
+              "line": 28,
+              "character": 24
+            }
+          },
+          "proof_state": {
+            "textDocument": {
+              "uri": "file://$PROJECT/src/lang/modes.v",
+              "version": 2
+            },
+            "position": {
+              "line": 28,
+              "character": 20
+            },
+            "range": {
+              "start": {
+                "line": 28,
+                "character": 20
+              },
+              "end": {
+                "line": 28,
+                "character": 24
+              }
+            },
+            "program": [],
+            "messages": [],
+            "error": " (in proof capsule_can_promote_wrong): Attempt to save an incomplete proof\n(there are remaining open goals)."
           }
         }
       ]

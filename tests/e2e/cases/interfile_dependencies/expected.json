@@ -21,12 +21,12 @@
     }
   },
   {
-    "step": "append dependent client error",
+    "step": "append dependent tactic failure",
     "action": "append",
     "file": "clients/UseBase.v"
   },
   {
-    "step": "recompile edited dependent client",
+    "step": "recompile dependent tactic failure",
     "action": "compile",
     "file": "clients/UseBase.v",
     "result": {
@@ -34,32 +34,32 @@
       "workspace": "$PROJECT",
       "version": 2,
       "counts": {
-        "errors": 1,
+        "errors": 2,
         "warnings": 0,
         "infos": 0
       },
       "diagnostics": [
         {
           "severity": 1,
-          "message": "The reference missing_interfile_dependency_name was not found in the current\nenvironment.",
+          "message": "Unable to unify \"40\" with \"imported_value\".",
           "range": {
             "start": {
-              "line": 7,
-              "character": 6
+              "line": 8,
+              "character": 7
             },
             "end": {
-              "line": 7,
-              "character": 39
+              "line": 8,
+              "character": 18
             }
           },
           "sentence_range": {
             "start": {
-              "line": 7,
-              "character": 0
+              "line": 8,
+              "character": 7
             },
             "end": {
-              "line": 7,
-              "character": 40
+              "line": 8,
+              "character": 19
             }
           },
           "proof_state": {
@@ -68,22 +68,82 @@
               "version": 2
             },
             "position": {
-              "line": 7,
-              "character": 0
+              "line": 8,
+              "character": 7
             },
             "range": {
               "start": {
-                "line": 7,
-                "character": 0
+                "line": 8,
+                "character": 7
               },
               "end": {
-                "line": 7,
-                "character": 40
+                "line": 8,
+                "character": 19
+              }
+            },
+            "goals": {
+              "goals": [
+                {
+                  "name": null,
+                  "hyps": [],
+                  "ty": "imported_value = 40"
+                }
+              ],
+              "stack": [],
+              "bullet": null,
+              "shelf": [],
+              "given_up": []
+            },
+            "program": [],
+            "messages": [],
+            "error": "Unable to unify\n \"40\"\nwith\n \"imported_value\"."
+          }
+        },
+        {
+          "severity": 1,
+          "message": " (in proof imported_value_wrong): Attempt to save an incomplete proof\n(there are remaining open goals).",
+          "range": {
+            "start": {
+              "line": 8,
+              "character": 20
+            },
+            "end": {
+              "line": 8,
+              "character": 24
+            }
+          },
+          "sentence_range": {
+            "start": {
+              "line": 8,
+              "character": 20
+            },
+            "end": {
+              "line": 8,
+              "character": 24
+            }
+          },
+          "proof_state": {
+            "textDocument": {
+              "uri": "file://$PROJECT/clients/UseBase.v",
+              "version": 2
+            },
+            "position": {
+              "line": 8,
+              "character": 20
+            },
+            "range": {
+              "start": {
+                "line": 8,
+                "character": 20
+              },
+              "end": {
+                "line": 8,
+                "character": 24
               }
             },
             "program": [],
             "messages": [],
-            "error": "The reference\nmissing_interfile_dependency_name\nwas not found\nin the current\nenvironment."
+            "error": " (in proof imported_value_wrong): Attempt to save an incomplete proof\n(there are remaining open goals)."
           }
         }
       ]

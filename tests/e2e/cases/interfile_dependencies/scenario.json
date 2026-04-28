@@ -14,13 +14,13 @@
       "file": "clients/UseBase.v"
     },
     {
-      "label": "append dependent client error",
+      "label": "append dependent tactic failure",
       "action": "append",
       "file": "clients/UseBase.v",
-      "text": "\nCheck missing_interfile_dependency_name.\n"
+      "text": "\nLemma imported_value_wrong : imported_value = 40.\nProof. reflexivity. Qed.\n"
     },
     {
-      "label": "recompile edited dependent client",
+      "label": "recompile dependent tactic failure",
       "action": "compile",
       "file": "clients/UseBase.v"
     }

@@ -32,7 +32,7 @@
     }
   },
   {
-    "step": "append client error",
+    "step": "append missing-name check",
     "action": "append",
     "file": "clients/UseCore.v"
   },

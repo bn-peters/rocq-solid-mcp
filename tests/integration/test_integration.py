@@ -39,7 +39,7 @@ async def test_valid_file_compiles_with_zero_errors(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_file_with_multiple_errors_reports_them(tmp_path: Path) -> None:
+async def test_missing_variable_names_report_multiple_errors(tmp_path: Path) -> None:
     source = tmp_path / "Bad.v"
     source.write_text(
         "Check does_not_exist_1.\nCheck does_not_exist_2.\n",
