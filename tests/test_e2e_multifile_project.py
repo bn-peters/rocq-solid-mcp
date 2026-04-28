@@ -9,20 +9,15 @@ import pytest
 from rocq_lsp_mcp.config import RocqLspConfig
 from rocq_lsp_mcp.manager import RocqLspManager
 
-WORKSPACE_ROOT = Path(__file__).resolve().parents[2]
-OCAML_MODES_REPO = WORKSPACE_ROOT / "ocaml-modes"
-
 pytestmark = pytest.mark.skipif(
-    not os.environ.get("RUN_ROCQ_LSP_E2E")
-    or shutil.which("coq-lsp") is None
-    or not OCAML_MODES_REPO.exists(),
-    reason="set RUN_ROCQ_LSP_E2E=1, install coq-lsp, and keep ocaml-modes/ present",
+    not os.environ.get("RUN_ROCQ_LSP_E2E") or shutil.which("coq-lsp") is None,
+    reason="set RUN_ROCQ_LSP_E2E=1 and install coq-lsp to run",
 )
 
 
-def write_simplified_ocaml_modes_project(root: Path) -> tuple[Path, Path]:
+def write_multifile_project(root: Path) -> tuple[Path, Path]:
     (root / "src/lang").mkdir(parents=True)
-    (root / "_CoqProject").write_text("-Q src ocaml_modes\n", encoding="utf-8")
+    (root / "_CoqProject").write_text("-Q src multifile_demo\n", encoding="utf-8")
 
     base = root / "src/base.v"
     base.write_text(
@@ -69,8 +64,8 @@ End Modes.
 
 
 @pytest.mark.asyncio
-async def test_simplified_ocaml_modes_multifile_late_edit(tmp_path: Path) -> None:
-    base, modes = write_simplified_ocaml_modes_project(tmp_path)
+async def test_multifile_project_late_edit_reports_new_errors(tmp_path: Path) -> None:
+    base, modes = write_multifile_project(tmp_path)
     manager = RocqLspManager(
         RocqLspConfig(
             binary="coq-lsp",
@@ -91,8 +86,8 @@ async def test_simplified_ocaml_modes_multifile_late_edit(tmp_path: Path) -> Non
 
         modes.write_text(
             modes.read_text(encoding="utf-8")
-            + "\nCheck missing_late_ocaml_modes_name_1.\n"
-            + "Check missing_late_ocaml_modes_name_2.\n",
+            + "\nCheck missing_late_multifile_name_1.\n"
+            + "Check missing_late_multifile_name_2.\n",
             encoding="utf-8",
         )
 
@@ -104,5 +99,5 @@ async def test_simplified_ocaml_modes_multifile_late_edit(tmp_path: Path) -> Non
     assert broken_modes_result.status == "complete"
     assert broken_modes_result.version == 2
     assert broken_modes_result.error_count >= 2
-    assert "missing_late_ocaml_modes_name_1" in messages
-    assert "missing_late_ocaml_modes_name_2" in messages
+    assert "missing_late_multifile_name_1" in messages
+    assert "missing_late_multifile_name_2" in messages

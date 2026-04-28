@@ -27,8 +27,7 @@ The server exposes one MCP tool:
 Tests that require a real `coq-lsp` are skipped unless enabled:
 
 ```bash
-RUN_ROCQ_LSP_INTEGRATION=1 uv run pytest tests/test_integration.py
-RUN_ROCQ_LSP_E2E=1 uv run pytest tests/test_e2e_ocaml_modes.py
+make test
 ```
 
-Security controls are intentionally minimal for this prototype.
+Use `make clean` to remove test artifacts.

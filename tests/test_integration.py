@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 from pathlib import Path
@@ -101,6 +102,7 @@ async def test_file_change_rechecks_and_reports_failure_proof_state(
     assert failing.error_count == 2
     assert failing.warning_count == 0
     assert failing.info_count == 0
+    assert "Pp_" not in json.dumps(failing.model_dump())
     assert [error.model_dump() for error in failing.errors] == [
         _expected_tactic_failure(source.as_uri()),
         _expected_incomplete_qed(source.as_uri()),
@@ -145,7 +147,7 @@ def _expected_tactic_failure(uri: str) -> dict[str, object]:
             "goals": {
                 "goals": [
                     {
-                        "info": {"evar": ["Ser_Evar", 2], "name": None},
+                        "name": None,
                         "hyps": [],
                         "ty": "0 = 0",
                     }
@@ -157,7 +159,7 @@ def _expected_tactic_failure(uri: str) -> dict[str, object]:
             },
             "program": [],
             "messages": [],
-            "error": ["Pp_glue", [["Pp_string", "Tactic failure."]]],
+            "error": "Tactic failure.",
         },
         "raw": {
             "range": range_,
@@ -187,17 +189,7 @@ def _expected_incomplete_qed(uri: str) -> dict[str, object]:
             "range": range_,
             "program": [],
             "messages": [],
-            "error": [
-                "Pp_glue",
-                [
-                    [
-                        "Pp_string",
-                        " (in proof Unnamed_thm): Attempt to save an incomplete proof",
-                    ],
-                    ["Pp_print_break", 1, 0],
-                    ["Pp_string", "(there are remaining open goals)."],
-                ],
-            ],
+            "error": message,
         },
         "raw": {
             "range": range_,

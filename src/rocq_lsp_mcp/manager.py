@@ -9,6 +9,7 @@ from typing import Any
 
 from .config import RocqLspConfig, load_config
 from .models import CompileResult, Diagnostic
+from .pretty import normalize_proof_state
 from .rocq_client import (
     RocqLspClient,
     RocqLspHardTimeout,
@@ -230,7 +231,9 @@ class RocqLspManager:
             goals = span.get("goals")
             range_ = span.get("range")
             if goals is not None and isinstance(range_, dict):
-                states[RocqLspManager._range_key(range_)] = goals
+                states[RocqLspManager._range_key(range_)] = normalize_proof_state(
+                    goals
+                )
         return states
 
     @staticmethod
