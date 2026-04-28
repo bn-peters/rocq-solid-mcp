@@ -1,5 +1,7 @@
 # rocq-lsp-mcp-prototype Guide
 
+It is the duty of the agent to keep AGENTS.md and README.md up to date.
+
 This package is a Python MCP prototype for compiling Rocq files through a
 persistent `coq-lsp` session. It returns structured diagnostics and, when
 available, proof-state context for the sentence that produced an error.
