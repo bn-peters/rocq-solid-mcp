@@ -9,12 +9,10 @@ from typing import Any
 
 from .config import RocqLspConfig, bounded_overall_timeout_seconds, load_config
 from .models import (
-    DEFAULT_MESSAGE_LIMIT,
     CommandResult,
     CompileResult,
-    bounded_message_limit,
+    TimeoutContext,
     command_location,
-    location_string,
 )
 from .pipeline import build_diagnostics
 from .rocq_client import (
@@ -55,11 +53,9 @@ class RocqLspManager:
     async def compile_file(
         self,
         file: str,
-        message_limit: int | None = DEFAULT_MESSAGE_LIMIT,
         command_timeout_seconds: float | None = None,
         overall_timeout_seconds: float | None = None,
     ) -> CompileResult:
-        message_limit = bounded_message_limit(message_limit)
         command_timeout = self._effective_command_timeout(command_timeout_seconds)
         overall_timeout = self._effective_overall_timeout(overall_timeout_seconds)
         path = self._resolve_file(file)
@@ -72,7 +68,6 @@ class RocqLspManager:
                 version=None,
                 completed=None,
                 diagnostics=[],
-                message_limit=message_limit,
                 message=f"File does not exist: {path}",
             )
 
@@ -82,7 +77,6 @@ class RocqLspManager:
             return await self._compile_with_session(
                 session,
                 path,
-                message_limit,
                 command_timeout,
                 overall_timeout,
             )
@@ -159,7 +153,6 @@ class RocqLspManager:
         self,
         session: RocqLspSession,
         path: Path,
-        message_limit: int,
         command_timeout: float | None,
         overall_timeout: float,
     ) -> CompileResult:
@@ -178,7 +171,6 @@ class RocqLspManager:
                 version=version,
                 completed=None,
                 diagnostics=[],
-                message_limit=message_limit,
                 message=str(exc),
             )
         session.notifications.clear(uri, version)
@@ -213,10 +205,13 @@ class RocqLspManager:
             )
             timeout_context = None
             if request_timed_out:
-                timeout_context = self._timeout_context(
+                timeout_context = TimeoutContext.from_manager_state(
                     content=content,
                     document=completed_doc,
                     progress=session.notifications.latest_file_progress(uri, version),
+                    cancel_grace_seconds=(
+                        self.config.timeout_policy.cancel_grace_seconds
+                    ),
                     timeout_kind=get_document_result.timeout_kind or "request",
                     request_timeout_seconds=overall_timeout,
                     command_timeout_seconds=(
@@ -234,7 +229,6 @@ class RocqLspManager:
                 version=version,
                 completed=self._completed_only(completed_doc),
                 diagnostics=diagnostics,
-                message_limit=message_limit,
                 timed_out=request_timed_out,
                 timeout_context=timeout_context,
             )
@@ -243,10 +237,11 @@ class RocqLspManager:
                 uri, version
             )
             diagnostics = build_diagnostics(raw_diagnostics, None)
-            timeout_context = self._timeout_context(
+            timeout_context = TimeoutContext.from_manager_state(
                 content=content,
                 document=None,
                 progress=session.notifications.latest_file_progress(uri, version),
+                cancel_grace_seconds=self.config.timeout_policy.cancel_grace_seconds,
                 timeout_kind=exc.timeout_kind,
                 request_timeout_seconds=overall_timeout,
                 command_timeout_seconds=(
@@ -263,7 +258,6 @@ class RocqLspManager:
                 version=version,
                 completed=None,
                 diagnostics=diagnostics,
-                message_limit=message_limit,
                 timed_out=True,
                 restarted=True,
                 timeout_context=timeout_context,
@@ -282,7 +276,6 @@ class RocqLspManager:
                 version=version,
                 completed=None,
                 diagnostics=diagnostics,
-                message_limit=message_limit,
                 message=str(exc.error),
             )
         except Exception as exc:
@@ -298,7 +291,6 @@ class RocqLspManager:
                 version=version,
                 completed=None,
                 diagnostics=diagnostics,
-                message_limit=message_limit,
                 message=str(exc),
             )
 
@@ -557,105 +549,6 @@ class RocqLspManager:
         completed = document.get("completed")
         return completed if isinstance(completed, dict) else None
 
-    def _timeout_context(
-        self,
-        *,
-        content: str,
-        document: dict[str, Any] | None,
-        progress: dict[str, Any] | None,
-        timeout_kind: str = "request",
-        request_timeout_seconds: float | None = None,
-        command_timeout_seconds: float | None = None,
-        timed_out_range: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        completed = self._completed_only(document) if document else None
-        completed_range = completed.get("range") if completed else None
-        completed_end = (
-            self._range_end(completed_range) if isinstance(completed_range, dict) else None
-        )
-        processing_range = self._latest_processing_range(progress)
-        progress_start = (
-            self._range_start(processing_range)
-            if isinstance(processing_range, dict)
-            else None
-        )
-        checked_until = completed_end or progress_start
-
-        context: dict[str, Any] = {
-            "operation": "coq/getDocument",
-            "timeout_kind": timeout_kind,
-            "request_timeout_seconds": (
-                bounded_overall_timeout_seconds(request_timeout_seconds)
-                if request_timeout_seconds is not None
-                else bounded_overall_timeout_seconds(
-                    self.config.timeout_policy.request_seconds
-                )
-            ),
-            "cancel_grace_seconds": self.config.timeout_policy.cancel_grace_seconds,
-            "checked_until": self._position_string(checked_until),
-            "latest_processing_range": location_string(processing_range),
-            "next_unchecked": self._next_unchecked_preview(content, checked_until),
-        }
-        if command_timeout_seconds is not None:
-            context["command_timeout_seconds"] = command_timeout_seconds
-        if timed_out_range is not None:
-            context["timed_out_range"] = location_string(timed_out_range)
-            context["timed_out_command"] = self._source_preview_for_range(
-                content, timed_out_range
-            )
-        return context
-
-    @staticmethod
-    def _source_preview_for_range(
-        content: str, range_: dict[str, Any]
-    ) -> dict[str, Any] | None:
-        return RocqLspManager._next_unchecked_preview(
-            content, RocqLspManager._range_start(range_)
-        )
-
-    @staticmethod
-    def _latest_processing_range(progress: Any) -> dict[str, Any] | None:
-        if not isinstance(progress, dict):
-            return None
-        processing = progress.get("processing")
-        if not isinstance(processing, list):
-            return None
-        for item in processing:
-            if not isinstance(item, dict):
-                continue
-            range_ = item.get("range")
-            if isinstance(range_, dict):
-                return range_
-        return None
-
-    @staticmethod
-    def _next_unchecked_preview(
-        content: str, position: dict[str, int] | None
-    ) -> dict[str, Any] | None:
-        if position is None:
-            return None
-
-        line_number = position["line"]
-        character = position["character"]
-        lines = content.splitlines()
-        for current_line_number in range(line_number, len(lines)):
-            line = lines[current_line_number]
-            start = character if current_line_number == line_number else 0
-            start = max(0, min(start, len(line)))
-            for index in range(start, len(line)):
-                if not line[index].isspace():
-                    return {
-                        "location": f"{current_line_number + 1}:{index + 1}",
-                        "line": RocqLspManager._truncate_preview_line(line.strip()),
-                    }
-        return None
-
-    @staticmethod
-    def _truncate_preview_line(line: str, limit: int = 160) -> str:
-        if len(line) <= limit:
-            return line
-        return f"{line[: limit - 3]}..."
-
     @staticmethod
     def _needs_incomplete_proof_goal_request(diagnostic: Any) -> bool:
         if not isinstance(diagnostic, dict) or diagnostic.get("severity") != 1:
@@ -686,23 +579,6 @@ class RocqLspManager:
         if isinstance(line, int) and isinstance(character, int):
             return {"line": line, "character": character}
         return None
-
-    @staticmethod
-    def _range_end(range_: dict[str, Any]) -> dict[str, int] | None:
-        end = range_.get("end")
-        if not isinstance(end, dict):
-            return None
-        line = end.get("line")
-        character = end.get("character")
-        if isinstance(line, int) and isinstance(character, int):
-            return {"line": line, "character": character}
-        return None
-
-    @staticmethod
-    def _position_string(position: dict[str, int] | None) -> str | None:
-        if position is None:
-            return None
-        return f"{position['line'] + 1}:{position['character'] + 1}"
 
     @staticmethod
     def _range_key(range_: dict[str, Any]) -> str:

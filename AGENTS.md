@@ -17,6 +17,7 @@ returns compact feedback output for the requested command.
   command_timeout_seconds: float | None = None)` and
   `rocq_lsp_run_command(file: str, command: str, line: int, character: int = 1,
   overall_timeout_seconds: float = 60)`.
+  Tool handlers render internal result models before returning MCP output.
 - `src/rocq_lsp_mcp/manager.py` is the orchestration layer. It resolves files,
   infers workspaces from `_RocqProject` or `_CoqProject`, keeps cached
   sessions per workspace, evicts idle sessions, reads files, routes compile and
@@ -32,10 +33,9 @@ returns compact feedback output for the requested command.
   timeout watchdogs, and lets callers wait briefly for diagnostics or execution
   changes for a requested document version.
 - `src/rocq_lsp_mcp/pipeline.py` normalizes raw diagnostics into compact
-  agent-facing `Diagnostic` models. It attaches proof states by matching
+  internal `Diagnostic` models. It attaches proof states by matching
   sentence ranges, merges supplemental `proof/goals` results for incomplete
-  proof saves, and keeps only the first error for each `proof_name`, while
-  preserving warnings, infos, and errors without a proof name.
+  proof saves, and leaves response filtering and truncation to the render step.
 - `src/rocq_lsp_mcp/rocq_client.py` is the manual stdio JSON-RPC client for
   `coq-lsp`. It handles `Content-Length` framing, `initialize`, server
   requests, `coq/getDocument`, `proof/goals`, `petanque/run_at_point`, request
@@ -45,17 +45,16 @@ returns compact feedback output for the requested command.
   such as `Pp_glue`, `Pp_box`, and `Pp_print_break` into readable text, then
   normalizes proof-state payloads into compact agent-facing JSON. Goal
   hypotheses are rendered as strings like `H : True` or `n := 0 : nat`.
-- `src/rocq_lsp_mcp/models.py` contains the Pydantic response models.
-  `CompileResult` separates diagnostics into errors, warnings, and infos.
-  `Diagnostic` keeps raw LSP details internally while serializing only compact
-  fields such as `level`, `location`, `message`, optional `proof_name`, and
-  optional `proof_state`. `CompileResult` caps returned diagnostics per severity
-  bucket, with a default of 10 and a hard cap of 50 requested messages per
-  bucket. Timeout compile results may include compact `timeout_context` with
-  the checked position and next unchecked source preview. `CommandResult`
-  serializes command status, file, location, command, and compact feedback
-  output. Serialized results include files relative to the workspace and omit
-  version/workspace internals.
+- `src/rocq_lsp_mcp/models.py` contains the internal Pydantic result models,
+  `TimeoutContext`, and `RenderOptions`. Internal models keep normalized raw
+  ranges, document metadata, diagnostics, proof states, and timeout state.
+  Their `render(options)` methods are the only place that decides the compact
+  MCP output shape: file display, severity labels, location format, proof-state
+  inclusion, duplicate proof-error filtering, per-severity message limits,
+  timeout formatting, and empty-field pruning. Default rendering keeps only the
+  first error for each `proof_name`, preserves warnings, infos, and global
+  errors, caps returned diagnostics at 10 per severity bucket with a hard cap
+  of 50, and includes compact `timeout_context` only for timeout results.
 - `src/rocq_lsp_mcp/config.py` loads environment configuration, defines
   `TimeoutPolicy`, builds the `opam exec -- coq-lsp` command, and builds the
   `coq-lsp` initialization settings. `send_execinfo` is enabled so per-call
@@ -68,14 +67,16 @@ LSP client library unless the user explicitly asks for that direction.
 
 The compile MCP tool receives a Rocq file path, optional `message_limit`,
 optional `overall_timeout_seconds`, and optional `command_timeout_seconds`;
-`overall_timeout_seconds` controls the outer `coq-lsp` request wait, defaults to
-60 seconds, and is capped at 3600 seconds. For `command_timeout_seconds`, `None`
-uses `ROCQ_LSP_COMMAND_TIMEOUT`, which defaults to 5 seconds, `0` disables the
-command watchdog for that call, and positive values enable it. The command MCP
-tool receives a Rocq file path, one complete command ending in `.`, a 1-based
-line/character position, and optional `overall_timeout_seconds`; this is the
-same command tool used for `Search` calls. On each call, the manager resolves
-the file, infers a workspace by walking upward to the nearest `_RocqProject` or
+`message_limit` is render-only and does not truncate the internal
+`CompileResult`. `overall_timeout_seconds` controls the outer `coq-lsp` request
+wait, defaults to 60 seconds, and is capped at 3600 seconds. For
+`command_timeout_seconds`, `None` uses `ROCQ_LSP_COMMAND_TIMEOUT`, which
+defaults to 5 seconds, `0` disables the command watchdog for that call, and
+positive values enable it. The command MCP tool receives a Rocq file path, one
+complete command ending in `.`, a 1-based line/character position, and optional
+`overall_timeout_seconds`; this is the same command tool used for `Search`
+calls. On each call, the manager resolves the file, infers a workspace by
+walking upward to the nearest `_RocqProject` or
 `_CoqProject`, then delegates to the cached `RocqLspSession` for that
 workspace. If no project file is found, the file's parent directory is used.
 The session sends either `textDocument/didOpen` or `textDocument/didChange`
@@ -92,21 +93,23 @@ Compilation is driven by `coq/getDocument` with `goals="Str"`. This asks
 `coq-lsp` for the checked document and proof-state data around spans. The
 `NotificationStore` collects diagnostics from
 `textDocument/publishDiagnostics`. `pipeline.py` normalizes those diagnostics
-for the MCP response, replacing raw LSP ranges with a single 1-based location
-string, replacing numeric LSP severities with `error`, `warning`, or `info`,
-and omitting null or empty fields. If multiple errors belong to the same
-`proof_name`, only the first is forwarded to the agent. Counts are serialized
-only when warnings or omitted diagnostics are present, and zero-valued count
-fields are omitted. When diagnostics are omitted because of `message_limit`, the
-response includes `omitted_counts` and the effective `message_limit`.
+and attaches proof states without applying agent-facing filtering. The
+`CompileResult.render(RenderOptions(...))` step converts raw LSP ranges to
+1-based locations, severity numbers to `error`, `warning`, or `info`, removes
+empty fields, filters duplicate proof errors by default, and applies
+per-severity diagnostic limits. Counts are rendered only when warnings or
+omitted diagnostics are present, and zero-valued count fields are omitted. When
+diagnostics are omitted because of `message_limit`, the response includes
+`omitted_counts` and the effective `message_limit`.
 
-When `coq/getDocument` times out, the manager returns status `timeout` with a
-compact `timeout_context`. `checked_until` comes from partial
-`completed.range.end` when cancellation returns a partial document; otherwise it
-falls back to the start of the latest `$/coq/fileProgress` processing range.
-The context also includes the operation name, `timeout_kind`, timeout settings,
-`latest_processing_range`, and `next_unchecked` as 1-based human-facing
-locations. Raw file-progress payloads are kept internal.
+When `coq/getDocument` times out, the manager returns status `timeout` with an
+internal `TimeoutContext`. `TimeoutContext.from_manager_state(...)` builds the
+timeout state from source content, the partial document, the latest
+`$/coq/fileProgress` notification, timeout settings, and any timed-out command
+range. Rendering presents `checked_until` from partial `completed.range.end`
+when available, otherwise the start of the latest processing range, plus the
+operation name, `timeout_kind`, timeout settings, `latest_processing_range`,
+and `next_unchecked` as 1-based human-facing locations.
 
 When command timeout is enabled, the Python client watches
 `$/coq/executionInformation` during `coq/getDocument`. Each notification marks

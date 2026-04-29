@@ -13,6 +13,7 @@ from rocq_lsp_mcp.config import (
     TimeoutPolicy,
 )
 from rocq_lsp_mcp.manager import RocqLspManager
+from rocq_lsp_mcp.models import RenderOptions
 from rocq_lsp_mcp.notifications import NotificationStore
 from rocq_lsp_mcp.rocq_client import (
     GetDocumentResult,
@@ -321,10 +322,11 @@ async def test_compile_file_keeps_only_first_error_per_proof_name(
 
     result = await manager.compile_file(str(source))
 
-    assert result.error_count == 4
+    assert result.error_count == 5
     assert result.warning_count == 1
     assert [diagnostic.message for diagnostic in result.diagnostics] == [
         "first foo",
+        "second foo",
         "foo warning",
         "first bar",
         "global first",
@@ -332,6 +334,14 @@ async def test_compile_file_keeps_only_first_error_per_proof_name(
     ]
     assert [error.message for error in result.errors] == [
         "first foo",
+        "second foo",
+        "first bar",
+        "global first",
+        "global second",
+    ]
+    assert [diagnostic["message"] for diagnostic in result.render()["diagnostics"]] == [
+        "first foo",
+        "foo warning",
         "first bar",
         "global first",
         "global second",
@@ -353,20 +363,23 @@ async def test_compile_file_accepts_requested_message_limit(tmp_path: Path) -> N
     )
     manager = FakeManager(client, notifications, tmp_path)
 
-    result = await manager.compile_file(str(source), message_limit=2)
+    result = await manager.compile_file(str(source))
 
     assert [diagnostic.message for diagnostic in result.diagnostics] == [
         "bad 0",
         "bad 1",
+        "bad 2",
         "warn 0",
         "warn 1",
+        "warn 2",
         "note 0",
         "note 1",
+        "note 2",
     ]
     assert result.error_count == 3
     assert result.warning_count == 3
     assert result.info_count == 3
-    assert result.model_dump()["omitted_counts"] == {
+    assert result.render(RenderOptions(message_limit=2))["omitted_counts"] == {
         "errors": 1,
         "warnings": 1,
         "infos": 1,
@@ -520,7 +533,7 @@ async def test_compile_file_adds_timeout_context_from_file_progress(
 
     assert result.status == "timeout"
     assert result.timed_out is True
-    assert result.timeout_context == {
+    assert result.render()["timeout_context"] == {
         "operation": "coq/getDocument",
         "timeout_kind": "request",
         "request_timeout_seconds": 2.5,
@@ -564,7 +577,7 @@ async def test_compile_file_prefers_completed_position_for_timeout_context(
 
     result = await manager.compile_file(str(source))
 
-    assert result.timeout_context == {
+    assert result.render()["timeout_context"] == {
         "operation": "coq/getDocument",
         "timeout_kind": "request",
         "request_timeout_seconds": 1.0,
@@ -595,7 +608,7 @@ async def test_run_command_forwards_position_and_returns_feedback(
     assert result.status == "complete"
     assert result.version == 1
     assert result.location == "1:2"
-    assert result.output[0].model_dump() == {
+    assert result.output[0].render() == {
         "level": "info",
         "text": "Nat.add_0_r: forall n : nat, n + 0 = n",
     }
@@ -693,7 +706,7 @@ async def test_run_command_response_error_includes_feedback(tmp_path: Path) -> N
 
     assert result.status == "failed"
     assert result.message == "Coq: command failed"
-    assert result.output[0].model_dump() == {"level": "info", "text": "partial output"}
+    assert result.output[0].render() == {"level": "info", "text": "partial output"}
 
 
 @pytest.mark.asyncio
@@ -747,7 +760,7 @@ async def test_compile_file_adds_command_timeout_context(tmp_path: Path) -> None
     result = await manager.compile_file(str(source), command_timeout_seconds=2)
 
     assert result.status == "timeout"
-    assert result.timeout_context == {
+    assert result.render()["timeout_context"] == {
         "operation": "coq/getDocument",
         "timeout_kind": "command",
         "request_timeout_seconds": 1.0,
@@ -788,7 +801,7 @@ async def test_hard_timeout_resets_session(tmp_path: Path) -> None:
     assert result.timed_out is True
     assert result.restarted is True
     assert result.error_count == 1
-    assert result.timeout_context == {
+    assert result.render()["timeout_context"] == {
         "operation": "coq/getDocument",
         "timeout_kind": "request",
         "request_timeout_seconds": 1.0,

@@ -1,12 +1,23 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_serializer
+from pydantic import BaseModel, Field
 
 DEFAULT_MESSAGE_LIMIT = 10
 MAX_MESSAGE_LIMIT = 50
+LocationFormat = Literal["range", "point"]
+
+
+@dataclass(frozen=True)
+class RenderOptions:
+    include_proof_state: bool = True
+    include_timeout_context: bool = True
+    message_limit: int = DEFAULT_MESSAGE_LIMIT
+    location_format: LocationFormat = "range"
+    deduplicate_proof_errors: bool = True
 
 
 def lsp_to_jsonable(value: Any) -> Any:
@@ -29,16 +40,15 @@ def lsp_to_jsonable(value: Any) -> Any:
 
 
 class Diagnostic(BaseModel):
-    range: dict[str, Any] = Field(default_factory=dict, exclude=True)
-    location: str | None = None
+    range: dict[str, Any] = Field(default_factory=dict)
     message: str
     severity: int | None = None
     code: str | int | None = None
     source: str | None = None
-    data: Any | None = Field(default=None, exclude=True)
+    data: Any | None = None
     proof_name: str | None = None
     proof_state: Any | None = None
-    raw: dict[str, Any] = Field(default_factory=dict, exclude=True)
+    raw: dict[str, Any] = Field(default_factory=dict)
 
     @classmethod
     def from_lsp(cls, diagnostic: Any, proof_state: Any | None = None) -> "Diagnostic":
@@ -49,7 +59,6 @@ class Diagnostic(BaseModel):
         range_ = raw_range if isinstance(raw_range, dict) else {}
         return cls(
             range=range_,
-            location=location_string(range_),
             message=raw.get("message", ""),
             severity=raw.get("severity"),
             code=raw.get("code"),
@@ -60,17 +69,19 @@ class Diagnostic(BaseModel):
             raw=raw,
         )
 
-    @model_serializer
-    def serialize(self) -> dict[str, Any]:
+    def render(self, options: RenderOptions | None = None) -> dict[str, Any]:
+        options = options or RenderOptions()
         return pruned_dict(
             {
                 "level": diagnostic_level(self.severity),
                 "message": self.message,
-                "location": self.location,
+                "location": location_string(self.range, options.location_format),
                 "code": self.code,
                 "source": self.source,
                 "proof_name": self.proof_name,
-                "proof_state": self.proof_state,
+                "proof_state": (
+                    self.proof_state if options.include_proof_state else None
+                ),
             }
         )
 
@@ -101,8 +112,7 @@ class CommandOutput(BaseModel):
             return None
         return cls(text=str(raw))
 
-    @model_serializer
-    def serialize(self) -> dict[str, Any]:
+    def render(self, options: RenderOptions | None = None) -> dict[str, Any]:
         return pruned_dict(
             {
                 "level": diagnostic_level(self.severity),
@@ -159,18 +169,96 @@ class CommandResult(BaseModel):
             message=message,
         )
 
-    @model_serializer
-    def serialize(self) -> dict[str, Any]:
+    def render(self, options: RenderOptions | None = None) -> dict[str, Any]:
+        options = options or RenderOptions()
         return pruned_dict(
             {
                 "status": self.status,
                 "file": display_file(self.file, self.workspace),
                 "location": self.location,
                 "command": self.command,
-                "output": [item.model_dump() for item in self.output],
+                "output": [item.render(options) for item in self.output],
                 "timed_out": True if self.timed_out else None,
                 "restarted": True if self.restarted else None,
                 "message": self.message,
+            }
+        )
+
+
+class TimeoutContext(BaseModel):
+    operation: str = "coq/getDocument"
+    timeout_kind: str = "request"
+    request_timeout_seconds: int | float
+    cancel_grace_seconds: int | float
+    checked_until: dict[str, int] | None = None
+    latest_processing_range: dict[str, Any] | None = None
+    next_unchecked: dict[str, Any] | None = None
+    command_timeout_seconds: int | float | None = None
+    timed_out_range: dict[str, Any] | None = None
+    timed_out_command: dict[str, Any] | None = None
+
+    @classmethod
+    def from_manager_state(
+        cls,
+        *,
+        content: str,
+        document: dict[str, Any] | None,
+        progress: dict[str, Any] | None,
+        request_timeout_seconds: int | float,
+        cancel_grace_seconds: int | float,
+        timeout_kind: str = "request",
+        command_timeout_seconds: int | float | None = None,
+        timed_out_range: dict[str, Any] | None = None,
+    ) -> "TimeoutContext":
+        completed = _completed_only(document) if document else None
+        completed_range = completed.get("range") if completed else None
+        completed_end = (
+            range_end(completed_range) if isinstance(completed_range, dict) else None
+        )
+        processing_range = _latest_processing_range(progress)
+        progress_start = (
+            range_start(processing_range)
+            if isinstance(processing_range, dict)
+            else None
+        )
+        checked_until = completed_end or progress_start
+
+        return cls(
+            timeout_kind=timeout_kind,
+            request_timeout_seconds=request_timeout_seconds,
+            cancel_grace_seconds=cancel_grace_seconds,
+            checked_until=checked_until,
+            latest_processing_range=processing_range,
+            next_unchecked=_next_unchecked_preview(content, checked_until),
+            command_timeout_seconds=command_timeout_seconds,
+            timed_out_range=timed_out_range,
+            timed_out_command=(
+                _source_preview_for_range(content, timed_out_range)
+                if timed_out_range is not None
+                else None
+            ),
+        )
+
+    def render(self, options: RenderOptions | None = None) -> dict[str, Any]:
+        options = options or RenderOptions()
+        return pruned_dict(
+            {
+                "operation": self.operation,
+                "timeout_kind": self.timeout_kind,
+                "request_timeout_seconds": self.request_timeout_seconds,
+                "cancel_grace_seconds": self.cancel_grace_seconds,
+                "checked_until": position_string(self.checked_until),
+                "latest_processing_range": location_string(
+                    self.latest_processing_range,
+                    options.location_format,
+                ),
+                "next_unchecked": self.next_unchecked,
+                "command_timeout_seconds": self.command_timeout_seconds,
+                "timed_out_range": location_string(
+                    self.timed_out_range,
+                    options.location_format,
+                ),
+                "timed_out_command": self.timed_out_command,
             }
         )
 
@@ -183,18 +271,26 @@ class CompileResult(BaseModel):
     version: int | None = None
     completed: dict[str, Any] | None = None
     diagnostics: list[Diagnostic] = Field(default_factory=list)
-    errors: list[Diagnostic] = Field(default_factory=list)
-    error_count: int = 0
-    warning_count: int = 0
-    info_count: int = 0
-    omitted_error_count: int = 0
-    omitted_warning_count: int = 0
-    omitted_info_count: int = 0
-    message_limit: int = DEFAULT_MESSAGE_LIMIT
     timed_out: bool = False
     restarted: bool = False
-    timeout_context: dict[str, Any] | None = None
+    timeout_context: TimeoutContext | None = None
     message: str | None = None
+
+    @property
+    def errors(self) -> list[Diagnostic]:
+        return diagnostic_buckets(self.diagnostics)["errors"]
+
+    @property
+    def error_count(self) -> int:
+        return len(self.errors)
+
+    @property
+    def warning_count(self) -> int:
+        return len(diagnostic_buckets(self.diagnostics)["warnings"])
+
+    @property
+    def info_count(self) -> int:
+        return len(diagnostic_buckets(self.diagnostics)["infos"])
 
     @classmethod
     def from_diagnostics(
@@ -207,19 +303,11 @@ class CompileResult(BaseModel):
         version: int | None,
         completed: dict[str, Any] | None,
         diagnostics: list[Diagnostic],
-        message_limit: int | None = DEFAULT_MESSAGE_LIMIT,
         timed_out: bool = False,
         restarted: bool = False,
-        timeout_context: dict[str, Any] | None = None,
+        timeout_context: TimeoutContext | None = None,
         message: str | None = None,
     ) -> "CompileResult":
-        message_limit = bounded_message_limit(message_limit)
-        buckets = diagnostic_buckets(diagnostics)
-        limited_diagnostics = limit_diagnostics(diagnostics, message_limit)
-        limited_buckets = diagnostic_buckets(limited_diagnostics)
-        omitted_errors = len(buckets["errors"]) - len(limited_buckets["errors"])
-        omitted_warnings = len(buckets["warnings"]) - len(limited_buckets["warnings"])
-        omitted_infos = len(buckets["infos"]) - len(limited_buckets["infos"])
         return cls(
             status=status,
             file=file,
@@ -227,50 +315,56 @@ class CompileResult(BaseModel):
             workspace=workspace,
             version=version,
             completed=completed,
-            diagnostics=limited_diagnostics,
-            errors=limited_buckets["errors"],
-            error_count=len(buckets["errors"]),
-            warning_count=len(buckets["warnings"]),
-            info_count=len(buckets["infos"]),
-            omitted_error_count=omitted_errors,
-            omitted_warning_count=omitted_warnings,
-            omitted_info_count=omitted_infos,
-            message_limit=message_limit,
+            diagnostics=diagnostics,
             timed_out=timed_out,
             restarted=restarted,
             timeout_context=timeout_context,
             message=message,
         )
 
-    @model_serializer
-    def serialize(self) -> dict[str, Any]:
+    def render(self, options: RenderOptions | None = None) -> dict[str, Any]:
+        options = options or RenderOptions()
+        message_limit = bounded_message_limit(options.message_limit)
+        diagnostics = _render_diagnostics(self.diagnostics, options)
+        buckets = diagnostic_buckets(diagnostics)
+        limited_diagnostics = limit_diagnostics(diagnostics, message_limit)
+        limited_buckets = diagnostic_buckets(limited_diagnostics)
+        omitted_errors = len(buckets["errors"]) - len(limited_buckets["errors"])
+        omitted_warnings = len(buckets["warnings"]) - len(limited_buckets["warnings"])
+        omitted_infos = len(buckets["infos"]) - len(limited_buckets["infos"])
         omitted_counts = diagnostic_counts(
-            errors=self.omitted_error_count,
-            warnings=self.omitted_warning_count,
-            infos=self.omitted_info_count,
+            errors=omitted_errors,
+            warnings=omitted_warnings,
+            infos=omitted_infos,
             force=True,
         )
         has_omissions = bool(omitted_counts)
+        timeout_context = (
+            self.timeout_context.render(options)
+            if self.status == "timeout"
+            and self.timeout_context is not None
+            and options.include_timeout_context
+            else None
+        )
+
         return pruned_dict(
             {
                 "status": self.status,
                 "file": display_file(self.file, self.workspace),
                 "counts": diagnostic_counts(
-                    errors=self.error_count,
-                    warnings=self.warning_count,
-                    infos=self.info_count,
+                    errors=len(buckets["errors"]),
+                    warnings=len(buckets["warnings"]),
+                    infos=len(buckets["infos"]),
                     force=has_omissions,
                 ),
                 "omitted_counts": omitted_counts,
-                "message_limit": self.message_limit if has_omissions else None,
+                "message_limit": message_limit if has_omissions else None,
                 "diagnostics": [
-                    diagnostic.model_dump() for diagnostic in self.diagnostics
+                    diagnostic.render(options) for diagnostic in limited_diagnostics
                 ],
                 "timed_out": True if self.timed_out else None,
                 "restarted": True if self.restarted else None,
-                "timeout_context": (
-                    self.timeout_context if self.status == "timeout" else None
-                ),
+                "timeout_context": timeout_context,
                 "message": self.message,
             }
         )
@@ -315,15 +409,39 @@ def diagnostic_bucket(diagnostic: Diagnostic) -> str:
     return "infos"
 
 
-def location_string(range_: Any) -> str | None:
+def location_string(
+    range_: Any,
+    location_format: LocationFormat = "range",
+) -> str | None:
     """Render an LSP range as a compact human-facing 1-based location."""
     if not isinstance(range_, dict):
         return None
-    start = _position(range_.get("start"))
-    end = _position(range_.get("end"))
+    start = range_start(range_)
+    end = range_end(range_)
     if start is None or end is None:
         return None
-    return f"{start[0] + 1}:{start[1] + 1} to {end[0] + 1}:{end[1] + 1}"
+    if location_format == "point":
+        return position_string(start)
+    return f"{position_string(start)} to {position_string(end)}"
+
+
+def position_string(position: Any) -> str | None:
+    position_ = _position_dict(position)
+    if position_ is None:
+        return None
+    return f"{position_['line'] + 1}:{position_['character'] + 1}"
+
+
+def range_start(range_: Any) -> dict[str, int] | None:
+    if not isinstance(range_, dict):
+        return None
+    return _position_dict(range_.get("start"))
+
+
+def range_end(range_: Any) -> dict[str, int] | None:
+    if not isinstance(range_, dict):
+        return None
+    return _position_dict(range_.get("end"))
 
 
 def diagnostic_level(severity: int | None) -> str | None:
@@ -391,13 +509,87 @@ def is_empty_value(value: Any) -> bool:
     return value is None or value == [] or value == {}
 
 
-def _position(value: Any) -> tuple[int, int] | None:
+def _render_diagnostics(
+    diagnostics: list[Diagnostic],
+    options: RenderOptions,
+) -> list[Diagnostic]:
+    if not options.deduplicate_proof_errors:
+        return diagnostics
+
+    seen_error_proofs: set[str] = set()
+    filtered: list[Diagnostic] = []
+    for diagnostic in diagnostics:
+        if diagnostic.severity == 1 and diagnostic.proof_name is not None:
+            if diagnostic.proof_name in seen_error_proofs:
+                continue
+            seen_error_proofs.add(diagnostic.proof_name)
+        filtered.append(diagnostic)
+    return filtered
+
+
+def _completed_only(document: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(document, dict):
+        return None
+    completed = document.get("completed")
+    return completed if isinstance(completed, dict) else None
+
+
+def _latest_processing_range(progress: Any) -> dict[str, Any] | None:
+    if not isinstance(progress, dict):
+        return None
+    processing = progress.get("processing")
+    if not isinstance(processing, list):
+        return None
+    for item in processing:
+        if not isinstance(item, dict):
+            continue
+        range_ = item.get("range")
+        if isinstance(range_, dict):
+            return range_
+    return None
+
+
+def _source_preview_for_range(
+    content: str, range_: dict[str, Any]
+) -> dict[str, Any] | None:
+    return _next_unchecked_preview(content, range_start(range_))
+
+
+def _next_unchecked_preview(
+    content: str, position: dict[str, int] | None
+) -> dict[str, Any] | None:
+    if position is None:
+        return None
+
+    line_number = position["line"]
+    character = position["character"]
+    lines = content.splitlines()
+    for current_line_number in range(line_number, len(lines)):
+        line = lines[current_line_number]
+        start = character if current_line_number == line_number else 0
+        start = max(0, min(start, len(line)))
+        for index in range(start, len(line)):
+            if not line[index].isspace():
+                return {
+                    "location": f"{current_line_number + 1}:{index + 1}",
+                    "line": _truncate_preview_line(line.strip()),
+                }
+    return None
+
+
+def _truncate_preview_line(line: str, limit: int = 160) -> str:
+    if len(line) <= limit:
+        return line
+    return f"{line[: limit - 3]}..."
+
+
+def _position_dict(value: Any) -> dict[str, int] | None:
     if not isinstance(value, dict):
         return None
     line = value.get("line")
     character = value.get("character")
     if isinstance(line, int) and isinstance(character, int):
-        return line, character
+        return {"line": line, "character": character}
     return None
 
 

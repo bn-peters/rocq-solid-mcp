@@ -104,11 +104,12 @@ async def test_file_change_rechecks_and_reports_failure_proof_state(
             "end": {"line": 1, "character": 0},
         },
     }
-    assert failing.error_count == 1
+    assert failing.error_count == 2
     assert failing.warning_count == 0
     assert failing.info_count == 0
-    assert "Pp_" not in json.dumps(failing.model_dump())
-    assert [error.model_dump() for error in failing.errors] == [
+    rendered_failing = failing.render()
+    assert "Pp_" not in json.dumps(rendered_failing)
+    assert rendered_failing["diagnostics"] == [
         _expected_tactic_failure(),
     ]
 

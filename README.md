@@ -23,10 +23,10 @@ JSON-RPC.
 
 ## Architecture
 
-- `server.py` registers the MCP tools and manages one `RocqLspManager`
-  for the server lifespan.
+- `server.py` registers the MCP tools, manages one `RocqLspManager`
+  for the server lifespan, and renders internal results for MCP output.
 - `manager.py` resolves files and workspaces, keeps the session registry,
-  evicts idle sessions, and orchestrates compile and command results.
+  evicts idle sessions, and orchestrates internal compile and command results.
 - `session.py` owns each workspace session lifecycle, document versions, and
   notification store.
 - `rocq_client.py` is transport-only JSON-RPC framing, requests, notifications,
@@ -34,8 +34,12 @@ JSON-RPC.
   process cleanup.
 - `notifications.py` stores diagnostics, latest file-progress notifications,
   and sentence execution notifications published by `coq-lsp`.
-- `pipeline.py` converts raw diagnostics plus proof-state data into compact
-  agent-facing `Diagnostic` models.
+- `pipeline.py` converts raw diagnostics plus proof-state data into internal
+  `Diagnostic` models without deciding what the MCP response should include.
+- `models.py` holds internal result models, `TimeoutContext`, and the
+  `RenderOptions`-driven render step that applies agent-facing filtering,
+  message limits, location formatting, timeout formatting, and empty-field
+  pruning.
 
 For `Attempt to save an incomplete proof` diagnostics, the `Qed.` span may only
 contain the save error. The manager asks `proof/goals` with `mode: "Prev"` at
@@ -58,7 +62,7 @@ workspace so local opam switches select the matching Rocq and `coq-lsp`
 versions.
 
 When `coq/getDocument` times out, the response status is `timeout` and the
-serialized result includes `timeout_context`. `checked_until` is taken from the
+rendered result includes `timeout_context`. `checked_until` is taken from the
 partial `completed.range.end` when cancellation returns a partial document; if
 not, it falls back to the start of the latest `$/coq/fileProgress` processing
 range. The context also includes `latest_processing_range` and `next_unchecked`
@@ -89,7 +93,9 @@ The server exposes two MCP tools:
 
 `message_limit` caps returned diagnostics per severity bucket. Values above 50
 are capped to 50. When diagnostics are omitted, the response includes
-`omitted_counts` and `message_limit` alongside total `counts`.
+`omitted_counts` and `message_limit` alongside total `counts`. The limit is
+applied only while rendering the MCP response; internal compile results retain
+all normalized diagnostics.
 `overall_timeout_seconds` controls the outer `coq-lsp` request wait for compile
 and command/Search calls. It defaults to 60 seconds and may be at most 3600
 seconds.

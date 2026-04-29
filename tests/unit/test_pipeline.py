@@ -110,7 +110,7 @@ def test_build_diagnostics_merges_supplemental_incomplete_proof_goals() -> None:
     assert result[0].proof_state == {"goals": [{"conclusion": "Foo"}]}
 
 
-def test_build_diagnostics_filters_duplicate_proof_errors_only() -> None:
+def test_build_diagnostics_keeps_duplicate_proof_errors() -> None:
     diagnostics = [
         _diagnostic("first foo", 1, proof_name="foo", line=0),
         _diagnostic("second foo", 1, proof_name="foo", line=1),
@@ -124,6 +124,7 @@ def test_build_diagnostics_filters_duplicate_proof_errors_only() -> None:
 
     assert [diagnostic.message for diagnostic in result] == [
         "first foo",
+        "second foo",
         "foo warning",
         "first bar",
         "global first",

@@ -8,7 +8,7 @@ from pydantic import Field
 
 from .config import DEFAULT_OVERALL_TIMEOUT_SECONDS, MAX_OVERALL_TIMEOUT_SECONDS
 from .manager import RocqLspManager
-from .models import DEFAULT_MESSAGE_LIMIT, CommandResult, CompileResult
+from .models import DEFAULT_MESSAGE_LIMIT, RenderOptions
 
 
 @lifespan
@@ -61,7 +61,7 @@ async def rocq_lsp_compile_file(
             ),
         ),
     ] = None,
-) -> CompileResult:
+) -> dict[str, Any]:
     """Compile a Rocq file and report diagnostics.
 
     Use this to check to check files for errors. The diagnostics are much faster and much more detailed than those of regular compilation. They include the current proof state at the error position and precise ranges.
@@ -69,12 +69,12 @@ async def rocq_lsp_compile_file(
     Adjust the request timeout only when a file is known to take a long time to compile. Adjust the command timeout only when specific tactics in a file are known to be slow. The message limit should only rarely be adjusted.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
-    return await manager.compile_file(
+    result = await manager.compile_file(
         file,
-        message_limit=message_limit,
         overall_timeout_seconds=overall_timeout_seconds,
         command_timeout_seconds=command_timeout_seconds,
     )
+    return result.render(RenderOptions(message_limit=message_limit))
 
 
 @mcp.tool()
@@ -113,25 +113,26 @@ async def rocq_lsp_run_command(
             ),
         ),
     ] = DEFAULT_OVERALL_TIMEOUT_SECONDS,
-) -> CommandResult:
+) -> dict[str, Any]:
     """Run one Rocq command at a file position and return its output.
 
     Use this to query information about the proof environment, for instance using Search, Check, or Locate.
 
     Prefer calling this right after imports. If local definitions, scopes, or
-    modules are needed, call it between lemmas or definitions.
+    modules are needed, call it between lemmas/definitions.
 
     overall_timeout_seconds is the outer coq-lsp request timeout. It defaults to
     60 seconds and may be at most 3600 seconds.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
-    return await manager.run_command(
+    result = await manager.run_command(
         file,
         command,
         line,
         character,
         overall_timeout_seconds=overall_timeout_seconds,
     )
+    return result.render()
 
 
 def main() -> None:

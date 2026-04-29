@@ -186,7 +186,7 @@ def _step_record(step: dict[str, Any]) -> dict[str, Any]:
 def _result_record(
     result: CompileResult | CommandResult, project_root: Path
 ) -> dict[str, Any]:
-    return _scrub_value(result.model_dump(), project_root)
+    return _scrub_value(result.render(), project_root)
 
 
 def _scrub_value(value: Any, project_root: Path) -> Any:

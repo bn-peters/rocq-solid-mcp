@@ -14,7 +14,7 @@ def build_diagnostics(
 ) -> list[Diagnostic]:
     proof_states = _proof_states_by_range(document)
     _merge_supplemental_proof_states(proof_states, supplemental_proof_states)
-    diagnostics = [
+    return [
         Diagnostic.from_lsp(
             diagnostic,
             proof_state=proof_states.get(
@@ -23,19 +23,6 @@ def build_diagnostics(
         )
         for diagnostic in raw
     ]
-    return _agent_facing_filter(diagnostics)
-
-
-def _agent_facing_filter(diagnostics: list[Diagnostic]) -> list[Diagnostic]:
-    seen_error_proofs: set[str] = set()
-    filtered: list[Diagnostic] = []
-    for diagnostic in diagnostics:
-        if diagnostic.severity == 1 and diagnostic.proof_name is not None:
-            if diagnostic.proof_name in seen_error_proofs:
-                continue
-            seen_error_proofs.add(diagnostic.proof_name)
-        filtered.append(diagnostic)
-    return filtered
 
 
 def _proof_states_by_range(document: dict[str, Any] | None) -> dict[str, Any]:
