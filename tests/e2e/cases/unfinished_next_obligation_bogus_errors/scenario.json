@@ -1,0 +1,9 @@
+{
+  "steps": [
+    {
+      "label": "compile unfinished next obligation",
+      "action": "compile",
+      "file": "src/unfinished_next_obligation.v"
+    }
+  ]
+}

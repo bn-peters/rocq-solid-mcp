@@ -8,7 +8,7 @@
       "workspace": "$PROJECT",
       "version": 1,
       "counts": {
-        "errors": 3,
+        "errors": 1,
         "warnings": 0,
         "infos": 0
       },
@@ -56,116 +56,9 @@
                 "character": 4
               }
             },
-            "goals": {
-              "goals": [
-                {
-                  "name": null,
-                  "hyps": [],
-                  "ty": "Foo"
-                }
-              ],
-              "stack": [],
-              "bullet": null,
-              "shelf": [],
-              "given_up": []
-            },
             "program": [],
             "messages": [],
             "error": " (in proof token_world_le_preorder): Attempt to save an incomplete proof\n(there are remaining open goals)."
-          }
-        },
-        {
-          "severity": 1,
-          "message": "The reference token_inv_aux was not found in the current environment.",
-          "range": {
-            "start": {
-              "line": 15,
-              "character": 8
-            },
-            "end": {
-              "line": 15,
-              "character": 21
-            }
-          },
-          "sentence_range": {
-            "start": {
-              "line": 15,
-              "character": 2
-            },
-            "end": {
-              "line": 15,
-              "character": 22
-            }
-          },
-          "proof_state": {
-            "textDocument": {
-              "uri": "file://$PROJECT/src/unfinished_instance.v",
-              "version": 1
-            },
-            "position": {
-              "line": 15,
-              "character": 2
-            },
-            "range": {
-              "start": {
-                "line": 15,
-                "character": 2
-              },
-              "end": {
-                "line": 15,
-                "character": 22
-              }
-            },
-            "program": [],
-            "messages": [],
-            "error": "The reference\ntoken_inv_aux\nwas not found\nin the current\nenvironment."
-          }
-        },
-        {
-          "severity": 1,
-          "message": "There is nothing to end.",
-          "range": {
-            "start": {
-              "line": 17,
-              "character": 0
-            },
-            "end": {
-              "line": 17,
-              "character": 9
-            }
-          },
-          "sentence_range": {
-            "start": {
-              "line": 17,
-              "character": 0
-            },
-            "end": {
-              "line": 17,
-              "character": 9
-            }
-          },
-          "proof_state": {
-            "textDocument": {
-              "uri": "file://$PROJECT/src/unfinished_instance.v",
-              "version": 1
-            },
-            "position": {
-              "line": 17,
-              "character": 0
-            },
-            "range": {
-              "start": {
-                "line": 17,
-                "character": 0
-              },
-              "end": {
-                "line": 17,
-                "character": 9
-              }
-            },
-            "program": [],
-            "messages": [],
-            "error": "There is nothing to end."
           }
         }
       ]

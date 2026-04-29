@@ -1,0 +1,67 @@
+[
+  {
+    "step": "compile unfinished next obligation",
+    "action": "compile",
+    "file": "src/unfinished_next_obligation.v",
+    "result": {
+      "status": "complete",
+      "workspace": "$PROJECT",
+      "version": 1,
+      "counts": {
+        "errors": 1,
+        "warnings": 0,
+        "infos": 0
+      },
+      "diagnostics": [
+        {
+          "severity": 1,
+          "message": " (in proof foo_obligation_2): Attempt to save an incomplete proof\n(there are remaining open goals).",
+          "range": {
+            "start": {
+              "line": 11,
+              "character": 0
+            },
+            "end": {
+              "line": 11,
+              "character": 4
+            }
+          },
+          "proof_name": "foo_obligation_2",
+          "sentence_range": {
+            "start": {
+              "line": 11,
+              "character": 0
+            },
+            "end": {
+              "line": 11,
+              "character": 4
+            }
+          },
+          "proof_state": {
+            "textDocument": {
+              "uri": "file://$PROJECT/src/unfinished_next_obligation.v",
+              "version": 1
+            },
+            "position": {
+              "line": 11,
+              "character": 0
+            },
+            "range": {
+              "start": {
+                "line": 11,
+                "character": 0
+              },
+              "end": {
+                "line": 11,
+                "character": 4
+              }
+            },
+            "program": [],
+            "messages": [],
+            "error": " (in proof foo_obligation_2): Attempt to save an incomplete proof\n(there are remaining open goals)."
+          }
+        }
+      ]
+    }
+  }
+]
