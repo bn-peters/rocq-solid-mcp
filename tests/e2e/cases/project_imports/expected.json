@@ -24,59 +24,11 @@
       "workspace": "$PROJECT",
       "version": 1,
       "counts": {
-        "errors": 1,
+        "errors": 0,
         "warnings": 0,
         "infos": 0
       },
-      "diagnostics": [
-        {
-          "severity": 1,
-          "message": "Cannot find a physical path bound to logical path Arith with prefix Stdlib.",
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 27
-            },
-            "end": {
-              "line": 0,
-              "character": 32
-            }
-          },
-          "sentence_range": {
-            "start": {
-              "line": 0,
-              "character": 0
-            },
-            "end": {
-              "line": 0,
-              "character": 33
-            }
-          },
-          "proof_state": {
-            "textDocument": {
-              "uri": "file://$PROJECT/clients/UseCore.v",
-              "version": 1
-            },
-            "position": {
-              "line": 0,
-              "character": 0
-            },
-            "range": {
-              "start": {
-                "line": 0,
-                "character": 0
-              },
-              "end": {
-                "line": 0,
-                "character": 33
-              }
-            },
-            "program": [],
-            "messages": [],
-            "error": "Cannot\nfind\na\nphysical\npath\nbound\nto\nlogical\npath\nArith with prefix Stdlib."
-          }
-        }
-      ]
+      "diagnostics": []
     }
   },
   {
@@ -93,58 +45,11 @@
       "workspace": "$PROJECT",
       "version": 2,
       "counts": {
-        "errors": 2,
+        "errors": 1,
         "warnings": 0,
         "infos": 0
       },
       "diagnostics": [
-        {
-          "severity": 1,
-          "message": "Cannot find a physical path bound to logical path Arith with prefix Stdlib.",
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 27
-            },
-            "end": {
-              "line": 0,
-              "character": 32
-            }
-          },
-          "sentence_range": {
-            "start": {
-              "line": 0,
-              "character": 0
-            },
-            "end": {
-              "line": 0,
-              "character": 33
-            }
-          },
-          "proof_state": {
-            "textDocument": {
-              "uri": "file://$PROJECT/clients/UseCore.v",
-              "version": 2
-            },
-            "position": {
-              "line": 0,
-              "character": 0
-            },
-            "range": {
-              "start": {
-                "line": 0,
-                "character": 0
-              },
-              "end": {
-                "line": 0,
-                "character": 33
-              }
-            },
-            "program": [],
-            "messages": [],
-            "error": "Cannot\nfind\na\nphysical\npath\nbound\nto\nlogical\npath\nArith with prefix Stdlib."
-          }
-        },
         {
           "severity": 1,
           "message": "The reference missing_project_import_name was not found in the current\nenvironment.",
