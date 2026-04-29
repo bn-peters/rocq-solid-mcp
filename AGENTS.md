@@ -92,7 +92,7 @@ narrower suites by directory via `make unit`, `make integration`, or `make e2e`;
 do not use environment variables to select test classes. Override parallelism
 with a Make variable such as `make test PYTEST_WORKERS=4`. Tests that need a
 real `coq-lsp` skip themselves if it is unavailable. E2e scenarios with compiled
-dependencies also skip themselves if `rocqc` is unavailable. `make promote`
+dependencies also skip themselves if `rocq` is unavailable. `make promote`
 refreshes promoted e2e transcripts and runs serially because it rewrites golden
 files. `make clean` removes pytest caches, Python bytecode caches, and egg-info
 directories while preserving `.venv/`.
