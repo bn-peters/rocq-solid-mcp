@@ -78,8 +78,9 @@ make integration
 make e2e
 ```
 
-These targets run tests in parallel with `pytest-xdist` by default. Override the
-worker count with a Make variable, for example `make test PYTEST_WORKERS=4`.
+These targets run tests under `opam exec` and in parallel with `pytest-xdist` by
+default. Override the worker count with a Make variable, for example
+`make test PYTEST_WORKERS=4`.
 
 Integration and e2e tests skip themselves when `opam` or `coq-lsp` is
 unavailable. E2e scenarios with compiled dependencies also skip when `rocq` is
@@ -91,4 +92,5 @@ the harness defaults for timeout-specific coverage.
 Use `make promote` to refresh promoted e2e transcripts after intentional output
 changes; promotion runs serially because it rewrites golden files.
 
-Use `make clean` to remove test artifacts.
+Use `opam exec -- .venv/bin/python -m pytest ...` for focused test runs outside
+of the Makefile. Use `make clean` to remove test artifacts.

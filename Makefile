@@ -1,5 +1,6 @@
 PYTHON := .venv/bin/python
-PYTEST := $(PYTHON) -m pytest
+OPAM_EXEC := opam exec --
+PYTEST := $(OPAM_EXEC) $(PYTHON) -m pytest
 PYTEST_WORKERS ?= auto
 PYTEST_PARALLEL := -n $(PYTEST_WORKERS)
 
