@@ -75,6 +75,106 @@ class Diagnostic(BaseModel):
         )
 
 
+class CommandOutput(BaseModel):
+    severity: int | None = None
+    text: str
+
+    @classmethod
+    def from_feedback(cls, feedback: Any) -> "CommandOutput | None":
+        raw = lsp_to_jsonable(feedback)
+        if isinstance(raw, (list, tuple)) and len(raw) >= 2:
+            severity = raw[0] if isinstance(raw[0], int) else None
+            text = raw[1]
+            return cls(severity=severity, text=str(text))
+        if isinstance(raw, dict):
+            severity = raw.get("level")
+            text = raw.get("text")
+            if text is None:
+                text = raw.get("message")
+            if text is None:
+                return None
+            return cls(
+                severity=severity if isinstance(severity, int) else None,
+                text=str(text),
+            )
+        if raw is None:
+            return None
+        return cls(text=str(raw))
+
+    @model_serializer
+    def serialize(self) -> dict[str, Any]:
+        return pruned_dict(
+            {
+                "level": diagnostic_level(self.severity),
+                "text": self.text,
+            }
+        )
+
+
+class CommandResult(BaseModel):
+    status: Literal["complete", "timeout", "failed"]
+    file: str
+    command: str
+    location: str | None = None
+    output: list[CommandOutput] = Field(default_factory=list)
+    uri: str | None = None
+    workspace: str | None = None
+    version: int | None = None
+    timed_out: bool = False
+    restarted: bool = False
+    message: str | None = None
+
+    @classmethod
+    def from_feedback(
+        cls,
+        *,
+        status: Literal["complete", "timeout", "failed"],
+        file: str,
+        command: str,
+        location: str | None,
+        uri: str | None,
+        workspace: str | None,
+        version: int | None,
+        feedback: Any,
+        timed_out: bool = False,
+        restarted: bool = False,
+        message: str | None = None,
+    ) -> "CommandResult":
+        output = [
+            item
+            for entry in _feedback_entries(feedback)
+            if (item := CommandOutput.from_feedback(entry)) is not None
+        ]
+        return cls(
+            status=status,
+            file=file,
+            command=command,
+            location=location,
+            output=output,
+            uri=uri,
+            workspace=workspace,
+            version=version,
+            timed_out=timed_out,
+            restarted=restarted,
+            message=message,
+        )
+
+    @model_serializer
+    def serialize(self) -> dict[str, Any]:
+        return pruned_dict(
+            {
+                "status": self.status,
+                "file": display_file(self.file, self.workspace),
+                "location": self.location,
+                "command": self.command,
+                "output": [item.model_dump() for item in self.output],
+                "timed_out": True if self.timed_out else None,
+                "restarted": True if self.restarted else None,
+                "message": self.message,
+            }
+        )
+
+
 class CompileResult(BaseModel):
     status: Literal["complete", "timeout", "failed"]
     file: str
@@ -236,6 +336,10 @@ def diagnostic_level(severity: int | None) -> str | None:
     return None
 
 
+def command_location(line: int, character: int) -> str:
+    return f"{line}:{character}"
+
+
 def diagnostic_counts(
     *, errors: int, warnings: int, infos: int, force: bool = False
 ) -> dict[str, int]:
@@ -295,3 +399,13 @@ def _position(value: Any) -> tuple[int, int] | None:
     if isinstance(line, int) and isinstance(character, int):
         return line, character
     return None
+
+
+def _feedback_entries(feedback: Any) -> list[Any]:
+    raw = lsp_to_jsonable(feedback)
+    if isinstance(raw, dict):
+        entries = raw.get("feedback")
+        return entries if isinstance(entries, list) else []
+    if isinstance(raw, list):
+        return raw
+    return []

@@ -7,7 +7,7 @@ from fastmcp.server.lifespan import lifespan
 from pydantic import Field
 
 from .manager import RocqLspManager
-from .models import DEFAULT_MESSAGE_LIMIT, CompileResult
+from .models import DEFAULT_MESSAGE_LIMIT, CommandResult, CompileResult
 
 
 @lifespan
@@ -44,6 +44,19 @@ async def rocq_lsp_compile_file(
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
     return await manager.compile_file(file, message_limit=message_limit)
+
+
+@mcp.tool()
+async def rocq_lsp_run_command(
+    file: str, command: str, line: int, ctx: Context, character: int = 1
+) -> CommandResult:
+    """Run one Rocq command at a file position and return its output.
+
+    Prefer calling this right after imports. If local definitions, scopes, or
+    modules are needed, call it between lemmas or definitions.
+    """
+    manager: RocqLspManager = ctx.request_context.lifespan_context
+    return await manager.run_command(file, command, line, character)
 
 
 def main() -> None:

@@ -1,0 +1,12 @@
+{
+  "steps": [
+    {
+      "label": "search add zero",
+      "action": "command",
+      "file": "src/Search.v",
+      "command": "Search (_ + 0 = _).",
+      "line": 1,
+      "character": 43
+    }
+  ]
+}

@@ -10,7 +10,11 @@ import pytest
 from rocq_lsp_mcp.config import RocqLspConfig, TimeoutPolicy
 from rocq_lsp_mcp.manager import RocqLspManager
 from rocq_lsp_mcp.notifications import NotificationStore
-from rocq_lsp_mcp.rocq_client import RocqLspHardTimeout, language_id_for_path
+from rocq_lsp_mcp.rocq_client import (
+    RocqLspHardTimeout,
+    RocqLspResponseError,
+    language_id_for_path,
+)
 from rocq_lsp_mcp.session import RocqLspSession
 
 
@@ -23,6 +27,7 @@ class FakeClient:
         goals_response: dict[str, Any] | Exception | None = None,
         file_progress: dict[str, Any] | None = None,
         request_timed_out: bool = False,
+        command_response: dict[str, Any] | Exception | None = None,
     ) -> None:
         self.notifications = notifications
         self.diagnostics = diagnostics or []
@@ -30,9 +35,11 @@ class FakeClient:
         self.goals_response = goals_response
         self.file_progress = file_progress
         self.request_timed_out = request_timed_out
+        self.command_response = command_response
         self.opened: list[tuple[Path, int]] = []
         self.changed: list[tuple[Path, int]] = []
         self.goal_requests: list[dict[str, Any]] = []
+        self.command_requests: list[dict[str, Any]] = []
         self.killed = False
         self.closed = False
         self.pending_cleared = False
@@ -105,6 +112,32 @@ class FakeClient:
         if isinstance(self.goals_response, Exception):
             raise self.goals_response
         return self.goals_response or {}
+
+    async def request_run_at_point(
+        self,
+        *,
+        uri: str,
+        version: int,
+        position: dict[str, int],
+        command: str,
+        timeout: float,
+        hard_timeout_grace: float,
+    ) -> tuple[dict[str, Any], bool]:
+        self.command_requests.append(
+            {
+                "uri": uri,
+                "version": version,
+                "position": position,
+                "command": command,
+                "timeout": timeout,
+                "hard_timeout_grace": hard_timeout_grace,
+            }
+        )
+        if self.hard_timeout:
+            raise RocqLspHardTimeout("stuck")
+        if isinstance(self.command_response, Exception):
+            raise self.command_response
+        return self.command_response or {"feedback": []}, False
 
     def clear_pending_requests(self) -> None:
         self.pending_cleared = True
@@ -490,6 +523,117 @@ async def test_compile_file_prefers_completed_position_for_timeout_context(
         "latest_processing_range": "1:1 to 2:12",
         "next_unchecked": {"location": "2:1", "line": "Check bool."},
     }
+
+
+@pytest.mark.asyncio
+async def test_run_command_forwards_position_and_returns_feedback(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("From Stdlib Require Import Arith.PeanoNat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(
+        notifications,
+        command_response={
+            "feedback": [[3, "Nat.add_0_r: forall n : nat, n + 0 = n"]],
+        },
+    )
+    manager = FakeManager(client, notifications, tmp_path)
+
+    result = await manager.run_command(str(source), "Search (_ + 0 = _).", 1, 2)
+
+    assert result.status == "complete"
+    assert result.version == 1
+    assert result.location == "1:2"
+    assert result.output[0].model_dump() == {
+        "level": "info",
+        "text": "Nat.add_0_r: forall n : nat, n + 0 = n",
+    }
+    assert client.opened == [(source.resolve(), 1)]
+    assert client.command_requests == [
+        {
+            "uri": source.as_uri(),
+            "version": 1,
+            "position": {"line": 0, "character": 1},
+            "command": "Search (_ + 0 = _).",
+            "timeout": 1,
+            "hard_timeout_grace": 0.01,
+        }
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("command", "line", "character", "message"),
+    [
+        ("", 1, 1, "command must be a non-empty Rocq command ending in '.'"),
+        ("Check nat", 1, 1, "command must be a non-empty Rocq command ending in '.'"),
+        ("Check nat.", 0, 1, "line and character must be positive 1-based integers"),
+        ("Check nat.", 1, 0, "line and character must be positive 1-based integers"),
+    ],
+)
+async def test_run_command_validates_before_lsp_request(
+    tmp_path: Path,
+    command: str,
+    line: int,
+    character: int,
+    message: str,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    manager = FakeManager(client, notifications, tmp_path)
+
+    result = await manager.run_command(str(source), command, line, character)
+
+    assert result.status == "failed"
+    assert result.message == message
+    assert client.opened == []
+    assert client.changed == []
+    assert client.command_requests == []
+
+
+@pytest.mark.asyncio
+async def test_run_command_response_error_includes_feedback(tmp_path: Path) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(
+        notifications,
+        command_response=RocqLspResponseError(
+            {
+                "message": "Coq: command failed",
+                "data": {"feedback": [[3, "partial output"]]},
+            }
+        ),
+    )
+    manager = FakeManager(client, notifications, tmp_path)
+
+    result = await manager.run_command(str(source), "Check missing.", 1, 1)
+
+    assert result.status == "failed"
+    assert result.message == "Coq: command failed"
+    assert result.output[0].model_dump() == {"level": "info", "text": "partial output"}
+
+
+@pytest.mark.asyncio
+async def test_run_command_hard_timeout_resets_session(tmp_path: Path) -> None:
+    source = tmp_path / "Slow.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    client.hard_timeout = True
+    manager = FakeManager(client, notifications, tmp_path)
+
+    result = await manager.run_command(str(source), "Search nat.", 1, 1)
+
+    assert result.status == "timeout"
+    assert result.timed_out is True
+    assert result.restarted is True
+    assert client.pending_cleared is True
+    assert client.killed is True
+    assert tmp_path not in manager._sessions
 
 
 @pytest.mark.asyncio

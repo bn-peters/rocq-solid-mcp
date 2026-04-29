@@ -233,6 +233,55 @@ class RocqLspClient:
             timeout=timeout,
         )
 
+    async def request_run_at_point(
+        self,
+        *,
+        uri: str,
+        version: int,
+        position: dict[str, int],
+        command: str,
+        timeout: float,
+        hard_timeout_grace: float,
+    ) -> tuple[dict[str, Any], bool]:
+        request_id = self._reserve_request()
+        future = self._pending[request_id]
+        await self._send(
+            {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": "petanque/run_at_point",
+                "params": {
+                    "textDocument": {"uri": uri, "version": version},
+                    "position": position,
+                    "command": command,
+                },
+            }
+        )
+
+        try:
+            raw = await asyncio.wait_for(asyncio.shield(future), timeout=timeout)
+            self._pending.pop(request_id, None)
+            return self._result_or_raise(raw), False
+        except TimeoutError as exc:
+            await self.notify("$/cancelRequest", {"id": request_id})
+            try:
+                raw = await asyncio.wait_for(
+                    asyncio.shield(future), timeout=hard_timeout_grace
+                )
+            except TimeoutError:
+                self._pending.pop(request_id, None)
+                future.cancel()
+                raise RocqLspHardTimeout(
+                    f"petanque/run_at_point timed out after {timeout}s and did not "
+                    f"settle within {hard_timeout_grace}s"
+                ) from exc
+            finally:
+                self._pending.pop(request_id, None)
+
+            if "error" in raw:
+                return {}, True
+            return self._result_or_raise(raw), True
+
     async def request(
         self, method: str, params: Any | None, *, timeout: float | None = None
     ) -> dict[str, Any]:

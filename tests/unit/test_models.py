@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from rocq_lsp_mcp.models import CompileResult, Diagnostic
+from rocq_lsp_mcp.models import CommandResult, CompileResult, Diagnostic
 
 
 def test_diagnostic_serializes_agent_facing_fields() -> None:
@@ -196,3 +196,32 @@ def test_compile_result_hard_caps_requested_message_limit(tmp_path: Path) -> Non
     assert dumped["counts"] == {"errors": 51}
     assert dumped["omitted_counts"] == {"errors": 1}
     assert dumped["message_limit"] == 50
+
+
+def test_command_result_serializes_agent_facing_fields(tmp_path: Path) -> None:
+    source = tmp_path / "src" / "Demo.v"
+    source.parent.mkdir()
+    source.write_text("Check nat.\n", encoding="utf-8")
+    result = CommandResult.from_feedback(
+        status="complete",
+        file=str(source),
+        command="Search (_ + 0 = _).",
+        location="1:1",
+        uri=source.as_uri(),
+        workspace=str(tmp_path),
+        version=1,
+        feedback={"feedback": [[3, "Nat.add_0_r: forall n : nat, n + 0 = n"]]},
+    )
+
+    assert result.model_dump() == {
+        "status": "complete",
+        "file": "src/Demo.v",
+        "location": "1:1",
+        "command": "Search (_ + 0 = _).",
+        "output": [
+            {
+                "level": "info",
+                "text": "Nat.add_0_r: forall n : nat, n + 0 = n",
+            }
+        ],
+    }
