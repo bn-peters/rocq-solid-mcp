@@ -4,8 +4,9 @@ import asyncio
 import json
 import os
 from contextlib import suppress
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from .config import rocq_lsp_command, rocq_lsp_settings
 from .notifications import NotificationStore
@@ -18,11 +19,28 @@ class RocqLspResponseError(RuntimeError):
 
 
 class RocqLspHardTimeout(TimeoutError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        timeout_kind: Literal["request", "command"] = "request",
+        timed_out_range: dict[str, Any] | None = None,
+    ) -> None:
+        self.timeout_kind = timeout_kind
+        self.timed_out_range = timed_out_range
+        super().__init__(message)
 
 
 class RocqLspProcessExited(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class GetDocumentResult:
+    document: dict[str, Any]
+    timed_out: bool = False
+    timeout_kind: Literal["request", "command"] | None = None
+    timed_out_range: dict[str, Any] | None = None
 
 
 def language_id_for_path(path: Path) -> str:
@@ -170,10 +188,16 @@ class RocqLspClient:
         version: int,
         timeout: float,
         hard_timeout_grace: float,
+        command_timeout: float | None = None,
         goals: str | None = None,
-    ) -> tuple[dict[str, Any], bool]:
+    ) -> GetDocumentResult:
         request_id = self._reserve_request()
         future = self._pending[request_id]
+        command_state: dict[str, Any] = {
+            "timed_out": False,
+            "range": None,
+        }
+        watchdog: asyncio.Task[None] | None = None
         params: dict[str, Any] = {"textDocument": {"uri": uri, "version": version}}
         if goals is not None:
             params["goals"] = goals
@@ -185,30 +209,149 @@ class RocqLspClient:
                 "params": params,
             }
         )
+        if command_timeout is not None and command_timeout > 0:
+            watchdog = asyncio.create_task(
+                self._command_timeout_watchdog(
+                    uri=uri,
+                    version=version,
+                    request_id=request_id,
+                    command_timeout=command_timeout,
+                    command_state=command_state,
+                )
+            )
 
         try:
-            raw = await asyncio.wait_for(asyncio.shield(future), timeout=timeout)
-            self._pending.pop(request_id, None)
-            return self._result_or_raise(raw), False
-        except TimeoutError as exc:
-            await self.notify("$/cancelRequest", {"id": request_id})
-            try:
-                raw = await asyncio.wait_for(
-                    asyncio.shield(future), timeout=hard_timeout_grace
-                )
-            except TimeoutError:
+            if watchdog is None:
+                try:
+                    raw = await asyncio.wait_for(
+                        asyncio.shield(future), timeout=timeout
+                    )
+                except TimeoutError:
+                    await self.notify("$/cancelRequest", {"id": request_id})
+                    return await self._wait_for_cancelled_get_document(
+                        request_id=request_id,
+                        future=future,
+                        hard_timeout_grace=hard_timeout_grace,
+                        timeout_kind="request",
+                        timeout_seconds=timeout,
+                        timed_out_range=None,
+                    )
                 self._pending.pop(request_id, None)
-                future.cancel()
-                raise RocqLspHardTimeout(
-                    f"coq/getDocument timed out after {timeout}s and did not "
-                    f"settle within {hard_timeout_grace}s"
-                ) from exc
-            finally:
-                self._pending.pop(request_id, None)
+                return GetDocumentResult(document=self._result_or_raise(raw))
 
-            if "error" in raw:
-                return {}, True
-            return self._result_or_raise(raw), True
+            done, _ = await asyncio.wait(
+                {future, watchdog},
+                timeout=timeout,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if not done:
+                await self.notify("$/cancelRequest", {"id": request_id})
+                return await self._wait_for_cancelled_get_document(
+                    request_id=request_id,
+                    future=future,
+                    hard_timeout_grace=hard_timeout_grace,
+                    timeout_kind="request",
+                    timeout_seconds=timeout,
+                    timed_out_range=None,
+                )
+
+            if watchdog in done:
+                await watchdog
+                return await self._wait_for_cancelled_get_document(
+                    request_id=request_id,
+                    future=future,
+                    hard_timeout_grace=hard_timeout_grace,
+                    timeout_kind="command",
+                    timeout_seconds=command_timeout or 0,
+                    timed_out_range=command_state["range"],
+                )
+
+            raw = future.result()
+            self._pending.pop(request_id, None)
+            if command_state["timed_out"]:
+                return self._get_document_timeout_result(
+                    raw, command_state["range"]
+                )
+            return GetDocumentResult(document=self._result_or_raise(raw))
+        finally:
+            if watchdog is not None:
+                watchdog.cancel()
+                with suppress(asyncio.CancelledError):
+                    await watchdog
+
+    async def _command_timeout_watchdog(
+        self,
+        *,
+        uri: str,
+        version: int,
+        request_id: int,
+        command_timeout: float,
+        command_state: dict[str, Any],
+    ) -> None:
+        after_sequence = self.notifications.latest_execution_sequence(uri, version)
+        active_range: dict[str, Any] | None = None
+        while True:
+            update = await self.notifications.wait_for_execution_info(
+                uri,
+                version,
+                after_sequence=after_sequence,
+                timeout=command_timeout if active_range is not None else None,
+            )
+            if update is None:
+                command_state["timed_out"] = True
+                command_state["range"] = active_range
+                await self.notify("$/cancelRequest", {"id": request_id})
+                return
+
+            after_sequence, params = update
+            range_ = params.get("range") if isinstance(params, dict) else None
+            active_range = range_ if isinstance(range_, dict) else None
+
+    def _get_document_timeout_result(
+        self, raw: dict[str, Any], timed_out_range: dict[str, Any] | None
+    ) -> GetDocumentResult:
+        document = {} if "error" in raw else self._result_or_raise(raw)
+        return GetDocumentResult(
+            document=document,
+            timed_out=True,
+            timeout_kind="command",
+            timed_out_range=timed_out_range,
+        )
+
+    async def _wait_for_cancelled_get_document(
+        self,
+        *,
+        request_id: int,
+        future: asyncio.Future[dict[str, Any]],
+        hard_timeout_grace: float,
+        timeout_kind: Literal["request", "command"],
+        timeout_seconds: float,
+        timed_out_range: dict[str, Any] | None,
+    ) -> GetDocumentResult:
+        try:
+            raw = await asyncio.wait_for(
+                asyncio.shield(future), timeout=hard_timeout_grace
+            )
+        except TimeoutError as exc:
+            self._pending.pop(request_id, None)
+            future.cancel()
+            raise RocqLspHardTimeout(
+                f"coq/getDocument {timeout_kind} timed out after "
+                f"{timeout_seconds}s and did not settle within "
+                f"{hard_timeout_grace}s",
+                timeout_kind=timeout_kind,
+                timed_out_range=timed_out_range,
+            ) from exc
+        finally:
+            self._pending.pop(request_id, None)
+
+        document = {} if "error" in raw else self._result_or_raise(raw)
+        return GetDocumentResult(
+            document=document,
+            timed_out=True,
+            timeout_kind=timeout_kind,
+            timed_out_range=timed_out_range,
+        )
 
     async def request_goals(
         self,

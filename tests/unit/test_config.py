@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from rocq_lsp_mcp.config import load_config, rocq_lsp_command
+from rocq_lsp_mcp.config import load_config, rocq_lsp_command, rocq_lsp_settings
 
 
 def test_rocq_lsp_command_defaults_to_opam_exec() -> None:
@@ -21,6 +21,7 @@ def test_load_config_reads_opam_and_idle_ttl(monkeypatch) -> None:
         "ROCQ_LSP_BINARY",
         "ROCQ_LSP_TIMEOUT",
         "ROCQ_LSP_HARD_TIMEOUT_GRACE",
+        "ROCQ_LSP_COMMAND_TIMEOUT",
         "ROCQ_LSP_MAX_ERRORS",
         "ROCQ_LSP_WORKSPACE",
     ):
@@ -32,3 +33,24 @@ def test_load_config_reads_opam_and_idle_ttl(monkeypatch) -> None:
 
     assert config.use_opam is False
     assert config.idle_ttl_seconds == 12.5
+    assert config.timeout_policy.command_seconds is None
+
+
+def test_load_config_reads_command_timeout(monkeypatch) -> None:
+    monkeypatch.setenv("ROCQ_LSP_COMMAND_TIMEOUT", "2.5")
+
+    config = load_config()
+
+    assert config.timeout_policy.command_seconds == 2.5
+
+
+def test_load_config_disables_non_positive_command_timeout(monkeypatch) -> None:
+    monkeypatch.setenv("ROCQ_LSP_COMMAND_TIMEOUT", "0")
+
+    config = load_config()
+
+    assert config.timeout_policy.command_seconds is None
+
+
+def test_rocq_lsp_settings_enable_execution_information() -> None:
+    assert rocq_lsp_settings(100)["send_execinfo"] is True

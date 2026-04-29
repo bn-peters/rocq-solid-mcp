@@ -12,8 +12,11 @@ diagnostics are limited per severity bucket: the default is 10 errors, 10
 warnings, and 10 info/hint messages, and callers may request up to the hard cap
 of 50 per bucket. The prototype talks to `coq-lsp` directly over stdio JSON-RPC.
 Timeout results include a compact `timeout_context` that reports the request
-operation, timeout settings, the latest checked position, the latest processing
-range, and a small preview of the next unchecked source line when available.
+operation, timeout kind and settings, the latest checked position, the latest
+processing range, and a small preview of the next unchecked source line when
+available. Optional per-command timeouts use coq-lsp sentence execution
+notifications, so the timeout unit is one Rocq sentence such as `sleep 5.` or
+`repeat ... .`, not an internal Ltac substep.
 
 ## Architecture
 
@@ -25,8 +28,8 @@ range, and a small preview of the next unchecked source line when available.
   notification store.
 - `rocq_client.py` is transport-only JSON-RPC framing, requests, notifications,
   cancellation, `coq/getDocument`, `proof/goals`, and process cleanup.
-- `notifications.py` stores diagnostics and latest file-progress notifications
-  published by `coq-lsp`.
+- `notifications.py` stores diagnostics, latest file-progress notifications,
+  and sentence execution notifications published by `coq-lsp`.
 - `pipeline.py` converts raw diagnostics plus proof-state data into compact
   agent-facing `Diagnostic` models.
 
@@ -51,6 +54,15 @@ not, it falls back to the start of the latest `$/coq/fileProgress` processing
 range. The context also includes `latest_processing_range` and `next_unchecked`
 as compact 1-based locations without exposing raw LSP progress payloads.
 
+When command timeout is enabled, the client watches `$/coq/executionInformation`
+notifications during `coq/getDocument`. Each new sentence resets the command
+deadline. If the current sentence exceeds the configured limit, the client sends
+`$/cancelRequest` and returns `status: "timeout"` with
+`timeout_context.timeout_kind: "command"`, the timed-out sentence range, and a
+source preview. The existing global request timeout remains the outer safety
+net for parsing stalls, missing execution notifications, or non-interruptible
+work.
+
 ## Run
 
 ```bash
@@ -59,11 +71,15 @@ uv run rocq-lsp-mcp
 
 The server exposes one MCP tool:
 
-- `rocq_lsp_compile_file(file: str, message_limit: int = 10)`
+- `rocq_lsp_compile_file(file: str, message_limit: int = 10,
+  command_timeout_seconds: float | None = None)`
 
 `message_limit` caps returned diagnostics per severity bucket. Values above 50
 are capped to 50. When diagnostics are omitted, the response includes
 `omitted_counts` and `message_limit` alongside total `counts`.
+`command_timeout_seconds` overrides `ROCQ_LSP_COMMAND_TIMEOUT` for one compile:
+`None` uses the server default, `0` disables the sentence watchdog, and positive
+values enable it for that call.
 
 ## Environment
 
@@ -71,6 +87,8 @@ are capped to 50. When diagnostics are omitted, the response includes
 - `ROCQ_LSP_USE_OPAM` defaults to `1`; set to `0` to run the binary directly
 - `ROCQ_LSP_TIMEOUT` defaults to `60`
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE` defaults to `5`
+- `ROCQ_LSP_COMMAND_TIMEOUT` is unset by default; set a positive number of
+  seconds to enable per-sentence command timeouts
 - `ROCQ_LSP_MAX_ERRORS` defaults to `1000000`
 - `ROCQ_LSP_WORKSPACE` optionally pins the workspace root
 - `ROCQ_LSP_IDLE_TTL_SECONDS` defaults to `1800`
@@ -105,7 +123,8 @@ unavailable.
 Scenario compile steps may include timing assertions for cache-sensitive
 behavior; those timings are asserted by the harness but omitted from promoted
 transcripts. Scenarios may also define a top-level `timeout_policy` to override
-the harness defaults for timeout-specific coverage.
+the harness defaults for timeout-specific coverage, including
+`command_seconds` for per-sentence timeout scenarios.
 Use `make promote` to refresh promoted e2e transcripts after intentional output
 changes; promotion runs serially because it rewrites golden files.
 
