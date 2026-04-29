@@ -105,7 +105,8 @@ unavailable.
 Scenario compile steps may include timing assertions for cache-sensitive
 behavior; those timings are asserted by the harness but omitted from promoted
 transcripts. Scenarios may also define a top-level `timeout_policy` to override
-the harness defaults for timeout-specific coverage.
+the harness defaults for timeout-specific coverage. The e2e suite covers both
+soft timeout recovery and hard-timeout session reset behavior.
 Use `make promote` to refresh promoted e2e transcripts after intentional output
 changes; promotion runs serially because it rewrites golden files.
 

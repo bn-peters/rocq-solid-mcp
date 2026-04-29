@@ -184,7 +184,9 @@ The local virtual environment is expected at `.venv/`. Use
   transcripts. `diagnostic_message_limit` covers default per-severity diagnostic
   truncation. `timeout_recovery` uses the local `sleep` tactic to cover a soft
   `coq/getDocument` timeout followed by a successful recompile in the same
-  manager.
+  manager. `hard_timeout_resets_cache` sets the cancel grace to zero and checks
+  that a hard timeout drops the old `coq-lsp` process by requiring a later
+  recompile to rerun an unchanged slow proof.
 
 When changing output shape, update exact-output tests rather than weakening
 assertions. The MCP output should be useful to agents and humans; raw Rocq

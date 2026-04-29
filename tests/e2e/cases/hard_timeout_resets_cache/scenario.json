@@ -1,0 +1,34 @@
+{
+  "timeout_policy": {
+    "request_seconds": 4,
+    "cancel_grace_seconds": 0
+  },
+  "steps": [
+    {
+      "label": "compile through hard timeout",
+      "action": "compile",
+      "file": "src/hard_timeout.v",
+      "min_seconds": 4
+    },
+    {
+      "label": "remove later slow tactic",
+      "action": "replace",
+      "file": "src/hard_timeout.v",
+      "old": "sleep 7",
+      "new": "sleep 0"
+    },
+    {
+      "label": "fix later proof",
+      "action": "replace",
+      "file": "src/hard_timeout.v",
+      "old": "fail.",
+      "new": "easy."
+    },
+    {
+      "label": "recompile after hard timeout",
+      "action": "compile",
+      "file": "src/hard_timeout.v",
+      "min_seconds": 2
+    }
+  ]
+}

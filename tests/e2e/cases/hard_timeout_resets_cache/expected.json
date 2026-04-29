@@ -1,0 +1,44 @@
+[
+  {
+    "step": "compile through hard timeout",
+    "action": "compile",
+    "file": "src/hard_timeout.v",
+    "result": {
+      "status": "timeout",
+      "file": "src/hard_timeout.v",
+      "timed_out": true,
+      "restarted": true,
+      "timeout_context": {
+        "operation": "coq/getDocument",
+        "request_timeout_seconds": 4,
+        "cancel_grace_seconds": 0,
+        "checked_until": "11:7",
+        "latest_processing_range": "11:7 to 20:1",
+        "next_unchecked": {
+          "location": "12:3",
+          "line": "sleep 7."
+        }
+      },
+      "message": "coq/getDocument timed out after 4s and did not settle within 0s"
+    }
+  },
+  {
+    "step": "remove later slow tactic",
+    "action": "replace",
+    "file": "src/hard_timeout.v"
+  },
+  {
+    "step": "fix later proof",
+    "action": "replace",
+    "file": "src/hard_timeout.v"
+  },
+  {
+    "step": "recompile after hard timeout",
+    "action": "compile",
+    "file": "src/hard_timeout.v",
+    "result": {
+      "status": "complete",
+      "file": "src/hard_timeout.v"
+    }
+  }
+]
