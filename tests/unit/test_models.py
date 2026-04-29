@@ -73,3 +73,80 @@ def test_compile_result_counts_keep_only_nonzero_fields_for_warnings(
     )
 
     assert result.model_dump()["counts"] == {"warnings": 1}
+
+
+def test_compile_result_limits_diagnostics_per_level_by_default(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    diagnostics = [
+        *[
+            Diagnostic.from_lsp(
+                {"range": {}, "message": f"bad {index}", "severity": 1}
+            )
+            for index in range(12)
+        ],
+        *[
+            Diagnostic.from_lsp(
+                {"range": {}, "message": f"careful {index}", "severity": 2}
+            )
+            for index in range(11)
+        ],
+        *[
+            Diagnostic.from_lsp(
+                {"range": {}, "message": f"note {index}", "severity": 3}
+            )
+            for index in range(13)
+        ],
+    ]
+
+    result = CompileResult.from_diagnostics(
+        status="complete",
+        file=str(source),
+        uri=source.as_uri(),
+        workspace=str(tmp_path),
+        version=1,
+        completed=None,
+        diagnostics=diagnostics,
+    )
+
+    dumped = result.model_dump()
+    assert len(dumped["diagnostics"]) == 30
+    assert dumped["counts"] == {"errors": 12, "warnings": 11, "infos": 13}
+    assert dumped["omitted_counts"] == {"errors": 2, "warnings": 1, "infos": 3}
+    assert dumped["message_limit"] == 10
+    assert [diagnostic["message"] for diagnostic in dumped["diagnostics"]] == [
+        *[f"bad {index}" for index in range(10)],
+        *[f"careful {index}" for index in range(10)],
+        *[f"note {index}" for index in range(10)],
+    ]
+    assert result.error_count == 12
+    assert len(result.errors) == 10
+
+
+def test_compile_result_hard_caps_requested_message_limit(tmp_path: Path) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+
+    result = CompileResult.from_diagnostics(
+        status="complete",
+        file=str(source),
+        uri=source.as_uri(),
+        workspace=str(tmp_path),
+        version=1,
+        completed=None,
+        diagnostics=[
+            Diagnostic.from_lsp(
+                {"range": {}, "message": f"bad {index}", "severity": 1}
+            )
+            for index in range(51)
+        ],
+        message_limit=1000,
+    )
+
+    dumped = result.model_dump()
+    assert len(dumped["diagnostics"]) == 50
+    assert dumped["counts"] == {"errors": 51}
+    assert dumped["omitted_counts"] == {"errors": 1}
+    assert dumped["message_limit"] == 50

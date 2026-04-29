@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import RocqLspConfig, load_config
-from .models import CompileResult
+from .models import DEFAULT_MESSAGE_LIMIT, CompileResult, bounded_message_limit
 from .pipeline import build_diagnostics
 from .rocq_client import (
     RocqLspClient,
@@ -45,7 +45,10 @@ class RocqLspManager:
         for session in sessions:
             await session.stop()
 
-    async def compile_file(self, file: str) -> CompileResult:
+    async def compile_file(
+        self, file: str, message_limit: int | None = DEFAULT_MESSAGE_LIMIT
+    ) -> CompileResult:
+        message_limit = bounded_message_limit(message_limit)
         path = self._resolve_file(file)
         if not path.is_file():
             return CompileResult.from_diagnostics(
@@ -56,20 +59,21 @@ class RocqLspManager:
                 version=None,
                 completed=None,
                 diagnostics=[],
+                message_limit=message_limit,
                 message=f"File does not exist: {path}",
             )
 
         workspace = self._infer_workspace(path)
         session = await self._checkout_session(workspace)
         try:
-            return await self._compile_with_session(session, path)
+            return await self._compile_with_session(session, path, message_limit)
         finally:
             session.lock.release()
             await self._release_session(session)
             await self._cleanup_idle_sessions()
 
     async def _compile_with_session(
-        self, session: RocqLspSession, path: Path
+        self, session: RocqLspSession, path: Path, message_limit: int
     ) -> CompileResult:
         client = session.client
         uri = path.as_uri()
@@ -86,6 +90,7 @@ class RocqLspManager:
                 version=version,
                 completed=None,
                 diagnostics=[],
+                message_limit=message_limit,
                 message=str(exc),
             )
         session.notifications.clear(uri, version)
@@ -123,6 +128,7 @@ class RocqLspManager:
                 version=version,
                 completed=self._completed_only(completed_doc),
                 diagnostics=diagnostics,
+                message_limit=message_limit,
                 timed_out=request_timed_out,
             )
         except RocqLspHardTimeout as exc:
@@ -139,6 +145,7 @@ class RocqLspManager:
                 version=version,
                 completed=None,
                 diagnostics=diagnostics,
+                message_limit=message_limit,
                 timed_out=True,
                 restarted=True,
                 message=str(exc),
@@ -156,6 +163,7 @@ class RocqLspManager:
                 version=version,
                 completed=None,
                 diagnostics=diagnostics,
+                message_limit=message_limit,
                 message=str(exc.error),
             )
         except Exception as exc:
@@ -171,6 +179,7 @@ class RocqLspManager:
                 version=version,
                 completed=None,
                 diagnostics=diagnostics,
+                message_limit=message_limit,
                 message=str(exc),
             )
 

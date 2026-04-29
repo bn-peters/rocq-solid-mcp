@@ -5,6 +5,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_serializer
 
+DEFAULT_MESSAGE_LIMIT = 10
+MAX_MESSAGE_LIMIT = 50
+
 
 def lsp_to_jsonable(value: Any) -> Any:
     """Convert common structured values into JSON-compatible data."""
@@ -84,6 +87,10 @@ class CompileResult(BaseModel):
     error_count: int = 0
     warning_count: int = 0
     info_count: int = 0
+    omitted_error_count: int = 0
+    omitted_warning_count: int = 0
+    omitted_info_count: int = 0
+    message_limit: int = DEFAULT_MESSAGE_LIMIT
     timed_out: bool = False
     restarted: bool = False
     message: str | None = None
@@ -99,13 +106,18 @@ class CompileResult(BaseModel):
         version: int | None,
         completed: dict[str, Any] | None,
         diagnostics: list[Diagnostic],
+        message_limit: int | None = DEFAULT_MESSAGE_LIMIT,
         timed_out: bool = False,
         restarted: bool = False,
         message: str | None = None,
     ) -> "CompileResult":
-        errors = [diag for diag in diagnostics if diag.severity == 1]
-        warnings = [diag for diag in diagnostics if diag.severity == 2]
-        infos = [diag for diag in diagnostics if diag.severity in (3, 4)]
+        message_limit = bounded_message_limit(message_limit)
+        buckets = diagnostic_buckets(diagnostics)
+        limited_diagnostics = limit_diagnostics(diagnostics, message_limit)
+        limited_buckets = diagnostic_buckets(limited_diagnostics)
+        omitted_errors = len(buckets["errors"]) - len(limited_buckets["errors"])
+        omitted_warnings = len(buckets["warnings"]) - len(limited_buckets["warnings"])
+        omitted_infos = len(buckets["infos"]) - len(limited_buckets["infos"])
         return cls(
             status=status,
             file=file,
@@ -113,11 +125,15 @@ class CompileResult(BaseModel):
             workspace=workspace,
             version=version,
             completed=completed,
-            diagnostics=diagnostics,
-            errors=errors,
-            error_count=len(errors),
-            warning_count=len(warnings),
-            info_count=len(infos),
+            diagnostics=limited_diagnostics,
+            errors=limited_buckets["errors"],
+            error_count=len(buckets["errors"]),
+            warning_count=len(buckets["warnings"]),
+            info_count=len(buckets["infos"]),
+            omitted_error_count=omitted_errors,
+            omitted_warning_count=omitted_warnings,
+            omitted_info_count=omitted_infos,
+            message_limit=message_limit,
             timed_out=timed_out,
             restarted=restarted,
             message=message,
@@ -125,6 +141,13 @@ class CompileResult(BaseModel):
 
     @model_serializer
     def serialize(self) -> dict[str, Any]:
+        omitted_counts = diagnostic_counts(
+            errors=self.omitted_error_count,
+            warnings=self.omitted_warning_count,
+            infos=self.omitted_info_count,
+            force=True,
+        )
+        has_omissions = bool(omitted_counts)
         return pruned_dict(
             {
                 "status": self.status,
@@ -133,7 +156,10 @@ class CompileResult(BaseModel):
                     errors=self.error_count,
                     warnings=self.warning_count,
                     infos=self.info_count,
+                    force=has_omissions,
                 ),
+                "omitted_counts": omitted_counts,
+                "message_limit": self.message_limit if has_omissions else None,
                 "diagnostics": [
                     diagnostic.model_dump() for diagnostic in self.diagnostics
                 ],
@@ -142,6 +168,45 @@ class CompileResult(BaseModel):
                 "message": self.message,
             }
         )
+
+
+def bounded_message_limit(limit: int | None) -> int:
+    if limit is None:
+        return DEFAULT_MESSAGE_LIMIT
+    return min(max(limit, 0), MAX_MESSAGE_LIMIT)
+
+
+def diagnostic_buckets(diagnostics: list[Diagnostic]) -> dict[str, list[Diagnostic]]:
+    buckets: dict[str, list[Diagnostic]] = {
+        "errors": [],
+        "warnings": [],
+        "infos": [],
+    }
+    for diagnostic in diagnostics:
+        buckets[diagnostic_bucket(diagnostic)].append(diagnostic)
+    return buckets
+
+
+def limit_diagnostics(
+    diagnostics: list[Diagnostic], message_limit: int
+) -> list[Diagnostic]:
+    counts = {"errors": 0, "warnings": 0, "infos": 0}
+    result: list[Diagnostic] = []
+    for diagnostic in diagnostics:
+        bucket = diagnostic_bucket(diagnostic)
+        if counts[bucket] >= message_limit:
+            continue
+        counts[bucket] += 1
+        result.append(diagnostic)
+    return result
+
+
+def diagnostic_bucket(diagnostic: Diagnostic) -> str:
+    if diagnostic.severity == 1:
+        return "errors"
+    if diagnostic.severity == 2:
+        return "warnings"
+    return "infos"
 
 
 def location_string(range_: Any) -> str | None:
@@ -165,8 +230,10 @@ def diagnostic_level(severity: int | None) -> str | None:
     return None
 
 
-def diagnostic_counts(*, errors: int, warnings: int, infos: int) -> dict[str, int]:
-    if warnings == 0:
+def diagnostic_counts(
+    *, errors: int, warnings: int, infos: int, force: bool = False
+) -> dict[str, int]:
+    if warnings == 0 and not force:
         return {}
     return {
         key: count

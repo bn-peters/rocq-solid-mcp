@@ -11,7 +11,7 @@ produced an error.
 
 - `src/rocq_lsp_mcp/server.py` defines the FastMCP server, the lifespan-managed
   `RocqLspManager`, and the single MCP tool
-  `rocq_lsp_compile_file(file: str)`.
+  `rocq_lsp_compile_file(file: str, message_limit: int = 10)`.
 - `src/rocq_lsp_mcp/manager.py` is the orchestration layer. It resolves files,
   infers workspaces from `_RocqProject` or `_CoqProject`, keeps cached
   sessions per workspace, evicts idle sessions, reads files, routes compile
@@ -40,8 +40,10 @@ produced an error.
   `CompileResult` separates diagnostics into errors, warnings, and infos.
   `Diagnostic` keeps raw LSP details internally while serializing only compact
   fields such as `level`, `location`, `message`, optional `proof_name`, and
-  optional `proof_state`. Serialized compile results include the compiled file
-  relative to the workspace and omit version/workspace internals.
+  optional `proof_state`. `CompileResult` caps returned diagnostics per severity
+  bucket, with a default of 10 and a hard cap of 50 requested messages per
+  bucket. Serialized compile results include the compiled file relative to the
+  workspace and omit version/workspace internals.
 - `src/rocq_lsp_mcp/config.py` loads environment configuration, defines
   `TimeoutPolicy`, builds the `opam exec -- coq-lsp` command, and builds the
   `coq-lsp` initialization settings.
@@ -51,12 +53,13 @@ LSP client library unless the user explicitly asks for that direction.
 
 ## Runtime Behavior
 
-The MCP tool receives only a Rocq file path. On each call, the manager resolves
-the file, infers a workspace by walking upward to the nearest `_RocqProject` or
-`_CoqProject`, then delegates to the cached `RocqLspSession` for that
-workspace. If no project file is found, the file's parent directory is used.
-The session sends either `textDocument/didOpen` or `textDocument/didChange`
-through its client. The document version increments on every call.
+The MCP tool receives a Rocq file path and optional `message_limit`. On each
+call, the manager resolves the file, infers a workspace by walking upward to the
+nearest `_RocqProject` or `_CoqProject`, then delegates to the cached
+`RocqLspSession` for that workspace. If no project file is found, the file's
+parent directory is used. The session sends either `textDocument/didOpen` or
+`textDocument/didChange` through its client. The document version increments on
+every call.
 
 Each inferred workspace gets a separate long-lived `coq-lsp` process. The
 process starts with `cwd` set to that workspace and, by default, with
@@ -73,7 +76,9 @@ for the MCP response, replacing raw LSP ranges with a single 1-based location
 string, replacing numeric LSP severities with `error`, `warning`, or `info`,
 and omitting null or empty fields. If multiple errors belong to the same
 `proof_name`, only the first is forwarded to the agent. Counts are serialized
-only when warnings are present, and zero-valued count fields are omitted.
+only when warnings or omitted diagnostics are present, and zero-valued count
+fields are omitted. When diagnostics are omitted because of `message_limit`, the
+response includes `omitted_counts` and the effective `message_limit`.
 
 For `Attempt to save an incomplete proof` diagnostics, the `Qed.` sentence can
 carry only the save error while the open goal is attached to the previous proof
@@ -162,7 +167,8 @@ The local virtual environment is expected at `.venv/`. Use
   `timeout_policy` for timeout-specific coverage. Scenario compile steps may
   include `min_seconds` or `max_seconds` timing assertions for cache-sensitive
   behavior; timings are asserted by the harness but omitted from promoted
-  transcripts. `timeout_recovery` uses the local `sleep` tactic to cover a soft
+  transcripts. `diagnostic_message_limit` covers default per-severity diagnostic
+  truncation. `timeout_recovery` uses the local `sleep` tactic to cover a soft
   `coq/getDocument` timeout followed by a successful recompile in the same
   manager.
 
