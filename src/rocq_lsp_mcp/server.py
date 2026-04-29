@@ -64,7 +64,11 @@ async def rocq_lsp_compile_file(
 ) -> dict[str, Any]:
     """Compile a Rocq file and report diagnostics.
 
-    Use this to check to check files for errors. The diagnostics are much faster and much more detailed than those of regular compilation. They include the current proof state at the error position and precise ranges.
+    Use this to check to check files for errors. The diagnostics are much more detailed than those of regular compilation. They include the current proof state at the error position and precise ranges.
+
+    This command is entirely stateless, but is very efficient due to caching.
+
+    External dependencies are not automatically recompiled, and no compilation artifacts are saved. If you edit upstream files, recompile them first using external tools.
 
     Adjust the request timeout only when a file is known to take a long time to compile. Adjust the command timeout only when specific tactics in a file are known to be slow. The message limit should only rarely be adjusted.
     """
