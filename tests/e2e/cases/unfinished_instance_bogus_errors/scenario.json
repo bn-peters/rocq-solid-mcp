@@ -1,0 +1,9 @@
+{
+  "steps": [
+    {
+      "label": "compile unfinished instance",
+      "action": "compile",
+      "file": "src/unfinished_instance.v"
+    }
+  ]
+}
