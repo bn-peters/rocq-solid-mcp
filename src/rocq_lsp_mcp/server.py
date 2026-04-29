@@ -25,14 +25,20 @@ mcp = FastMCP("rocq-lsp-mcp", lifespan=app_lifespan)
 
 @mcp.tool()
 async def rocq_lsp_compile_file(
-    file: str,
     ctx: Context,
+    file: Annotated[
+        str,
+        Field(
+            description=(
+                "Absolute path to a .v file"
+                ),
+            ),
+    ]
     message_limit: Annotated[
         int,
         Field(
             description=(
-                "Returned diagnostics per severity bucket; values above 50 "
-                "are capped."
+                "Optional maximum returned diagnostics per category (error, warning, info). Default 10, maximum 50"
             ),
         ),
     ] = DEFAULT_MESSAGE_LIMIT,
@@ -40,21 +46,16 @@ async def rocq_lsp_compile_file(
         float | None,
         Field(
             description=(
-                "Optional per Rocq sentence timeout in seconds. None uses the "
-                "server default, normally 5 seconds; 0 disables it for this call."
+                "Optional per Rocq sentence timeout, in seconds. Default 5s, 0 disables"
             ),
         ),
     ] = None,
 ) -> CompileResult:
-    """Compile a Rocq file through a cached rocq-lsp session.
+    """Compile a Rocq file and report diagnostics.
 
-    message_limit caps returned diagnostics per severity. The default is 10,
-    and values above the hard limit of 50 are capped.
+    Use this to check to check files for errors. The diagnostics are much faster and much more detailed than those of regular compilation. They include the current proof state at the error position and precise ranges.
 
-    command_timeout_seconds optionally cancels a compile when one Rocq sentence
-    runs longer than the requested number of seconds. By default, the server
-    uses 5 seconds unless configured otherwise. A value of 0 disables the
-    per-command timeout for this call.
+    Adjust the request timeout only when a file is known to take a long time to compile. Adjust the command timeout only when specific tactics in a file are known to be slow. The message limit should only rarely be adjusted.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
     return await manager.compile_file(
@@ -66,9 +67,33 @@ async def rocq_lsp_compile_file(
 
 @mcp.tool()
 async def rocq_lsp_run_command(
-    file: str, command: str, line: int, ctx: Context, character: int = 1
+    file: Annotated[str, Field(description="Absolute path to a .v file.")],
+    command: Annotated[
+        str,
+        Field(
+            description=(
+                "A single Rocq command to evaluate, e.g. 'Check Nat.add.' or "
+                "'Search (_ + _ = _).'."
+            ),
+        ),
+    ],
+    line: Annotated[
+        int,
+        Field(
+            description=(
+                "1-based line number in the file before which the command is injected."
+            ),
+        ),
+    ],
+    ctx: Context,
+    character: Annotated[
+        int,
+        Field(description="1-based column offset. Defaults to 1 (start of line)."),
+    ] = 1,
 ) -> CommandResult:
     """Run one Rocq command at a file position and return its output.
+
+    Use this to query information about the proof environment, for instance using Search, Check, or Locate.
 
     Prefer calling this right after imports. If local definitions, scopes, or
     modules are needed, call it between lemmas or definitions.
