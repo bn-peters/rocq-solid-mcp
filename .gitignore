@@ -9,3 +9,5 @@ __pycache__/
 *.glob
 _opam
 uv.lock
+.venv
+.codex
