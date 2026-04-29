@@ -8,3 +8,4 @@ __pycache__/
 *.vos
 *.glob
 _opam
+uv.lock

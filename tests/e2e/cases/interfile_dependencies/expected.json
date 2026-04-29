@@ -1,7 +1,7 @@
 [
   {
     "step": "compile dependency before lsp",
-    "action": "coqc",
+    "action": "rocqc",
     "file": "theories/Base.v"
   },
   {

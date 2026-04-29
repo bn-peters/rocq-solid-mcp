@@ -43,7 +43,8 @@ make e2e
 These targets run tests in parallel with `pytest-xdist` by default. Override the
 worker count with a Make variable, for example `make test PYTEST_WORKERS=4`.
 
-Integration and e2e tests skip themselves when `coq-lsp` is unavailable.
+Integration and e2e tests skip themselves when `coq-lsp` is unavailable. E2e
+scenarios with compiled dependencies also skip when `rocqc` is unavailable.
 Use `make promote` to refresh promoted e2e transcripts after intentional output
 changes; promotion runs serially because it rewrites golden files.
 

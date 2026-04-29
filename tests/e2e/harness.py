@@ -49,8 +49,8 @@ def _run_setup(project_root: Path, steps: list[dict[str, Any]]) -> list[dict[str
     transcript: list[dict[str, Any]] = []
     for step in steps:
         action = step["action"]
-        if action == "coqc":
-            _run_coqc(project_root, step)
+        if action == "rocqc":
+            _run_rocqc(project_root, step)
             transcript.append(_step_record(step))
             continue
 
@@ -58,15 +58,15 @@ def _run_setup(project_root: Path, steps: list[dict[str, Any]]) -> list[dict[str
     return transcript
 
 
-def _run_coqc(project_root: Path, step: dict[str, Any]) -> None:
-    coqc = shutil.which("coqc")
-    if coqc is None:
-        pytest.skip("install coqc to run e2e scenarios with compiled dependencies")
+def _run_rocqc(project_root: Path, step: dict[str, Any]) -> None:
+    rocqc = shutil.which("rocqc")
+    if rocqc is None:
+        pytest.skip("install rocqc to run e2e scenarios with compiled dependencies")
 
     file = step["file"]
     try:
         subprocess.run(
-            [coqc, *step.get("args", []), file],
+            [rocqc, *step.get("args", []), file],
             cwd=project_root,
             check=True,
             text=True,
@@ -74,7 +74,7 @@ def _run_coqc(project_root: Path, step: dict[str, Any]) -> None:
         )
     except subprocess.CalledProcessError as exc:
         output = "\n".join(part for part in (exc.stdout, exc.stderr) if part)
-        raise AssertionError(f"coqc failed for {file}\n{output}") from exc
+        raise AssertionError(f"rocqc failed for {file}\n{output}") from exc
 
 
 async def _run_steps(
