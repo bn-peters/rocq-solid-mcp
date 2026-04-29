@@ -126,7 +126,9 @@ The local virtual environment is expected at `.venv/`. Use
   after changing `fail` to `reflexivity`.
 - `tests/e2e/test_scenarios.py` runs promoted scenario fixtures that copy whole
   Rocq projects, compile files through one cached manager, edit files, and check
-  concise agent-facing transcripts.
+  concise agent-facing transcripts. Scenario compile steps may include
+  `min_seconds` or `max_seconds` timing assertions for cache-sensitive behavior;
+  timings are asserted by the harness but omitted from promoted transcripts.
 
 When changing output shape, update exact-output tests rather than weakening
 assertions. The MCP output should be useful to agents and humans; raw Rocq

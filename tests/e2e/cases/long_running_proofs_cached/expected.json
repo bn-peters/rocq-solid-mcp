@@ -1,0 +1,101 @@
+[
+  {
+    "step": "compile file with slow preceding proof",
+    "action": "compile",
+    "file": "src/cache.v",
+    "result": {
+      "status": "complete",
+      "workspace": "$PROJECT",
+      "version": 1,
+      "counts": {
+        "errors": 1,
+        "warnings": 0,
+        "infos": 0
+      },
+      "diagnostics": [
+        {
+          "severity": 1,
+          "message": "Tactic failure.",
+          "range": {
+            "start": {
+              "line": 11,
+              "character": 2
+            },
+            "end": {
+              "line": 11,
+              "character": 7
+            }
+          },
+          "proof_name": "Unnamed_thm0",
+          "sentence_range": {
+            "start": {
+              "line": 11,
+              "character": 2
+            },
+            "end": {
+              "line": 11,
+              "character": 7
+            }
+          },
+          "proof_state": {
+            "textDocument": {
+              "uri": "file://$PROJECT/src/cache.v",
+              "version": 1
+            },
+            "position": {
+              "line": 11,
+              "character": 2
+            },
+            "range": {
+              "start": {
+                "line": 11,
+                "character": 2
+              },
+              "end": {
+                "line": 11,
+                "character": 7
+              }
+            },
+            "goals": {
+              "goals": [
+                {
+                  "name": null,
+                  "hyps": [],
+                  "ty": "True"
+                }
+              ],
+              "stack": [],
+              "bullet": null,
+              "shelf": [],
+              "given_up": []
+            },
+            "program": [],
+            "messages": [],
+            "error": "Tactic failure."
+          }
+        }
+      ]
+    }
+  },
+  {
+    "step": "fix proof after slow proof",
+    "action": "replace",
+    "file": "src/cache.v"
+  },
+  {
+    "step": "recompile fixed proof from cache",
+    "action": "compile",
+    "file": "src/cache.v",
+    "result": {
+      "status": "complete",
+      "workspace": "$PROJECT",
+      "version": 2,
+      "counts": {
+        "errors": 0,
+        "warnings": 0,
+        "infos": 0
+      },
+      "diagnostics": []
+    }
+  }
+]

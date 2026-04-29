@@ -4,6 +4,7 @@ import difflib
 import json
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -111,7 +112,10 @@ async def _run_steps(
             continue
 
         if action == "compile":
+            start = time.monotonic()
             result = await manager.compile_file(str(path))
+            elapsed = time.monotonic() - start
+            _check_timing(step, elapsed)
             transcript.append(
                 {
                     **_step_record(step),
@@ -122,6 +126,19 @@ async def _run_steps(
 
         raise AssertionError(f"unknown e2e action: {action}")
     return transcript
+
+
+def _check_timing(step: dict[str, Any], elapsed: float) -> None:
+    if "min_seconds" in step and elapsed < step["min_seconds"]:
+        raise AssertionError(
+            f"{step['label']}: expected compile to take at least "
+            f"{step['min_seconds']:.3f}s, took {elapsed:.3f}s"
+        )
+    if "max_seconds" in step and elapsed >= step["max_seconds"]:
+        raise AssertionError(
+            f"{step['label']}: expected compile to take less than "
+            f"{step['max_seconds']:.3f}s, took {elapsed:.3f}s"
+        )
 
 
 def _step_record(step: dict[str, Any]) -> dict[str, Any]:

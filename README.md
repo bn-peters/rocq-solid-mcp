@@ -61,6 +61,9 @@ worker count with a Make variable, for example `make test PYTEST_WORKERS=4`.
 
 Integration and e2e tests skip themselves when `coq-lsp` is unavailable. E2e
 scenarios with compiled dependencies also skip when `rocq` is unavailable.
+Scenario compile steps may include timing assertions for cache-sensitive
+behavior; those timings are asserted by the harness but omitted from promoted
+transcripts.
 Use `make promote` to refresh promoted e2e transcripts after intentional output
 changes; promotion runs serially because it rewrites golden files.
 

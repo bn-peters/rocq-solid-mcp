@@ -1,0 +1,23 @@
+{
+  "steps": [
+    {
+      "label": "compile file with slow preceding proof",
+      "action": "compile",
+      "file": "src/cache.v",
+      "min_seconds": 4
+    },
+    {
+      "label": "fix proof after slow proof",
+      "action": "replace",
+      "file": "src/cache.v",
+      "old": "fail.",
+      "new": "easy."
+    },
+    {
+      "label": "recompile fixed proof from cache",
+      "action": "compile",
+      "file": "src/cache.v",
+      "max_seconds": 3
+    }
+  ]
+}
