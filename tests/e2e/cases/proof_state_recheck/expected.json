@@ -24,7 +24,7 @@
       "workspace": "$PROJECT",
       "version": 1,
       "counts": {
-        "errors": 2,
+        "errors": 1,
         "warnings": 0,
         "infos": 0
       },
@@ -88,54 +88,6 @@
             "program": [],
             "messages": [],
             "error": "Tactic failure."
-          }
-        },
-        {
-          "severity": 1,
-          "message": " (in proof Unnamed_thm): Attempt to save an incomplete proof\n(there are remaining open goals).",
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 25
-            },
-            "end": {
-              "line": 0,
-              "character": 29
-            }
-          },
-          "proof_name": "Unnamed_thm",
-          "sentence_range": {
-            "start": {
-              "line": 0,
-              "character": 25
-            },
-            "end": {
-              "line": 0,
-              "character": 29
-            }
-          },
-          "proof_state": {
-            "textDocument": {
-              "uri": "file://$PROJECT/src/proof.v",
-              "version": 1
-            },
-            "position": {
-              "line": 0,
-              "character": 25
-            },
-            "range": {
-              "start": {
-                "line": 0,
-                "character": 25
-              },
-              "end": {
-                "line": 0,
-                "character": 29
-              }
-            },
-            "program": [],
-            "messages": [],
-            "error": " (in proof Unnamed_thm): Attempt to save an incomplete proof\n(there are remaining open goals)."
           }
         }
       ]

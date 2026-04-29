@@ -26,7 +26,9 @@ available, proof-state context for the sentence that produced an error.
 - `src/rocq_lsp_mcp/models.py` contains the Pydantic response models.
   `CompileResult` separates diagnostics into errors, warnings, and infos.
   `Diagnostic` keeps the raw LSP diagnostic while exposing normalized fields and
-  optional `proof_name` and `proof_state`.
+  optional `proof_name` and `proof_state`. Agent-facing results keep only the
+  first error for each `proof_name`; warnings, infos, and errors without a proof
+  name are not deduplicated this way.
 - `src/rocq_lsp_mcp/config.py` loads environment configuration and builds the
   `coq-lsp` initialization settings.
 
@@ -42,8 +44,9 @@ The document version increments on every call.
 
 Compilation is driven by `coq/getDocument` with `goals="Str"`. This asks
 `coq-lsp` for the checked document and proof-state data around spans. The
-diagnostics from `textDocument/publishDiagnostics` are returned in the MCP
-response.
+diagnostics from `textDocument/publishDiagnostics` are normalized for the MCP
+response. If multiple errors belong to the same `proof_name`, only the first is
+forwarded to the agent.
 
 Caching is delegated to the long-lived `coq-lsp` process. The Python side keeps
 the session and version state alive so repeated calls for changed files can use

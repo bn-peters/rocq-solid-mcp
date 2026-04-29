@@ -45,7 +45,7 @@
       "workspace": "$PROJECT",
       "version": 2,
       "counts": {
-        "errors": 4,
+        "errors": 2,
         "warnings": 0,
         "infos": 0
       },
@@ -113,54 +113,6 @@
         },
         {
           "severity": 1,
-          "message": " (in proof shared_rank_wrong): Attempt to save an incomplete proof\n(there are remaining open goals).",
-          "range": {
-            "start": {
-              "line": 25,
-              "character": 20
-            },
-            "end": {
-              "line": 25,
-              "character": 24
-            }
-          },
-          "proof_name": "shared_rank_wrong",
-          "sentence_range": {
-            "start": {
-              "line": 25,
-              "character": 20
-            },
-            "end": {
-              "line": 25,
-              "character": 24
-            }
-          },
-          "proof_state": {
-            "textDocument": {
-              "uri": "file://$PROJECT/src/lang/modes.v",
-              "version": 2
-            },
-            "position": {
-              "line": 25,
-              "character": 20
-            },
-            "range": {
-              "start": {
-                "line": 25,
-                "character": 20
-              },
-              "end": {
-                "line": 25,
-                "character": 24
-              }
-            },
-            "program": [],
-            "messages": [],
-            "error": " (in proof shared_rank_wrong): Attempt to save an incomplete proof\n(there are remaining open goals)."
-          }
-        },
-        {
-          "severity": 1,
           "message": "Unable to unify \"true\" with \"Modes.can_promote Modes.Capsule\".",
           "range": {
             "start": {
@@ -218,54 +170,6 @@
             "program": [],
             "messages": [],
             "error": "Unable to unify\n \"true\"\nwith\n \"Modes.can_promote\nModes.Capsule\"."
-          }
-        },
-        {
-          "severity": 1,
-          "message": " (in proof capsule_can_promote_wrong): Attempt to save an incomplete proof\n(there are remaining open goals).",
-          "range": {
-            "start": {
-              "line": 28,
-              "character": 20
-            },
-            "end": {
-              "line": 28,
-              "character": 24
-            }
-          },
-          "proof_name": "capsule_can_promote_wrong",
-          "sentence_range": {
-            "start": {
-              "line": 28,
-              "character": 20
-            },
-            "end": {
-              "line": 28,
-              "character": 24
-            }
-          },
-          "proof_state": {
-            "textDocument": {
-              "uri": "file://$PROJECT/src/lang/modes.v",
-              "version": 2
-            },
-            "position": {
-              "line": 28,
-              "character": 20
-            },
-            "range": {
-              "start": {
-                "line": 28,
-                "character": 20
-              },
-              "end": {
-                "line": 28,
-                "character": 24
-              }
-            },
-            "program": [],
-            "messages": [],
-            "error": " (in proof capsule_can_promote_wrong): Attempt to save an incomplete proof\n(there are remaining open goals)."
           }
         }
       ]

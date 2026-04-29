@@ -84,6 +84,7 @@ class CompileResult(BaseModel):
         restarted: bool = False,
         message: str | None = None,
     ) -> "CompileResult":
+        diagnostics = _agent_facing_diagnostics(diagnostics)
         errors = [diag for diag in diagnostics if diag.severity == 1]
         warnings = [diag for diag in diagnostics if diag.severity == 2]
         infos = [diag for diag in diagnostics if diag.severity in (3, 4)]
@@ -103,3 +104,15 @@ class CompileResult(BaseModel):
             restarted=restarted,
             message=message,
         )
+
+
+def _agent_facing_diagnostics(diagnostics: list[Diagnostic]) -> list[Diagnostic]:
+    seen_error_proofs: set[str] = set()
+    filtered: list[Diagnostic] = []
+    for diagnostic in diagnostics:
+        if diagnostic.severity == 1 and diagnostic.proof_name is not None:
+            if diagnostic.proof_name in seen_error_proofs:
+                continue
+            seen_error_proofs.add(diagnostic.proof_name)
+        filtered.append(diagnostic)
+    return filtered

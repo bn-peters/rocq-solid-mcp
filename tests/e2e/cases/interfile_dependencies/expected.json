@@ -34,7 +34,7 @@
       "workspace": "$PROJECT",
       "version": 2,
       "counts": {
-        "errors": 2,
+        "errors": 1,
         "warnings": 0,
         "infos": 0
       },
@@ -98,54 +98,6 @@
             "program": [],
             "messages": [],
             "error": "Unable to unify\n \"40\"\nwith\n \"imported_value\"."
-          }
-        },
-        {
-          "severity": 1,
-          "message": " (in proof imported_value_wrong): Attempt to save an incomplete proof\n(there are remaining open goals).",
-          "range": {
-            "start": {
-              "line": 8,
-              "character": 20
-            },
-            "end": {
-              "line": 8,
-              "character": 24
-            }
-          },
-          "proof_name": "imported_value_wrong",
-          "sentence_range": {
-            "start": {
-              "line": 8,
-              "character": 20
-            },
-            "end": {
-              "line": 8,
-              "character": 24
-            }
-          },
-          "proof_state": {
-            "textDocument": {
-              "uri": "file://$PROJECT/clients/UseBase.v",
-              "version": 2
-            },
-            "position": {
-              "line": 8,
-              "character": 20
-            },
-            "range": {
-              "start": {
-                "line": 8,
-                "character": 20
-              },
-              "end": {
-                "line": 8,
-                "character": 24
-              }
-            },
-            "program": [],
-            "messages": [],
-            "error": " (in proof imported_value_wrong): Attempt to save an incomplete proof\n(there are remaining open goals)."
           }
         }
       ]

@@ -90,15 +90,28 @@ class FakeManager(RocqLspManager):
         return session
 
 
-def diagnostic(message: str, severity: int) -> dict[str, Any]:
-    return {
+def diagnostic(
+    message: str,
+    severity: int,
+    *,
+    proof_name: str | None = None,
+    line: int = 0,
+) -> dict[str, Any]:
+    range_ = {
+        "start": {"line": line, "character": 0},
+        "end": {"line": line, "character": 1},
+    }
+    result: dict[str, Any] = {
         "range": {
-            "start": {"line": 0, "character": 0},
-            "end": {"line": 0, "character": 1},
+            "start": {"line": line, "character": 0},
+            "end": {"line": line, "character": 1},
         },
         "message": message,
         "severity": severity,
     }
+    if proof_name is not None:
+        result["data"] = {"sentenceRange": range_, "proofName": proof_name}
+    return result
 
 
 @pytest.mark.asyncio
@@ -118,6 +131,43 @@ async def test_compile_file_opens_then_changes(tmp_path: Path) -> None:
     assert second.version == 2
     assert client.opened == [(source.resolve(), 1)]
     assert client.changed == [(source.resolve(), 2)]
+
+
+@pytest.mark.asyncio
+async def test_compile_file_keeps_only_first_error_per_proof_name(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    client = FakeClient(
+        [
+            diagnostic("first foo", 1, proof_name="foo", line=0),
+            diagnostic("second foo", 1, proof_name="foo", line=1),
+            diagnostic("foo warning", 2, proof_name="foo", line=2),
+            diagnostic("first bar", 1, proof_name="bar", line=3),
+            diagnostic("global first", 1, line=4),
+            diagnostic("global second", 1, line=5),
+        ]
+    )
+    manager = FakeManager(client, tmp_path)
+
+    result = await manager.compile_file(str(source))
+
+    assert result.error_count == 4
+    assert result.warning_count == 1
+    assert [diagnostic.message for diagnostic in result.diagnostics] == [
+        "first foo",
+        "foo warning",
+        "first bar",
+        "global first",
+        "global second",
+    ]
+    assert [error.message for error in result.errors] == [
+        "first foo",
+        "first bar",
+        "global first",
+        "global second",
+    ]
 
 
 @pytest.mark.asyncio

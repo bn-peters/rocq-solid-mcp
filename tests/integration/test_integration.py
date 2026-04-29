@@ -98,13 +98,12 @@ async def test_file_change_rechecks_and_reports_failure_proof_state(
             "end": {"line": 1, "character": 0},
         },
     }
-    assert failing.error_count == 2
+    assert failing.error_count == 1
     assert failing.warning_count == 0
     assert failing.info_count == 0
     assert "Pp_" not in json.dumps(failing.model_dump())
     assert [error.model_dump() for error in failing.errors] == [
         _expected_tactic_failure(source.as_uri()),
-        _expected_incomplete_qed(source.as_uri()),
     ]
 
     assert fixed.status == "complete"
@@ -165,37 +164,6 @@ def _expected_tactic_failure(uri: str) -> dict[str, object]:
             "range": range_,
             "severity": 1,
             "message": "Tactic failure.",
-            "data": {"sentenceRange": range_, "proofName": "Unnamed_thm"},
-        },
-    }
-
-
-def _expected_incomplete_qed(uri: str) -> dict[str, object]:
-    range_ = _range(25, 29)
-    message = (
-        " (in proof Unnamed_thm): Attempt to save an incomplete proof\n"
-        "(there are remaining open goals)."
-    )
-    return {
-        "range": range_,
-        "message": message,
-        "severity": 1,
-        "code": None,
-        "source": None,
-        "data": {"sentenceRange": range_, "proofName": "Unnamed_thm"},
-        "proof_name": "Unnamed_thm",
-        "proof_state": {
-            "textDocument": {"uri": uri, "version": 1},
-            "position": {"line": 0, "character": 25},
-            "range": range_,
-            "program": [],
-            "messages": [],
-            "error": message,
-        },
-        "raw": {
-            "range": range_,
-            "severity": 1,
-            "message": message,
             "data": {"sentenceRange": range_, "proofName": "Unnamed_thm"},
         },
     }

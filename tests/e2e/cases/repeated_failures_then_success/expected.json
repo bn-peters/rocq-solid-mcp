@@ -8,7 +8,7 @@
       "workspace": "$PROJECT",
       "version": 1,
       "counts": {
-        "errors": 3,
+        "errors": 1,
         "warnings": 0,
         "infos": 0
       },
@@ -53,128 +53,6 @@
               },
               "end": {
                 "line": 2,
-                "character": 7
-              }
-            },
-            "goals": {
-              "goals": [
-                {
-                  "name": null,
-                  "hyps": [],
-                  "ty": "3 = 3"
-                }
-              ],
-              "stack": [],
-              "bullet": null,
-              "shelf": [],
-              "given_up": []
-            },
-            "program": [],
-            "messages": [],
-            "error": "Tactic failure."
-          }
-        },
-        {
-          "severity": 1,
-          "message": "Tactic failure.",
-          "range": {
-            "start": {
-              "line": 3,
-              "character": 2
-            },
-            "end": {
-              "line": 3,
-              "character": 7
-            }
-          },
-          "proof_name": "foo",
-          "sentence_range": {
-            "start": {
-              "line": 3,
-              "character": 2
-            },
-            "end": {
-              "line": 3,
-              "character": 7
-            }
-          },
-          "proof_state": {
-            "textDocument": {
-              "uri": "file://$PROJECT/src/repeated_failures.v",
-              "version": 1
-            },
-            "position": {
-              "line": 3,
-              "character": 2
-            },
-            "range": {
-              "start": {
-                "line": 3,
-                "character": 2
-              },
-              "end": {
-                "line": 3,
-                "character": 7
-              }
-            },
-            "goals": {
-              "goals": [
-                {
-                  "name": null,
-                  "hyps": [],
-                  "ty": "3 = 3"
-                }
-              ],
-              "stack": [],
-              "bullet": null,
-              "shelf": [],
-              "given_up": []
-            },
-            "program": [],
-            "messages": [],
-            "error": "Tactic failure."
-          }
-        },
-        {
-          "severity": 1,
-          "message": "Tactic failure.",
-          "range": {
-            "start": {
-              "line": 4,
-              "character": 2
-            },
-            "end": {
-              "line": 4,
-              "character": 7
-            }
-          },
-          "proof_name": "foo",
-          "sentence_range": {
-            "start": {
-              "line": 4,
-              "character": 2
-            },
-            "end": {
-              "line": 4,
-              "character": 7
-            }
-          },
-          "proof_state": {
-            "textDocument": {
-              "uri": "file://$PROJECT/src/repeated_failures.v",
-              "version": 1
-            },
-            "position": {
-              "line": 4,
-              "character": 2
-            },
-            "range": {
-              "start": {
-                "line": 4,
-                "character": 2
-              },
-              "end": {
-                "line": 4,
                 "character": 7
               }
             },
