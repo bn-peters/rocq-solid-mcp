@@ -154,7 +154,6 @@ class RocqLspManager:
     async def _reset_session(self, workspace: Path) -> None:
         session = self._sessions.pop(workspace, None)
         if session is not None:
-            # TODO: Prefer a future rocq-lsp interrupt over killing the process.
             await session.stop(hard=True)
 
     def _resolve_file(self, file: str) -> Path:

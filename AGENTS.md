@@ -69,9 +69,7 @@ Timeout handling has two layers:
   `$/cancelRequest`.
 
 If the hard timeout is hit, the manager kills and drops that workspace session
-so the next call starts with a fresh `coq-lsp`. Keep the TODO in the hard-timeout
-path until there is a real rocq-lsp interrupt mechanism to use instead of
-killing the process.
+so the next call starts with a fresh `coq-lsp`.
 
 ## Configuration
 

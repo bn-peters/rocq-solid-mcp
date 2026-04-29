@@ -15,15 +15,13 @@ class RocqLspSession:
         *,
         workspace: Path,
         config: RocqLspConfig,
-        client: RocqLspClient | None = None,
-        notifications: NotificationStore | None = None,
     ) -> None:
         self.workspace = workspace
         self.config = config
         self.lock = asyncio.Lock()
         self.versions: dict[str, int] = {}
-        self._client = client
-        self._notifications = notifications or NotificationStore()
+        self._client: RocqLspClient | None = None
+        self._notifications = NotificationStore()
 
     @property
     def client(self) -> RocqLspClient:
@@ -63,7 +61,6 @@ class RocqLspSession:
 
     async def restart(self) -> None:
         await self.stop(hard=True)
-        self.versions.clear()
         await self.start()
 
     async def stop(self, *, hard: bool = False) -> None:
