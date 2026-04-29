@@ -82,6 +82,7 @@ def _timeout_policy(scenario: dict[str, Any]) -> TimeoutPolicy:
     return TimeoutPolicy(
         request_seconds=policy.get("request_seconds", 30),
         cancel_grace_seconds=policy.get("cancel_grace_seconds", 5),
+        command_seconds=policy.get("command_seconds"),
     )
 
 
@@ -118,7 +119,10 @@ async def _run_steps(
 
         if action == "compile":
             start = time.monotonic()
-            result = await manager.compile_file(str(path))
+            result = await manager.compile_file(
+                str(path),
+                command_timeout_seconds=step.get("command_timeout_seconds"),
+            )
             elapsed = time.monotonic() - start
             _check_timing(step, elapsed)
             transcript.append(

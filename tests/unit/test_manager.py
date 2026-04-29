@@ -11,6 +11,7 @@ from rocq_lsp_mcp.config import RocqLspConfig, TimeoutPolicy
 from rocq_lsp_mcp.manager import RocqLspManager
 from rocq_lsp_mcp.notifications import NotificationStore
 from rocq_lsp_mcp.rocq_client import (
+    GetDocumentResult,
     RocqLspHardTimeout,
     RocqLspResponseError,
     language_id_for_path,
@@ -28,6 +29,8 @@ class FakeClient:
         file_progress: dict[str, Any] | None = None,
         request_timed_out: bool = False,
         command_response: dict[str, Any] | Exception | None = None,
+        timeout_kind: str = "request",
+        timed_out_range: dict[str, Any] | None = None,
     ) -> None:
         self.notifications = notifications
         self.diagnostics = diagnostics or []
@@ -36,9 +39,12 @@ class FakeClient:
         self.file_progress = file_progress
         self.request_timed_out = request_timed_out
         self.command_response = command_response
+        self.timeout_kind = timeout_kind
+        self.timed_out_range = timed_out_range
         self.opened: list[tuple[Path, int]] = []
         self.changed: list[tuple[Path, int]] = []
         self.goal_requests: list[dict[str, Any]] = []
+        self.get_document_requests: list[dict[str, Any]] = []
         self.command_requests: list[dict[str, Any]] = []
         self.killed = False
         self.closed = False
@@ -62,8 +68,19 @@ class FakeClient:
         version: int,
         timeout: float,
         hard_timeout_grace: float,
+        command_timeout: float | None = None,
         goals: str | None = None,
-    ) -> tuple[dict[str, Any], bool]:
+    ) -> GetDocumentResult:
+        self.get_document_requests.append(
+            {
+                "uri": uri,
+                "version": version,
+                "timeout": timeout,
+                "hard_timeout_grace": hard_timeout_grace,
+                "command_timeout": command_timeout,
+                "goals": goals,
+            }
+        )
         if self.file_progress is not None:
             self.notifications.handle("$/coq/fileProgress", self.file_progress)
         self.notifications.handle(
@@ -72,19 +89,23 @@ class FakeClient:
         )
         if self.hard_timeout:
             raise RocqLspHardTimeout("stuck")
-        return (
-            self.document
-            if self.document is not None
-            else {
-                "completed": {
-                    "status": "Yes",
-                    "range": {
-                        "start": {"line": 0, "character": 0},
-                        "end": {"line": 0, "character": 0},
-                    },
+        return GetDocumentResult(
+            document=(
+                self.document
+                if self.document is not None
+                else {
+                    "completed": {
+                        "status": "Yes",
+                        "range": {
+                            "start": {"line": 0, "character": 0},
+                            "end": {"line": 0, "character": 0},
+                        },
+                    }
                 }
-            },
-            self.request_timed_out,
+            ),
+            timed_out=self.request_timed_out,
+            timeout_kind=self.timeout_kind if self.request_timed_out else None,
+            timed_out_range=self.timed_out_range,
         )
 
     async def request_goals(
@@ -180,12 +201,14 @@ class FakeManager(RocqLspManager):
         notifications: SpyNotificationStore,
         workspace: Path | None,
         idle_ttl_seconds: float = 1800,
+        command_seconds: float | None = None,
     ) -> None:
         config = RocqLspConfig(
             binary="coq-lsp",
             timeout_policy=TimeoutPolicy(
                 request_seconds=1,
                 cancel_grace_seconds=0.01,
+                command_seconds=command_seconds,
             ),
             max_errors=1000000,
             workspace=workspace,
@@ -475,6 +498,7 @@ async def test_compile_file_adds_timeout_context_from_file_progress(
     assert result.timed_out is True
     assert result.timeout_context == {
         "operation": "coq/getDocument",
+        "timeout_kind": "request",
         "request_timeout_seconds": 1,
         "cancel_grace_seconds": 0.01,
         "checked_until": "3:3",
@@ -517,6 +541,7 @@ async def test_compile_file_prefers_completed_position_for_timeout_context(
 
     assert result.timeout_context == {
         "operation": "coq/getDocument",
+        "timeout_kind": "request",
         "request_timeout_seconds": 1,
         "cancel_grace_seconds": 0.01,
         "checked_until": "1:11",
@@ -637,6 +662,53 @@ async def test_run_command_hard_timeout_resets_session(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_compile_file_adds_command_timeout_context(tmp_path: Path) -> None:
+    source = tmp_path / "Slow.v"
+    source.write_text(
+        "Goal True.\nProof.\n  sleep 5.\n  easy.\nQed.\n",
+        encoding="utf-8",
+    )
+    timed_out_range = {
+        "start": {"line": 2, "character": 2},
+        "end": {"line": 2, "character": 10},
+    }
+    notifications = SpyNotificationStore()
+    client = FakeClient(
+        notifications,
+        document={},
+        file_progress=file_progress(
+            source.as_uri(),
+            1,
+            start_line=2,
+            start_character=2,
+            end_line=4,
+            end_character=4,
+        ),
+        request_timed_out=True,
+        timeout_kind="command",
+        timed_out_range=timed_out_range,
+    )
+    manager = FakeManager(client, notifications, tmp_path)
+
+    result = await manager.compile_file(str(source), command_timeout_seconds=2)
+
+    assert result.status == "timeout"
+    assert result.timeout_context == {
+        "operation": "coq/getDocument",
+        "timeout_kind": "command",
+        "request_timeout_seconds": 1,
+        "cancel_grace_seconds": 0.01,
+        "checked_until": "3:3",
+        "latest_processing_range": "3:3 to 5:5",
+        "next_unchecked": {"location": "3:3", "line": "sleep 5."},
+        "command_timeout_seconds": 2,
+        "timed_out_range": "3:3 to 3:11",
+        "timed_out_command": {"location": "3:3", "line": "sleep 5."},
+    }
+    assert client.get_document_requests[0]["command_timeout"] == 2
+
+
+@pytest.mark.asyncio
 async def test_hard_timeout_resets_session(tmp_path: Path) -> None:
     source = tmp_path / "Slow.v"
     source.write_text("Goal True.\nProof.\n  sleep 5.\nQed.\n", encoding="utf-8")
@@ -664,6 +736,7 @@ async def test_hard_timeout_resets_session(tmp_path: Path) -> None:
     assert result.error_count == 1
     assert result.timeout_context == {
         "operation": "coq/getDocument",
+        "timeout_kind": "request",
         "request_timeout_seconds": 1,
         "cancel_grace_seconds": 0.01,
         "checked_until": "3:3",

@@ -12,7 +12,8 @@ returns compact feedback output for the requested command.
 
 - `src/rocq_lsp_mcp/server.py` defines the FastMCP server, the lifespan-managed
   `RocqLspManager`, and the MCP tools
-  `rocq_lsp_compile_file(file: str, message_limit: int = 10)` and
+  `rocq_lsp_compile_file(file: str, message_limit: int = 10,
+  command_timeout_seconds: float | None = None)` and
   `rocq_lsp_run_command(file: str, command: str, line: int, character: int = 1)`.
 - `src/rocq_lsp_mcp/manager.py` is the orchestration layer. It resolves files,
   infers workspaces from `_RocqProject` or `_CoqProject`, keeps cached
@@ -25,8 +26,9 @@ returns compact feedback output for the requested command.
 - `src/rocq_lsp_mcp/notifications.py` stores LSP notification state. It handles
   `textDocument/publishDiagnostics`, tracks latest diagnostic versions by URI,
   stores latest `$/coq/fileProgress` payloads by URI/version for timeout
-  context, and lets callers wait briefly for diagnostics for a requested
-  document version.
+  context, stores `$/coq/executionInformation` by URI/version for command
+  timeout watchdogs, and lets callers wait briefly for diagnostics or execution
+  changes for a requested document version.
 - `src/rocq_lsp_mcp/pipeline.py` normalizes raw diagnostics into compact
   agent-facing `Diagnostic` models. It attaches proof states by matching
   sentence ranges, merges supplemental `proof/goals` results for incomplete
@@ -35,8 +37,8 @@ returns compact feedback output for the requested command.
 - `src/rocq_lsp_mcp/rocq_client.py` is the manual stdio JSON-RPC client for
   `coq-lsp`. It handles `Content-Length` framing, `initialize`, server
   requests, `coq/getDocument`, `proof/goals`, `petanque/run_at_point`, request
-  timeouts, cancellation, process cleanup, and dispatches notifications to
-  `NotificationStore`.
+  timeouts, cancellation, optional per-command watchdog cancellation, process
+  cleanup, and dispatches notifications to `NotificationStore`.
 - `src/rocq_lsp_mcp/pretty.py` converts rocq-lsp serialized pretty-print trees
   such as `Pp_glue`, `Pp_box`, and `Pp_print_break` into readable text, then
   normalizes proof-state payloads into compact agent-facing JSON. Goal
@@ -54,17 +56,20 @@ returns compact feedback output for the requested command.
   version/workspace internals.
 - `src/rocq_lsp_mcp/config.py` loads environment configuration, defines
   `TimeoutPolicy`, builds the `opam exec -- coq-lsp` command, and builds the
-  `coq-lsp` initialization settings.
+  `coq-lsp` initialization settings. `send_execinfo` is enabled so per-call
+  command timeouts can be used without restarting sessions.
 
 The prototype intentionally talks to `coq-lsp` directly. Do not reintroduce an
 LSP client library unless the user explicitly asks for that direction.
 
 ## Runtime Behavior
 
-The compile MCP tool receives a Rocq file path and optional `message_limit`.
-The command MCP tool receives a Rocq file path, one complete command ending in
-`.`, and a 1-based line/character position. On each call, the manager resolves
-the file, infers a workspace by walking upward to the nearest `_RocqProject` or
+The compile MCP tool receives a Rocq file path, optional `message_limit`, and
+optional `command_timeout_seconds`; `None` uses `ROCQ_LSP_COMMAND_TIMEOUT`, `0`
+disables the command watchdog for that call, and positive values enable it. The
+command MCP tool receives a Rocq file path, one complete command ending in `.`,
+and a 1-based line/character position. On each call, the manager resolves the
+file, infers a workspace by walking upward to the nearest `_RocqProject` or
 `_CoqProject`, then delegates to the cached `RocqLspSession` for that
 workspace. If no project file is found, the file's parent directory is used.
 The session sends either `textDocument/didOpen` or `textDocument/didChange`
@@ -93,9 +98,17 @@ When `coq/getDocument` times out, the manager returns status `timeout` with a
 compact `timeout_context`. `checked_until` comes from partial
 `completed.range.end` when cancellation returns a partial document; otherwise it
 falls back to the start of the latest `$/coq/fileProgress` processing range.
-The context also includes the operation name, timeout settings,
+The context also includes the operation name, `timeout_kind`, timeout settings,
 `latest_processing_range`, and `next_unchecked` as 1-based human-facing
 locations. Raw file-progress payloads are kept internal.
+
+When command timeout is enabled, the Python client watches
+`$/coq/executionInformation` during `coq/getDocument`. Each notification marks
+the start of one Rocq sentence and resets the command deadline. If that sentence
+exceeds the deadline, the client sends `$/cancelRequest` and the manager returns
+`status: "timeout"` with `timeout_kind: "command"`, `command_timeout_seconds`,
+the timed-out sentence range, and a source preview. This is per Rocq sentence,
+not per internal Ltac substep.
 
 For `Attempt to save an incomplete proof` diagnostics, the `Qed.` sentence can
 carry only the save error while the open goal is attached to the previous proof
@@ -117,10 +130,12 @@ cleaned up by the MCP server's background reaper and opportunistically during
 compile calls after `ROCQ_LSP_IDLE_TTL_SECONDS`; sessions that are compiling or
 queued for a compile are not stopped.
 
-Timeout handling has two layers:
+Timeout handling has three layers:
 
 - `ROCQ_LSP_TIMEOUT` is the normal `coq/getDocument` or
   `petanque/run_at_point` wait.
+- `ROCQ_LSP_COMMAND_TIMEOUT` is an optional per-sentence watchdog during
+  `coq/getDocument`; unset or non-positive values disable it.
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE` is the extra wait after sending
   `$/cancelRequest`.
 
@@ -137,6 +152,8 @@ The prototype reads these environment variables:
 - `ROCQ_LSP_USE_OPAM`, default `1`; set to `0` to run the binary directly
 - `ROCQ_LSP_TIMEOUT`, default `60`
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE`, default `5`
+- `ROCQ_LSP_COMMAND_TIMEOUT`, default unset/disabled; positive values enable
+  per-sentence command timeout
 - `ROCQ_LSP_MAX_ERRORS`, default `1000000`
 - `ROCQ_LSP_WORKSPACE`, optional workspace override
 - `ROCQ_LSP_IDLE_TTL_SECONDS`, default `1800`
@@ -180,8 +197,8 @@ The local virtual environment is expected at `.venv/`. Use
 - `tests/unit/test_config.py` covers command construction and environment
   configuration.
 - `tests/unit/test_notifications.py` covers diagnostic notification storage,
-  file-progress storage for timeout context, clearing, waiting, fallback
-  behavior, and ignored notifications.
+  file-progress storage for timeout context, execution-info storage for command
+  timeout, clearing, waiting, fallback behavior, and ignored notifications.
 - `tests/unit/test_pipeline.py` covers proof-state attachment and agent-facing
   diagnostic filtering.
 - `tests/unit/test_pretty.py` covers readable rendering of rocq-lsp Pp structures
@@ -204,6 +221,8 @@ The local virtual environment is expected at `.venv/`. Use
   successful recompile in the same manager. `hard_timeout_resets_cache` sets the
   cancel grace to zero and checks that a hard timeout drops the old `coq-lsp`
   process by requiring a later recompile to rerun an unchanged slow proof.
+  `command_timeout` uses the same local `sleep` tactic with a long global
+  timeout and short command timeout to cover per-sentence cancellation.
 
 When changing output shape, update exact-output tests rather than weakening
 assertions. The MCP output should be useful to agents and humans; raw Rocq
