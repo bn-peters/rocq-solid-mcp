@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from rocq_lsp_mcp.config import RocqLspConfig
+from rocq_lsp_mcp.config import RocqLspConfig, TimeoutPolicy
 from rocq_lsp_mcp.manager import RocqLspManager
 from rocq_lsp_mcp.models import CompileResult, Diagnostic
 
@@ -31,8 +31,10 @@ async def run_case(case_dir: Path, tmp_path: Path, *, promote: bool) -> None:
     manager = RocqLspManager(
         RocqLspConfig(
             binary="coq-lsp",
-            timeout=30,
-            hard_timeout_grace=5,
+            timeout_policy=TimeoutPolicy(
+                request_seconds=30,
+                cancel_grace_seconds=5,
+            ),
             max_errors=1000000,
             workspace=None,
         )

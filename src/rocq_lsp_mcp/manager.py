@@ -1,28 +1,16 @@
 from __future__ import annotations
 
-import asyncio
-import json
-from contextlib import suppress
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from .config import RocqLspConfig, load_config
-from .models import CompileResult, Diagnostic
-from .pretty import normalize_proof_state
+from .models import CompileResult
+from .pipeline import build_diagnostics
 from .rocq_client import (
-    RocqLspClient,
     RocqLspHardTimeout,
     RocqLspResponseError,
 )
-
-
-@dataclass
-class RocqLspSession:
-    workspace: Path
-    client: RocqLspClient
-    versions: dict[str, int] = field(default_factory=dict)
-    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+from .session import RocqLspSession
 
 
 class RocqLspManager:
@@ -34,7 +22,7 @@ class RocqLspManager:
         sessions = list(self._sessions.values())
         self._sessions.clear()
         for session in sessions:
-            await self._close_session(session)
+            await session.stop()
 
     async def compile_file(self, file: str) -> CompileResult:
         path = self._resolve_file(file)
@@ -75,7 +63,7 @@ class RocqLspManager:
                 diagnostics=[],
                 message=str(exc),
             )
-        client.clear_diagnostics(uri, version)
+        session.notifications.clear(uri, version)
 
         try:
             if uri in session.versions:
@@ -87,13 +75,14 @@ class RocqLspManager:
             completed_doc, request_timed_out = await client.request_get_document(
                 uri=uri,
                 version=version,
-                timeout=self.config.timeout,
-                hard_timeout_grace=self.config.hard_timeout_grace,
+                timeout=self.config.timeout_policy.request_seconds,
+                hard_timeout_grace=self.config.timeout_policy.cancel_grace_seconds,
                 goals="Str",
             )
-            diagnostics = await self._diagnostics_for(
-                client, uri, version, document=completed_doc
+            raw_diagnostics = await session.notifications.wait_for_diagnostics(
+                uri, version
             )
+            diagnostics = build_diagnostics(raw_diagnostics, completed_doc)
             return CompileResult.from_diagnostics(
                 status="timeout" if request_timed_out else "complete",
                 file=str(path),
@@ -105,7 +94,10 @@ class RocqLspManager:
                 timed_out=request_timed_out,
             )
         except RocqLspHardTimeout as exc:
-            diagnostics = await self._diagnostics_for(client, uri, version)
+            raw_diagnostics = await session.notifications.wait_for_diagnostics(
+                uri, version
+            )
+            diagnostics = build_diagnostics(raw_diagnostics, None)
             await self._reset_session(session.workspace)
             return CompileResult.from_diagnostics(
                 status="timeout",
@@ -120,7 +112,10 @@ class RocqLspManager:
                 message=str(exc),
             )
         except RocqLspResponseError as exc:
-            diagnostics = await self._diagnostics_for(client, uri, version)
+            raw_diagnostics = await session.notifications.wait_for_diagnostics(
+                uri, version
+            )
+            diagnostics = build_diagnostics(raw_diagnostics, None)
             return CompileResult.from_diagnostics(
                 status="failed",
                 file=str(path),
@@ -132,7 +127,10 @@ class RocqLspManager:
                 message=str(exc.error),
             )
         except Exception as exc:
-            diagnostics = await self._diagnostics_for(client, uri, version)
+            raw_diagnostics = await session.notifications.wait_for_diagnostics(
+                uri, version
+            )
+            diagnostics = build_diagnostics(raw_diagnostics, None)
             return CompileResult.from_diagnostics(
                 status="failed",
                 file=str(path),
@@ -144,59 +142,20 @@ class RocqLspManager:
                 message=str(exc),
             )
 
-    async def _diagnostics_for(
-        self,
-        client: RocqLspClient,
-        uri: str,
-        version: int,
-        *,
-        document: dict[str, Any] | None = None,
-    ) -> list[Diagnostic]:
-        raw = await client.wait_for_diagnostics(uri, version)
-        proof_states = self._proof_states_by_range(document)
-        return [
-            Diagnostic.from_lsp(
-                diagnostic,
-                proof_state=proof_states.get(
-                    self._range_key(self._diagnostic_sentence_range(diagnostic))
-                ),
-            )
-            for diagnostic in raw
-        ]
-
     async def _get_or_create_session(self, workspace: Path) -> RocqLspSession:
         if session := self._sessions.get(workspace):
             return session
 
-        request_timeout = max(10.0, self.config.timeout + self.config.hard_timeout_grace + 5)
-        client = RocqLspClient(
-            binary=self.config.binary,
-            workspace=workspace,
-            max_errors=self.config.max_errors,
-            request_timeout=request_timeout,
-        )
-        await client.start()
-        await client.notify_change_configuration()
-        session = RocqLspSession(workspace=workspace, client=client)
+        session = RocqLspSession(workspace=workspace, config=self.config)
+        await session.start()
         self._sessions[workspace] = session
         return session
 
     async def _reset_session(self, workspace: Path) -> None:
         session = self._sessions.pop(workspace, None)
         if session is not None:
-            await self._close_session(session, hard=True)
-
-    async def _close_session(
-        self, session: RocqLspSession, *, hard: bool = False
-    ) -> None:
-        if hard:
-            with suppress(Exception):
-                session.client.clear_pending_requests()
-            with suppress(Exception):
-                await session.client.kill_server()
-        else:
-            with suppress(Exception):
-                await session.client.close()
+            # TODO: Prefer a future rocq-lsp interrupt over killing the process.
+            await session.stop(hard=True)
 
     def _resolve_file(self, file: str) -> Path:
         path = Path(file).expanduser()
@@ -219,33 +178,3 @@ class RocqLspManager:
     def _completed_only(document: dict[str, Any]) -> dict[str, Any] | None:
         completed = document.get("completed")
         return completed if isinstance(completed, dict) else None
-
-    @staticmethod
-    def _proof_states_by_range(document: dict[str, Any] | None) -> dict[str, Any]:
-        if not document:
-            return {}
-        states: dict[str, Any] = {}
-        for span in document.get("spans", []):
-            if not isinstance(span, dict):
-                continue
-            goals = span.get("goals")
-            range_ = span.get("range")
-            if goals is not None and isinstance(range_, dict):
-                states[RocqLspManager._range_key(range_)] = normalize_proof_state(
-                    goals
-                )
-        return states
-
-    @staticmethod
-    def _diagnostic_sentence_range(diagnostic: Any) -> dict[str, Any]:
-        if not isinstance(diagnostic, dict):
-            return {}
-        data = diagnostic.get("data")
-        if isinstance(data, dict) and isinstance(data.get("sentenceRange"), dict):
-            return data["sentenceRange"]
-        range_ = diagnostic.get("range")
-        return range_ if isinstance(range_, dict) else {}
-
-    @staticmethod
-    def _range_key(range_: dict[str, Any]) -> str:
-        return json.dumps(range_, sort_keys=True, separators=(",", ":"))

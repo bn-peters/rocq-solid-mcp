@@ -13,44 +13,54 @@ available, proof-state context for the sentence that produced an error.
   `rocq_lsp_compile_file(file: str)`.
 - `src/rocq_lsp_mcp/manager.py` is the orchestration layer. It resolves files,
   infers workspaces from `_RocqProject` or `_CoqProject`, keeps cached
-  `coq-lsp` sessions per workspace, tracks document versions, sends open/change
-  notifications, calls `coq/getDocument`, collects diagnostics, and attaches
-  proof states by matching sentence ranges.
+  sessions per workspace, reads files, routes compile requests, and converts
+  outcomes into `CompileResult`.
+- `src/rocq_lsp_mcp/session.py` owns the lifecycle for one workspace-backed
+  `coq-lsp` session. It starts and stops the client, keeps the session lock,
+  tracks document versions, and owns the session `NotificationStore`.
+- `src/rocq_lsp_mcp/notifications.py` stores LSP notification state. It handles
+  `textDocument/publishDiagnostics`, tracks latest diagnostic versions by URI,
+  and lets callers wait briefly for diagnostics for a requested document
+  version.
+- `src/rocq_lsp_mcp/pipeline.py` normalizes raw diagnostics into
+  agent-facing `Diagnostic` models. It attaches proof states by matching
+  sentence ranges and keeps only the first error for each `proof_name`, while
+  preserving warnings, infos, and errors without a proof name.
 - `src/rocq_lsp_mcp/rocq_client.py` is the manual stdio JSON-RPC client for
   `coq-lsp`. It handles `Content-Length` framing, `initialize`, server
-  requests, diagnostics notifications, request timeouts, cancellation, and
-  process cleanup.
+  requests, request timeouts, cancellation, process cleanup, and dispatches
+  notifications to `NotificationStore`.
 - `src/rocq_lsp_mcp/pretty.py` converts rocq-lsp serialized pretty-print trees
   such as `Pp_glue`, `Pp_box`, and `Pp_print_break` into readable text, then
   normalizes proof-state payloads into agent-facing JSON.
 - `src/rocq_lsp_mcp/models.py` contains the Pydantic response models.
   `CompileResult` separates diagnostics into errors, warnings, and infos.
   `Diagnostic` keeps the raw LSP diagnostic while exposing normalized fields and
-  optional `proof_name` and `proof_state`. Agent-facing results keep only the
-  first error for each `proof_name`; warnings, infos, and errors without a proof
-  name are not deduplicated this way.
-- `src/rocq_lsp_mcp/config.py` loads environment configuration and builds the
-  `coq-lsp` initialization settings.
+  optional `proof_name` and `proof_state`.
+- `src/rocq_lsp_mcp/config.py` loads environment configuration, defines
+  `TimeoutPolicy`, and builds the `coq-lsp` initialization settings.
 
 The prototype intentionally talks to `coq-lsp` directly. Do not reintroduce an
 LSP client library unless the user explicitly asks for that direction.
 
 ## Runtime Behavior
 
-The MCP tool receives only a Rocq file path. On each call, the manager reads the
-file from disk and sends either `textDocument/didOpen` or
-`textDocument/didChange` to the cached `coq-lsp` session for that workspace.
-The document version increments on every call.
+The MCP tool receives only a Rocq file path. On each call, the manager resolves
+the file and workspace, then delegates to the cached `RocqLspSession` for that
+workspace. The session sends either `textDocument/didOpen` or
+`textDocument/didChange` through its client. The document version increments on
+every call.
 
 Compilation is driven by `coq/getDocument` with `goals="Str"`. This asks
 `coq-lsp` for the checked document and proof-state data around spans. The
-diagnostics from `textDocument/publishDiagnostics` are normalized for the MCP
-response. If multiple errors belong to the same `proof_name`, only the first is
-forwarded to the agent.
+`NotificationStore` collects diagnostics from
+`textDocument/publishDiagnostics`. `pipeline.py` normalizes those diagnostics
+for the MCP response. If multiple errors belong to the same `proof_name`, only
+the first is forwarded to the agent.
 
 Caching is delegated to the long-lived `coq-lsp` process. The Python side keeps
-the session and version state alive so repeated calls for changed files can use
-rocq-lsp's incremental checking behavior.
+the session, notification, and version state alive so repeated calls for changed
+files can use rocq-lsp's incremental checking behavior.
 
 Timeout handling has two layers:
 
@@ -59,7 +69,9 @@ Timeout handling has two layers:
   `$/cancelRequest`.
 
 If the hard timeout is hit, the manager kills and drops that workspace session
-so the next call starts with a fresh `coq-lsp`.
+so the next call starts with a fresh `coq-lsp`. Keep the TODO in the hard-timeout
+path until there is a real rocq-lsp interrupt mechanism to use instead of
+killing the process.
 
 ## Configuration
 
@@ -104,6 +116,10 @@ The local virtual environment is expected at `.venv/`. Use
 
 - `tests/unit/test_manager.py` uses fakes to cover manager behavior, versioning,
   workspace inference, language IDs, and hard-timeout reset logic.
+- `tests/unit/test_notifications.py` covers diagnostic notification storage,
+  clearing, waiting, fallback behavior, and ignored notifications.
+- `tests/unit/test_pipeline.py` covers proof-state attachment and agent-facing
+  diagnostic filtering.
 - `tests/unit/test_pretty.py` covers readable rendering of rocq-lsp Pp structures
   and proof-state normalization.
 - `tests/integration/test_integration.py` talks to a real `coq-lsp`. It checks clean files,

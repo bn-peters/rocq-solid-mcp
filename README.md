@@ -8,6 +8,20 @@ first error for each `proof_name`, while preserving warnings, infos, and errors
 without a proof name. The prototype talks to `coq-lsp` directly over stdio
 JSON-RPC.
 
+## Architecture
+
+- `server.py` registers the single MCP tool and manages one `RocqLspManager`
+  for the server lifespan.
+- `manager.py` resolves files and workspaces, keeps the session registry, and
+  orchestrates compile results.
+- `session.py` owns each workspace session lifecycle, document versions, and
+  notification store.
+- `rocq_client.py` is transport-only JSON-RPC framing, requests, notifications,
+  cancellation, and process cleanup.
+- `notifications.py` stores diagnostics published by `coq-lsp`.
+- `pipeline.py` converts raw diagnostics plus `coq/getDocument` proof-state data
+  into agent-facing `Diagnostic` models.
+
 ## Run
 
 ```bash

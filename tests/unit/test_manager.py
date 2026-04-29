@@ -5,9 +5,10 @@ from typing import Any
 
 import pytest
 
-from rocq_lsp_mcp.config import RocqLspConfig
-from rocq_lsp_mcp.manager import RocqLspManager, RocqLspSession
+from rocq_lsp_mcp.config import RocqLspConfig, TimeoutPolicy
+from rocq_lsp_mcp.manager import RocqLspManager
 from rocq_lsp_mcp.rocq_client import RocqLspHardTimeout, language_id_for_path
+from rocq_lsp_mcp.session import RocqLspSession
 
 
 class FakeClient:
@@ -20,7 +21,7 @@ class FakeClient:
         self.pending_cleared = False
         self.hard_timeout = False
 
-    def clear_diagnostics(self, uri: str, version: int) -> None:
+    def clear(self, uri: str, version: int) -> None:
         self.cleared.append((uri, version))
 
     async def notify_document_opened(
@@ -71,8 +72,10 @@ class FakeManager(RocqLspManager):
     def __init__(self, client: FakeClient, workspace: Path) -> None:
         config = RocqLspConfig(
             binary="coq-lsp",
-            timeout=1,
-            hard_timeout_grace=0.01,
+            timeout_policy=TimeoutPolicy(
+                request_seconds=1,
+                cancel_grace_seconds=0.01,
+            ),
             max_errors=1000000,
             workspace=workspace,
         )
@@ -84,7 +87,9 @@ class FakeManager(RocqLspManager):
             return session
         session = RocqLspSession(
             workspace=workspace,
+            config=self.config,
             client=self.client,  # type: ignore[arg-type]
+            notifications=self.client,  # type: ignore[arg-type]
         )
         self._sessions[workspace] = session
         return session
@@ -199,8 +204,7 @@ def test_workspace_inference_prefers_project_file(tmp_path: Path) -> None:
     manager = RocqLspManager(
         RocqLspConfig(
             binary="coq-lsp",
-            timeout=1,
-            hard_timeout_grace=1,
+            timeout_policy=TimeoutPolicy(request_seconds=1, cancel_grace_seconds=1),
             max_errors=1000000,
             workspace=None,
         )

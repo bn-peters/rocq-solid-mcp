@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from rocq_lsp_mcp.config import RocqLspConfig
+from rocq_lsp_mcp.config import RocqLspConfig, TimeoutPolicy
 from rocq_lsp_mcp.manager import RocqLspManager
 
 
@@ -23,8 +23,10 @@ async def test_valid_file_compiles_with_zero_errors(tmp_path: Path) -> None:
     manager = RocqLspManager(
         RocqLspConfig(
             binary="coq-lsp",
-            timeout=30,
-            hard_timeout_grace=5,
+            timeout_policy=TimeoutPolicy(
+                request_seconds=30,
+                cancel_grace_seconds=5,
+            ),
             max_errors=1000000,
             workspace=tmp_path,
         )
@@ -48,8 +50,10 @@ async def test_missing_variable_names_report_multiple_errors(tmp_path: Path) -> 
     manager = RocqLspManager(
         RocqLspConfig(
             binary="coq-lsp",
-            timeout=30,
-            hard_timeout_grace=5,
+            timeout_policy=TimeoutPolicy(
+                request_seconds=30,
+                cancel_grace_seconds=5,
+            ),
             max_errors=1000000,
             workspace=tmp_path,
         )
@@ -72,8 +76,10 @@ async def test_file_change_rechecks_and_reports_failure_proof_state(
     manager = RocqLspManager(
         RocqLspConfig(
             binary="coq-lsp",
-            timeout=30,
-            hard_timeout_grace=5,
+            timeout_policy=TimeoutPolicy(
+                request_seconds=30,
+                cancel_grace_seconds=5,
+            ),
             max_errors=1000000,
             workspace=tmp_path,
         )

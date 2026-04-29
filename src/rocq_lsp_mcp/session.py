@@ -1,0 +1,83 @@
+from __future__ import annotations
+
+import asyncio
+from contextlib import suppress
+from pathlib import Path
+
+from .config import RocqLspConfig
+from .notifications import NotificationStore
+from .rocq_client import RocqLspClient
+
+
+class RocqLspSession:
+    def __init__(
+        self,
+        *,
+        workspace: Path,
+        config: RocqLspConfig,
+        client: RocqLspClient | None = None,
+        notifications: NotificationStore | None = None,
+    ) -> None:
+        self.workspace = workspace
+        self.config = config
+        self.lock = asyncio.Lock()
+        self.versions: dict[str, int] = {}
+        self._client = client
+        self._notifications = notifications or NotificationStore()
+
+    @property
+    def client(self) -> RocqLspClient:
+        if self._client is None:
+            raise RuntimeError("rocq-lsp session has not been started")
+        return self._client
+
+    @property
+    def notifications(self) -> NotificationStore:
+        return self._notifications
+
+    async def start(self) -> None:
+        if self._client is not None:
+            raise RuntimeError("rocq-lsp session has already been started")
+        self.versions.clear()
+        self._notifications = NotificationStore()
+        request_timeout = max(
+            10.0,
+            self.config.timeout_policy.request_seconds
+            + self.config.timeout_policy.cancel_grace_seconds
+            + 5,
+        )
+        client = RocqLspClient(
+            binary=self.config.binary,
+            workspace=self.workspace,
+            max_errors=self.config.max_errors,
+            request_timeout=request_timeout,
+            notifications=self._notifications,
+        )
+        self._client = client
+        try:
+            await client.start()
+            await client.notify_change_configuration()
+        except Exception:
+            await self.stop(hard=True)
+            raise
+
+    async def restart(self) -> None:
+        await self.stop(hard=True)
+        self.versions.clear()
+        await self.start()
+
+    async def stop(self, *, hard: bool = False) -> None:
+        client = self._client
+        self._client = None
+        if client is None:
+            return
+
+        if hard:
+            with suppress(Exception):
+                client.clear_pending_requests()
+            with suppress(Exception):
+                await client.kill_server()
+            return
+
+        with suppress(Exception):
+            await client.close()

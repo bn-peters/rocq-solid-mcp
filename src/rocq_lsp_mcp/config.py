@@ -6,10 +6,15 @@ from pathlib import Path
 
 
 @dataclass(frozen=True)
+class TimeoutPolicy:
+    request_seconds: float = 60.0
+    cancel_grace_seconds: float = 5.0
+
+
+@dataclass(frozen=True)
 class RocqLspConfig:
     binary: str
-    timeout: float
-    hard_timeout_grace: float
+    timeout_policy: TimeoutPolicy
     max_errors: int
     workspace: Path | None
 
@@ -26,8 +31,10 @@ def load_config() -> RocqLspConfig:
     workspace = os.environ.get("ROCQ_LSP_WORKSPACE")
     return RocqLspConfig(
         binary=os.environ.get("ROCQ_LSP_BINARY", "coq-lsp"),
-        timeout=_float_env("ROCQ_LSP_TIMEOUT", "60"),
-        hard_timeout_grace=_float_env("ROCQ_LSP_HARD_TIMEOUT_GRACE", "5"),
+        timeout_policy=TimeoutPolicy(
+            request_seconds=_float_env("ROCQ_LSP_TIMEOUT", "60"),
+            cancel_grace_seconds=_float_env("ROCQ_LSP_HARD_TIMEOUT_GRACE", "5"),
+        ),
         max_errors=_int_env("ROCQ_LSP_MAX_ERRORS", "1000000"),
         workspace=Path(workspace).expanduser().resolve() if workspace else None,
     )

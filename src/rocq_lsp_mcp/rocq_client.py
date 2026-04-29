@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import rocq_lsp_settings
+from .notifications import NotificationStore
 
 
 class RocqLspResponseError(RuntimeError):
@@ -41,19 +42,18 @@ class RocqLspClient:
         workspace: Path,
         max_errors: int,
         request_timeout: float,
+        notifications: NotificationStore,
     ) -> None:
         self.binary = binary
         self.workspace = workspace
         self.max_errors = max_errors
         self.request_timeout = request_timeout
+        self.notifications = notifications
         self.process: asyncio.subprocess.Process | None = None
         self._next_request_id = 1
         self._pending: dict[int, asyncio.Future[dict[str, Any]]] = {}
         self._reader_task: asyncio.Task[None] | None = None
         self._stderr_task: asyncio.Task[None] | None = None
-        self._diagnostics: dict[tuple[str, int | None], list[dict[str, Any]]] = {}
-        self._diagnostic_events: dict[tuple[str, int | None], asyncio.Event] = {}
-        self._latest_versions_by_uri: dict[str, int | None] = {}
         self.stderr_lines: list[str] = []
 
     async def start(self) -> None:
@@ -161,27 +161,6 @@ class RocqLspClient:
                 "contentChanges": [{"text": content}],
             },
         )
-
-    def clear_diagnostics(self, uri: str, version: int) -> None:
-        self._diagnostics.pop((uri, version), None)
-        self._diagnostic_events.pop((uri, version), None)
-
-    async def wait_for_diagnostics(
-        self, uri: str, version: int, settle_seconds: float = 0.25
-    ) -> list[dict[str, Any]]:
-        key = (uri, version)
-        if key not in self._diagnostics:
-            event = self._diagnostic_events.setdefault(key, asyncio.Event())
-            with suppress(TimeoutError):
-                await asyncio.wait_for(event.wait(), timeout=settle_seconds)
-
-        if key in self._diagnostics:
-            return self._diagnostics[key]
-
-        latest = self._latest_versions_by_uri.get(uri)
-        if latest == version:
-            return self._diagnostics.get((uri, latest), [])
-        return self._diagnostics.get((uri, None), [])
 
     async def request_get_document(
         self,
@@ -326,16 +305,8 @@ class RocqLspClient:
             await self._respond_to_server_request(message["id"], method, params)
             return
 
-        if method == "textDocument/publishDiagnostics" and isinstance(params, dict):
-            uri = params.get("uri")
-            version = params.get("version")
-            diagnostics = params.get("diagnostics", [])
-            if isinstance(uri, str) and isinstance(diagnostics, list):
-                key = (uri, version)
-                self._diagnostics[key] = diagnostics
-                self._latest_versions_by_uri[uri] = version
-                if event := self._diagnostic_events.get(key):
-                    event.set()
+        if isinstance(method, str):
+            self.notifications.handle(method, params)
 
     async def _respond_to_server_request(
         self, request_id: int, method: str, params: Any | None
