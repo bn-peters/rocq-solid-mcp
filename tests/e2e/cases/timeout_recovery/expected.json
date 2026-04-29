@@ -10,7 +10,7 @@
       "timeout_context": {
         "operation": "coq/getDocument",
         "timeout_kind": "request",
-        "request_timeout_seconds": 1,
+        "request_timeout_seconds": 1.0,
         "cancel_grace_seconds": 1,
         "checked_until": "5:7",
         "latest_processing_range": "5:7 to 9:1",

@@ -567,7 +567,7 @@ async def test_compile_file_prefers_completed_position_for_timeout_context(
     assert result.timeout_context == {
         "operation": "coq/getDocument",
         "timeout_kind": "request",
-        "request_timeout_seconds": 1,
+        "request_timeout_seconds": 1.0,
         "cancel_grace_seconds": 0.01,
         "checked_until": "1:11",
         "latest_processing_range": "1:1 to 2:12",
@@ -750,7 +750,7 @@ async def test_compile_file_adds_command_timeout_context(tmp_path: Path) -> None
     assert result.timeout_context == {
         "operation": "coq/getDocument",
         "timeout_kind": "command",
-        "request_timeout_seconds": 1,
+        "request_timeout_seconds": 1.0,
         "cancel_grace_seconds": 0.01,
         "checked_until": "3:3",
         "latest_processing_range": "3:3 to 5:5",
@@ -791,7 +791,7 @@ async def test_hard_timeout_resets_session(tmp_path: Path) -> None:
     assert result.timeout_context == {
         "operation": "coq/getDocument",
         "timeout_kind": "request",
-        "request_timeout_seconds": 1,
+        "request_timeout_seconds": 1.0,
         "cancel_grace_seconds": 0.01,
         "checked_until": "3:3",
         "latest_processing_range": "3:3 to 4:5",

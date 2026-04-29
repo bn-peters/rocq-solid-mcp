@@ -11,7 +11,7 @@
       "timeout_context": {
         "operation": "coq/getDocument",
         "timeout_kind": "request",
-        "request_timeout_seconds": 4,
+        "request_timeout_seconds": 4.0,
         "cancel_grace_seconds": 0,
         "checked_until": "11:7",
         "latest_processing_range": "11:7 to 20:1",
@@ -20,7 +20,7 @@
           "line": "sleep 7."
         }
       },
-      "message": "coq/getDocument request timed out after 4s and did not settle within 0s"
+      "message": "coq/getDocument request timed out after 4.0s and did not settle within 0s"
     }
   },
   {
