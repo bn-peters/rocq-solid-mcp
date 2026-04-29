@@ -21,8 +21,9 @@ produced an error.
   tracks document versions, and owns the session `NotificationStore`.
 - `src/rocq_lsp_mcp/notifications.py` stores LSP notification state. It handles
   `textDocument/publishDiagnostics`, tracks latest diagnostic versions by URI,
-  and lets callers wait briefly for diagnostics for a requested document
-  version.
+  stores latest `$/coq/fileProgress` payloads by URI/version for timeout
+  context, and lets callers wait briefly for diagnostics for a requested
+  document version.
 - `src/rocq_lsp_mcp/pipeline.py` normalizes raw diagnostics into compact
   agent-facing `Diagnostic` models. It attaches proof states by matching
   sentence ranges, merges supplemental `proof/goals` results for incomplete
@@ -40,8 +41,10 @@ produced an error.
   `CompileResult` separates diagnostics into errors, warnings, and infos.
   `Diagnostic` keeps raw LSP details internally while serializing only compact
   fields such as `level`, `location`, `message`, optional `proof_name`, and
-  optional `proof_state`. Serialized compile results include the compiled file
-  relative to the workspace and omit version/workspace internals.
+  optional `proof_state`. Timeout compile results may include compact
+  `timeout_context` with the checked position and next unchecked source preview.
+  Serialized compile results include the compiled file relative to the workspace
+  and omit version/workspace internals.
 - `src/rocq_lsp_mcp/config.py` loads environment configuration, defines
   `TimeoutPolicy`, builds the `opam exec -- coq-lsp` command, and builds the
   `coq-lsp` initialization settings.
@@ -75,6 +78,14 @@ and omitting null or empty fields. If multiple errors belong to the same
 `proof_name`, only the first is forwarded to the agent. Counts are serialized
 only when warnings are present, and zero-valued count fields are omitted.
 
+When `coq/getDocument` times out, the manager returns status `timeout` with a
+compact `timeout_context`. `checked_until` comes from partial
+`completed.range.end` when cancellation returns a partial document; otherwise it
+falls back to the start of the latest `$/coq/fileProgress` processing range.
+The context also includes the operation name, timeout settings,
+`latest_processing_range`, and `next_unchecked` as 1-based human-facing
+locations. Raw file-progress payloads are kept internal.
+
 For `Attempt to save an incomplete proof` diagnostics, the `Qed.` sentence can
 carry only the save error while the open goal is attached to the previous proof
 span. The manager issues a best-effort `proof/goals` request with `mode="Prev"`
@@ -95,7 +106,9 @@ Timeout handling has two layers:
   `$/cancelRequest`.
 
 If the hard timeout is hit, the manager kills and drops that workspace session
-so the next call starts with a fresh `coq-lsp`.
+so the next call starts with a fresh `coq-lsp`. Hard-timeout responses still
+include timeout context built from any latest progress notification observed
+before the session reset.
 
 ## Configuration
 
@@ -143,11 +156,12 @@ The local virtual environment is expected at `.venv/`. Use
 
 - `tests/unit/test_manager.py` uses fakes to cover manager behavior, versioning,
   workspace inference, per-workspace session separation, idle cleanup, language
-  IDs, and hard-timeout reset logic.
+  IDs, timeout context construction, and hard-timeout reset logic.
 - `tests/unit/test_config.py` covers command construction and environment
   configuration.
 - `tests/unit/test_notifications.py` covers diagnostic notification storage,
-  clearing, waiting, fallback behavior, and ignored notifications.
+  file-progress storage for timeout context, clearing, waiting, fallback
+  behavior, and ignored notifications.
 - `tests/unit/test_pipeline.py` covers proof-state attachment and agent-facing
   diagnostic filtering.
 - `tests/unit/test_pretty.py` covers readable rendering of rocq-lsp Pp structures

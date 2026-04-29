@@ -10,14 +10,31 @@ class NotificationStore:
         self._diagnostics: dict[tuple[str, int | None], list[dict[str, Any]]] = {}
         self._diagnostic_events: dict[tuple[str, int | None], asyncio.Event] = {}
         self._latest_versions_by_uri: dict[str, int | None] = {}
+        self._file_progress: dict[tuple[str, int | None], dict[str, Any]] = {}
+        self._latest_progress_versions_by_uri: dict[str, int | None] = {}
 
     def handle(self, method: str, params: Any | None) -> None:
         if method == "textDocument/publishDiagnostics" and isinstance(params, dict):
             self._handle_publish_diagnostics(params)
+        if method == "$/coq/fileProgress" and isinstance(params, dict):
+            self._handle_file_progress(params)
 
     def clear(self, uri: str, version: int) -> None:
         self._diagnostics.pop((uri, version), None)
         self._diagnostic_events.pop((uri, version), None)
+        self._file_progress.pop((uri, version), None)
+        if self._latest_progress_versions_by_uri.get(uri) == version:
+            self._latest_progress_versions_by_uri.pop(uri, None)
+
+    def latest_file_progress(self, uri: str, version: int) -> dict[str, Any] | None:
+        key = (uri, version)
+        if key in self._file_progress:
+            return self._file_progress[key]
+
+        latest = self._latest_progress_versions_by_uri.get(uri)
+        if latest == version:
+            return self._file_progress.get((uri, latest))
+        return self._file_progress.get((uri, None))
 
     async def wait_for_diagnostics(
         self, uri: str, version: int, settle_seconds: float = 0.25
@@ -46,3 +63,16 @@ class NotificationStore:
             self._latest_versions_by_uri[uri] = version
             if event := self._diagnostic_events.get(key):
                 event.set()
+
+    def _handle_file_progress(self, params: dict[str, Any]) -> None:
+        text_document = params.get("textDocument")
+        if not isinstance(text_document, dict):
+            return
+
+        uri = text_document.get("uri")
+        version = text_document.get("version")
+        if not isinstance(uri, str):
+            return
+
+        self._file_progress[(uri, version)] = params
+        self._latest_progress_versions_by_uri[uri] = version

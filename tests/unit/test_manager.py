@@ -21,11 +21,15 @@ class FakeClient:
         diagnostics: list[Any] | None = None,
         document: dict[str, Any] | None = None,
         goals_response: dict[str, Any] | Exception | None = None,
+        file_progress: dict[str, Any] | None = None,
+        request_timed_out: bool = False,
     ) -> None:
         self.notifications = notifications
         self.diagnostics = diagnostics or []
         self.document = document
         self.goals_response = goals_response
+        self.file_progress = file_progress
+        self.request_timed_out = request_timed_out
         self.opened: list[tuple[Path, int]] = []
         self.changed: list[tuple[Path, int]] = []
         self.goal_requests: list[dict[str, Any]] = []
@@ -53,6 +57,8 @@ class FakeClient:
         hard_timeout_grace: float,
         goals: str | None = None,
     ) -> tuple[dict[str, Any], bool]:
+        if self.file_progress is not None:
+            self.notifications.handle("$/coq/fileProgress", self.file_progress)
         self.notifications.handle(
             "textDocument/publishDiagnostics",
             {"uri": uri, "version": version, "diagnostics": self.diagnostics},
@@ -61,7 +67,8 @@ class FakeClient:
             raise RocqLspHardTimeout("stuck")
         return (
             self.document
-            or {
+            if self.document is not None
+            else {
                 "completed": {
                     "status": "Yes",
                     "range": {
@@ -70,7 +77,7 @@ class FakeClient:
                     },
                 }
             },
-            False,
+            self.request_timed_out,
         )
 
     async def request_goals(
@@ -186,6 +193,29 @@ def diagnostic(
     if proof_name is not None:
         result["data"] = {"sentenceRange": range_, "proofName": proof_name}
     return result
+
+
+def file_progress(
+    uri: str,
+    version: int,
+    *,
+    start_line: int,
+    start_character: int,
+    end_line: int,
+    end_character: int,
+) -> dict[str, Any]:
+    return {
+        "textDocument": {"uri": uri, "version": version},
+        "processing": [
+            {
+                "range": {
+                    "start": {"line": start_line, "character": start_character},
+                    "end": {"line": end_line, "character": end_character},
+                },
+                "kind": 1,
+            }
+        ],
+    }
 
 
 @pytest.mark.asyncio
@@ -347,11 +377,103 @@ async def test_compile_file_skips_goal_request_for_regular_proof_error(
 
 
 @pytest.mark.asyncio
+async def test_compile_file_adds_timeout_context_from_file_progress(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Slow.v"
+    source.write_text(
+        "Goal True.\nProof.\n  sleep 5.\n  easy.\nQed.\n",
+        encoding="utf-8",
+    )
+    notifications = SpyNotificationStore()
+    client = FakeClient(
+        notifications,
+        document={},
+        file_progress=file_progress(
+            source.as_uri(),
+            1,
+            start_line=2,
+            start_character=2,
+            end_line=4,
+            end_character=4,
+        ),
+        request_timed_out=True,
+    )
+    manager = FakeManager(client, notifications, tmp_path)
+
+    result = await manager.compile_file(str(source))
+
+    assert result.status == "timeout"
+    assert result.timed_out is True
+    assert result.timeout_context == {
+        "operation": "coq/getDocument",
+        "request_timeout_seconds": 1,
+        "cancel_grace_seconds": 0.01,
+        "checked_until": "3:3",
+        "latest_processing_range": "3:3 to 5:5",
+        "next_unchecked": {"location": "3:3", "line": "sleep 5."},
+    }
+
+
+@pytest.mark.asyncio
+async def test_compile_file_prefers_completed_position_for_timeout_context(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Slow.v"
+    source.write_text("Check nat.\nCheck bool.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(
+        notifications,
+        document={
+            "completed": {
+                "status": "Yes",
+                "range": {
+                    "start": {"line": 0, "character": 0},
+                    "end": {"line": 0, "character": 10},
+                },
+            }
+        },
+        file_progress=file_progress(
+            source.as_uri(),
+            1,
+            start_line=0,
+            start_character=0,
+            end_line=1,
+            end_character=11,
+        ),
+        request_timed_out=True,
+    )
+    manager = FakeManager(client, notifications, tmp_path)
+
+    result = await manager.compile_file(str(source))
+
+    assert result.timeout_context == {
+        "operation": "coq/getDocument",
+        "request_timeout_seconds": 1,
+        "cancel_grace_seconds": 0.01,
+        "checked_until": "1:11",
+        "latest_processing_range": "1:1 to 2:12",
+        "next_unchecked": {"location": "2:1", "line": "Check bool."},
+    }
+
+
+@pytest.mark.asyncio
 async def test_hard_timeout_resets_session(tmp_path: Path) -> None:
     source = tmp_path / "Slow.v"
-    source.write_text("Check nat.\n", encoding="utf-8")
+    source.write_text("Goal True.\nProof.\n  sleep 5.\nQed.\n", encoding="utf-8")
     notifications = SpyNotificationStore()
-    client = FakeClient(notifications, [diagnostic("partial", 1)])
+    client = FakeClient(
+        notifications,
+        [diagnostic("partial", 1)],
+        file_progress=file_progress(
+            source.as_uri(),
+            1,
+            start_line=2,
+            start_character=2,
+            end_line=3,
+            end_character=4,
+        ),
+    )
     client.hard_timeout = True
     manager = FakeManager(client, notifications, tmp_path)
 
@@ -361,6 +483,14 @@ async def test_hard_timeout_resets_session(tmp_path: Path) -> None:
     assert result.timed_out is True
     assert result.restarted is True
     assert result.error_count == 1
+    assert result.timeout_context == {
+        "operation": "coq/getDocument",
+        "request_timeout_seconds": 1,
+        "cancel_grace_seconds": 0.01,
+        "checked_until": "3:3",
+        "latest_processing_range": "3:3 to 4:5",
+        "next_unchecked": {"location": "3:3", "line": "sleep 5."},
+    }
     assert notifications.cleared == [(source.as_uri(), 1)]
     assert client.pending_cleared is True
     assert client.killed is True

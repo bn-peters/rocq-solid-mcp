@@ -9,6 +9,9 @@ duplicated ranges, versions, empty lists, and null fields is omitted from the MC
 response. Agent-facing results keep only the first error for each `proof_name`,
 while preserving warnings, infos, and errors without a proof name. The prototype
 talks to `coq-lsp` directly over stdio JSON-RPC.
+Timeout results include a compact `timeout_context` that reports the request
+operation, timeout settings, the latest checked position, the latest processing
+range, and a small preview of the next unchecked source line when available.
 
 ## Architecture
 
@@ -20,7 +23,8 @@ talks to `coq-lsp` directly over stdio JSON-RPC.
   notification store.
 - `rocq_client.py` is transport-only JSON-RPC framing, requests, notifications,
   cancellation, `coq/getDocument`, `proof/goals`, and process cleanup.
-- `notifications.py` stores diagnostics published by `coq-lsp`.
+- `notifications.py` stores diagnostics and latest file-progress notifications
+  published by `coq-lsp`.
 - `pipeline.py` converts raw diagnostics plus proof-state data into compact
   agent-facing `Diagnostic` models.
 
@@ -37,6 +41,13 @@ files inside one project reuse the same `coq-lsp` cache. By default, each
 process starts as `opam exec -- coq-lsp` with `cwd` set to the inferred
 workspace so local opam switches select the matching Rocq and `coq-lsp`
 versions.
+
+When `coq/getDocument` times out, the response status is `timeout` and the
+serialized result includes `timeout_context`. `checked_until` is taken from the
+partial `completed.range.end` when cancellation returns a partial document; if
+not, it falls back to the start of the latest `$/coq/fileProgress` processing
+range. The context also includes `latest_processing_range` and `next_unchecked`
+as compact 1-based locations without exposing raw LSP progress payloads.
 
 ## Run
 

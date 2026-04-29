@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import RocqLspConfig, load_config
-from .models import CompileResult
+from .models import CompileResult, location_string
 from .pipeline import build_diagnostics
 from .rocq_client import (
     RocqLspClient,
@@ -115,6 +115,13 @@ class RocqLspManager:
                 completed_doc,
                 supplemental_proof_states=supplemental_proof_states,
             )
+            timeout_context = None
+            if request_timed_out:
+                timeout_context = self._timeout_context(
+                    content=content,
+                    document=completed_doc,
+                    progress=session.notifications.latest_file_progress(uri, version),
+                )
             return CompileResult.from_diagnostics(
                 status="timeout" if request_timed_out else "complete",
                 file=str(path),
@@ -124,12 +131,18 @@ class RocqLspManager:
                 completed=self._completed_only(completed_doc),
                 diagnostics=diagnostics,
                 timed_out=request_timed_out,
+                timeout_context=timeout_context,
             )
         except RocqLspHardTimeout as exc:
             raw_diagnostics = await session.notifications.wait_for_diagnostics(
                 uri, version
             )
             diagnostics = build_diagnostics(raw_diagnostics, None)
+            timeout_context = self._timeout_context(
+                content=content,
+                document=None,
+                progress=session.notifications.latest_file_progress(uri, version),
+            )
             await self._reset_session(session.workspace)
             return CompileResult.from_diagnostics(
                 status="timeout",
@@ -141,6 +154,7 @@ class RocqLspManager:
                 diagnostics=diagnostics,
                 timed_out=True,
                 restarted=True,
+                timeout_context=timeout_context,
                 message=str(exc),
             )
         except RocqLspResponseError as exc:
@@ -318,6 +332,79 @@ class RocqLspManager:
         completed = document.get("completed")
         return completed if isinstance(completed, dict) else None
 
+    def _timeout_context(
+        self,
+        *,
+        content: str,
+        document: dict[str, Any] | None,
+        progress: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        completed = self._completed_only(document) if document else None
+        completed_range = completed.get("range") if completed else None
+        completed_end = (
+            self._range_end(completed_range) if isinstance(completed_range, dict) else None
+        )
+        processing_range = self._latest_processing_range(progress)
+        progress_start = (
+            self._range_start(processing_range)
+            if isinstance(processing_range, dict)
+            else None
+        )
+        checked_until = completed_end or progress_start
+
+        context: dict[str, Any] = {
+            "operation": "coq/getDocument",
+            "request_timeout_seconds": self.config.timeout_policy.request_seconds,
+            "cancel_grace_seconds": self.config.timeout_policy.cancel_grace_seconds,
+            "checked_until": self._position_string(checked_until),
+            "latest_processing_range": location_string(processing_range),
+            "next_unchecked": self._next_unchecked_preview(content, checked_until),
+        }
+        return context
+
+    @staticmethod
+    def _latest_processing_range(progress: Any) -> dict[str, Any] | None:
+        if not isinstance(progress, dict):
+            return None
+        processing = progress.get("processing")
+        if not isinstance(processing, list):
+            return None
+        for item in processing:
+            if not isinstance(item, dict):
+                continue
+            range_ = item.get("range")
+            if isinstance(range_, dict):
+                return range_
+        return None
+
+    @staticmethod
+    def _next_unchecked_preview(
+        content: str, position: dict[str, int] | None
+    ) -> dict[str, Any] | None:
+        if position is None:
+            return None
+
+        line_number = position["line"]
+        character = position["character"]
+        lines = content.splitlines()
+        for current_line_number in range(line_number, len(lines)):
+            line = lines[current_line_number]
+            start = character if current_line_number == line_number else 0
+            start = max(0, min(start, len(line)))
+            for index in range(start, len(line)):
+                if not line[index].isspace():
+                    return {
+                        "location": f"{current_line_number + 1}:{index + 1}",
+                        "line": RocqLspManager._truncate_preview_line(line.strip()),
+                    }
+        return None
+
+    @staticmethod
+    def _truncate_preview_line(line: str, limit: int = 160) -> str:
+        if len(line) <= limit:
+            return line
+        return f"{line[: limit - 3]}..."
+
     @staticmethod
     def _needs_incomplete_proof_goal_request(diagnostic: Any) -> bool:
         if not isinstance(diagnostic, dict) or diagnostic.get("severity") != 1:
@@ -348,6 +435,23 @@ class RocqLspManager:
         if isinstance(line, int) and isinstance(character, int):
             return {"line": line, "character": character}
         return None
+
+    @staticmethod
+    def _range_end(range_: dict[str, Any]) -> dict[str, int] | None:
+        end = range_.get("end")
+        if not isinstance(end, dict):
+            return None
+        line = end.get("line")
+        character = end.get("character")
+        if isinstance(line, int) and isinstance(character, int):
+            return {"line": line, "character": character}
+        return None
+
+    @staticmethod
+    def _position_string(position: dict[str, int] | None) -> str | None:
+        if position is None:
+            return None
+        return f"{position['line'] + 1}:{position['character'] + 1}"
 
     @staticmethod
     def _range_key(range_: dict[str, Any]) -> str:

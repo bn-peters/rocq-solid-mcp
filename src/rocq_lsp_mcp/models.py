@@ -86,6 +86,7 @@ class CompileResult(BaseModel):
     info_count: int = 0
     timed_out: bool = False
     restarted: bool = False
+    timeout_context: dict[str, Any] | None = None
     message: str | None = None
 
     @classmethod
@@ -101,6 +102,7 @@ class CompileResult(BaseModel):
         diagnostics: list[Diagnostic],
         timed_out: bool = False,
         restarted: bool = False,
+        timeout_context: dict[str, Any] | None = None,
         message: str | None = None,
     ) -> "CompileResult":
         errors = [diag for diag in diagnostics if diag.severity == 1]
@@ -120,6 +122,7 @@ class CompileResult(BaseModel):
             info_count=len(infos),
             timed_out=timed_out,
             restarted=restarted,
+            timeout_context=timeout_context,
             message=message,
         )
 
@@ -139,6 +142,9 @@ class CompileResult(BaseModel):
                 ],
                 "timed_out": True if self.timed_out else None,
                 "restarted": True if self.restarted else None,
+                "timeout_context": (
+                    self.timeout_context if self.status == "timeout" else None
+                ),
                 "message": self.message,
             }
         )

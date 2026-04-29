@@ -6,7 +6,18 @@
     "result": {
       "status": "timeout",
       "file": "src/timeout.v",
-      "timed_out": true
+      "timed_out": true,
+      "timeout_context": {
+        "operation": "coq/getDocument",
+        "request_timeout_seconds": 1,
+        "cancel_grace_seconds": 1,
+        "checked_until": "5:7",
+        "latest_processing_range": "5:7 to 9:1",
+        "next_unchecked": {
+          "location": "6:3",
+          "line": "sleep 5."
+        }
+      }
     }
   },
   {
