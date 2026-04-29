@@ -31,19 +31,23 @@ class Diagnostic(BaseModel):
     code: str | int | None = None
     source: str | None = None
     data: Any | None = None
+    proof_name: str | None = None
     proof_state: Any | None = None
     raw: dict[str, Any] = Field(default_factory=dict)
 
     @classmethod
     def from_lsp(cls, diagnostic: Any, proof_state: Any | None = None) -> "Diagnostic":
         raw = lsp_to_jsonable(diagnostic)
+        data = raw.get("data")
+        proof_name = data.get("proofName") if isinstance(data, dict) else None
         return cls(
             range=raw.get("range", {}),
             message=raw.get("message", ""),
             severity=raw.get("severity"),
             code=raw.get("code"),
             source=raw.get("source"),
-            data=raw.get("data"),
+            data=data,
+            proof_name=proof_name if isinstance(proof_name, str) else None,
             proof_state=proof_state,
             raw=raw,
         )

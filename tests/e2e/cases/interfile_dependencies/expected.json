@@ -52,6 +52,7 @@
               "character": 18
             }
           },
+          "proof_name": "imported_value_wrong",
           "sentence_range": {
             "start": {
               "line": 8,
@@ -112,6 +113,7 @@
               "character": 24
             }
           },
+          "proof_name": "imported_value_wrong",
           "sentence_range": {
             "start": {
               "line": 8,

@@ -138,7 +138,8 @@ def _expected_tactic_failure(uri: str) -> dict[str, object]:
         "severity": 1,
         "code": None,
         "source": None,
-        "data": {"sentenceRange": range_},
+        "data": {"sentenceRange": range_, "proofName": "Unnamed_thm"},
+        "proof_name": "Unnamed_thm",
         "proof_state": {
             "textDocument": {"uri": uri, "version": 1},
             "position": {"line": 0, "character": 19},
@@ -164,7 +165,7 @@ def _expected_tactic_failure(uri: str) -> dict[str, object]:
             "range": range_,
             "severity": 1,
             "message": "Tactic failure.",
-            "data": {"sentenceRange": range_},
+            "data": {"sentenceRange": range_, "proofName": "Unnamed_thm"},
         },
     }
 
@@ -181,7 +182,8 @@ def _expected_incomplete_qed(uri: str) -> dict[str, object]:
         "severity": 1,
         "code": None,
         "source": None,
-        "data": {"sentenceRange": range_},
+        "data": {"sentenceRange": range_, "proofName": "Unnamed_thm"},
+        "proof_name": "Unnamed_thm",
         "proof_state": {
             "textDocument": {"uri": uri, "version": 1},
             "position": {"line": 0, "character": 25},
@@ -194,6 +196,6 @@ def _expected_incomplete_qed(uri: str) -> dict[str, object]:
             "range": range_,
             "severity": 1,
             "message": message,
-            "data": {"sentenceRange": range_},
+            "data": {"sentenceRange": range_, "proofName": "Unnamed_thm"},
         },
     }

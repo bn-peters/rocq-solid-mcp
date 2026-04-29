@@ -42,6 +42,7 @@
               "character": 24
             }
           },
+          "proof_name": "Unnamed_thm",
           "sentence_range": {
             "start": {
               "line": 0,
@@ -102,6 +103,7 @@
               "character": 29
             }
           },
+          "proof_name": "Unnamed_thm",
           "sentence_range": {
             "start": {
               "line": 0,

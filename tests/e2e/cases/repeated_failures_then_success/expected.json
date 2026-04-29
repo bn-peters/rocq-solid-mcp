@@ -26,6 +26,7 @@
               "character": 7
             }
           },
+          "proof_name": "foo",
           "sentence_range": {
             "start": {
               "line": 2,
@@ -86,6 +87,7 @@
               "character": 7
             }
           },
+          "proof_name": "foo",
           "sentence_range": {
             "start": {
               "line": 3,
@@ -146,6 +148,7 @@
               "character": 7
             }
           },
+          "proof_name": "foo",
           "sentence_range": {
             "start": {
               "line": 4,

@@ -63,6 +63,7 @@
               "character": 18
             }
           },
+          "proof_name": "shared_rank_wrong",
           "sentence_range": {
             "start": {
               "line": 25,
@@ -123,6 +124,7 @@
               "character": 24
             }
           },
+          "proof_name": "shared_rank_wrong",
           "sentence_range": {
             "start": {
               "line": 25,
@@ -170,6 +172,7 @@
               "character": 18
             }
           },
+          "proof_name": "capsule_can_promote_wrong",
           "sentence_range": {
             "start": {
               "line": 28,
@@ -230,6 +233,7 @@
               "character": 24
             }
           },
+          "proof_name": "capsule_can_promote_wrong",
           "sentence_range": {
             "start": {
               "line": 28,

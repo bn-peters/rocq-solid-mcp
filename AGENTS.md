@@ -26,7 +26,7 @@ available, proof-state context for the sentence that produced an error.
 - `src/rocq_lsp_mcp/models.py` contains the Pydantic response models.
   `CompileResult` separates diagnostics into errors, warnings, and infos.
   `Diagnostic` keeps the raw LSP diagnostic while exposing normalized fields and
-  optional `proof_state`.
+  optional `proof_name` and `proof_state`.
 - `src/rocq_lsp_mcp/config.py` loads environment configuration and builds the
   `coq-lsp` initialization settings.
 

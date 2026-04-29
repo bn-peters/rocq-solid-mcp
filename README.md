@@ -1,7 +1,9 @@
 # rocq-lsp-mcp-prototype
 
 Prototype MCP server that compiles Rocq files through a persistent `coq-lsp`
-session and returns structured diagnostics. The prototype talks to `coq-lsp`
+session and returns structured diagnostics. Diagnostics preserve raw LSP data
+and expose normalized fields such as proof-state context and, when `coq-lsp`
+reports it, the enclosing `proof_name`. The prototype talks to `coq-lsp`
 directly over stdio JSON-RPC.
 
 ## Run

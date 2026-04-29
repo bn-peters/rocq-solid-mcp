@@ -169,6 +169,8 @@ def _diagnostic_record(
         record["code"] = diagnostic.code
     if diagnostic.source is not None:
         record["source"] = diagnostic.source
+    if diagnostic.proof_name is not None:
+        record["proof_name"] = diagnostic.proof_name
     if isinstance(diagnostic.data, dict) and isinstance(
         diagnostic.data.get("sentenceRange"), dict
     ):
