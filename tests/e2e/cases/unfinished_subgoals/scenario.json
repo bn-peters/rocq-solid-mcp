@@ -1,0 +1,19 @@
+{
+  "steps": [
+    {
+      "label": "compile first subgoal unfinished",
+      "action": "compile",
+      "file": "src/first_subgoal_unfinished.v"
+    },
+    {
+      "label": "compile second subgoal unfinished",
+      "action": "compile",
+      "file": "src/second_subgoal_unfinished.v"
+    },
+    {
+      "label": "compile empty second subgoal",
+      "action": "compile",
+      "file": "src/empty_second_subgoal.v"
+    }
+  ]
+}
