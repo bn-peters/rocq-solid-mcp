@@ -109,7 +109,7 @@ async def test_file_change_rechecks_and_reports_failure_proof_state(
     assert failing.info_count == 0
     assert "Pp_" not in json.dumps(failing.model_dump())
     assert [error.model_dump() for error in failing.errors] == [
-        _expected_tactic_failure(source.as_uri()),
+        _expected_tactic_failure(),
     ]
 
     assert fixed.status == "complete"
@@ -128,48 +128,11 @@ async def test_file_change_rechecks_and_reports_failure_proof_state(
     assert fixed.errors == []
 
 
-def _range(start_character: int, end_character: int) -> dict[str, object]:
+def _expected_tactic_failure() -> dict[str, object]:
     return {
-        "start": {"line": 0, "character": start_character},
-        "end": {"line": 0, "character": end_character},
-    }
-
-
-def _expected_tactic_failure(uri: str) -> dict[str, object]:
-    range_ = _range(19, 24)
-    return {
-        "range": range_,
+        "level": "error",
         "message": "Tactic failure.",
-        "severity": 1,
-        "code": None,
-        "source": None,
-        "data": {"sentenceRange": range_, "proofName": "Unnamed_thm"},
+        "location": "1:20 to 1:25",
         "proof_name": "Unnamed_thm",
-        "proof_state": {
-            "textDocument": {"uri": uri, "version": 1},
-            "position": {"line": 0, "character": 19},
-            "range": range_,
-            "goals": {
-                "goals": [
-                    {
-                        "name": None,
-                        "hyps": [],
-                        "ty": "0 = 0",
-                    }
-                ],
-                "stack": [],
-                "bullet": None,
-                "shelf": [],
-                "given_up": [],
-            },
-            "program": [],
-            "messages": [],
-            "error": "Tactic failure.",
-        },
-        "raw": {
-            "range": range_,
-            "severity": 1,
-            "message": "Tactic failure.",
-            "data": {"sentenceRange": range_, "proofName": "Unnamed_thm"},
-        },
+        "proof_state": {"goals": [{"conclusion": "0 = 0"}]},
     }

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .models import Diagnostic
+from .models import Diagnostic, is_empty_value
 from .pretty import normalize_proof_state
 
 
@@ -48,7 +48,9 @@ def _proof_states_by_range(document: dict[str, Any] | None) -> dict[str, Any]:
         goals = span.get("goals")
         range_ = span.get("range")
         if goals is not None and isinstance(range_, dict):
-            states[_range_key(range_)] = normalize_proof_state(goals)
+            normalized = normalize_proof_state(goals)
+            if not is_empty_value(normalized):
+                states[_range_key(range_)] = normalized
     return states
 
 
@@ -60,14 +62,15 @@ def _merge_supplemental_proof_states(
         return
     for key, proof_state in supplemental.items():
         normalized = normalize_proof_state(proof_state)
-        if not isinstance(normalized, dict) or "goals" not in normalized:
+        if not isinstance(normalized, dict) or is_empty_value(normalized):
             continue
         current = states.get(key)
         if isinstance(current, dict):
-            if "goals" not in current:
-                current["goals"] = normalized["goals"]
+            for field, value in normalized.items():
+                if field not in current and not is_empty_value(value):
+                    current[field] = value
             continue
-        states[key] = {"goals": normalized["goals"]}
+        states[key] = normalized
 
 
 def _diagnostic_sentence_range(diagnostic: Any) -> dict[str, Any]:

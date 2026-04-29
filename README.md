@@ -1,12 +1,14 @@
 # rocq-lsp-mcp-prototype
 
 Prototype MCP server that compiles Rocq files through a persistent `coq-lsp`
-session and returns structured diagnostics. Diagnostics preserve raw LSP data
-and expose normalized fields such as proof-state context and, when `coq-lsp`
-reports it, the enclosing `proof_name`. Agent-facing results keep only the
-first error for each `proof_name`, while preserving warnings, infos, and errors
-without a proof name. The prototype talks to `coq-lsp` directly over stdio
-JSON-RPC.
+session and returns compact structured diagnostics. Diagnostics expose a
+human-facing `level`, `location`, message, optional `proof_name`, and compact
+proof-state context when available. Results include the compiled file relative
+to the workspace. Raw LSP plumbing such as document URIs, positions, duplicated
+ranges, versions, empty lists, and null fields is omitted from the MCP response.
+Agent-facing results keep only the first error for each `proof_name`, while
+preserving warnings, infos, and errors without a proof name. The prototype talks
+to `coq-lsp` directly over stdio JSON-RPC.
 
 ## Architecture
 
@@ -19,13 +21,13 @@ JSON-RPC.
 - `rocq_client.py` is transport-only JSON-RPC framing, requests, notifications,
   cancellation, `coq/getDocument`, `proof/goals`, and process cleanup.
 - `notifications.py` stores diagnostics published by `coq-lsp`.
-- `pipeline.py` converts raw diagnostics plus proof-state data into
+- `pipeline.py` converts raw diagnostics plus proof-state data into compact
   agent-facing `Diagnostic` models.
 
 For `Attempt to save an incomplete proof` diagnostics, the `Qed.` span may only
 contain the save error. The manager asks `proof/goals` with `mode: "Prev"` at
-that diagnostic position and merges just the returned `goals` field into the
-existing proof state.
+that diagnostic position and merges the returned compact goals and bullet state
+into the diagnostic proof state.
 
 ## Run
 

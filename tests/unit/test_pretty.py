@@ -14,13 +14,20 @@ def test_pp_to_text_handles_common_rocq_lsp_nodes() -> None:
     assert pp_to_text(["Pp_force_newline"]) == "\n"
 
 
-def test_normalize_proof_state_simplifies_goals_and_errors() -> None:
+def test_normalize_proof_state_simplifies_goals_and_hypotheses() -> None:
     proof_state = {
         "goals": {
             "goals": [
                 {
                     "info": {"evar": ["Ser_Evar", 2], "name": None},
-                    "hyps": [],
+                    "hyps": [
+                        {"names": ["H"], "def": None, "ty": ["Pp_string", "True"]},
+                        {
+                            "names": ["n"],
+                            "def": ["Pp_string", "0"],
+                            "ty": ["Pp_string", "nat"],
+                        },
+                    ],
                     "ty": ["Pp_string", "0 = 0"],
                 }
             ],
@@ -40,12 +47,10 @@ def test_normalize_proof_state_simplifies_goals_and_errors() -> None:
     }
 
     assert normalize_proof_state(proof_state) == {
-        "goals": {
-            "goals": [{"name": None, "hyps": [], "ty": "0 = 0"}],
-            "stack": [],
-            "bullet": None,
-            "shelf": [],
-            "given_up": [],
-        },
-        "error": "first\nsecond",
+        "goals": [
+            {
+                "hypotheses": ["H : True", "n := 0 : nat"],
+                "conclusion": "0 = 0",
+            }
+        ]
     }

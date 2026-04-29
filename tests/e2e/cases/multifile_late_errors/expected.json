@@ -5,14 +5,7 @@
     "file": "src/base.v",
     "result": {
       "status": "complete",
-      "workspace": "$PROJECT",
-      "version": 1,
-      "counts": {
-        "errors": 0,
-        "warnings": 0,
-        "infos": 0
-      },
-      "diagnostics": []
+      "file": "src/base.v"
     }
   },
   {
@@ -21,14 +14,7 @@
     "file": "src/lang/modes.v",
     "result": {
       "status": "complete",
-      "workspace": "$PROJECT",
-      "version": 1,
-      "counts": {
-        "errors": 0,
-        "warnings": 0,
-        "infos": 0
-      },
-      "diagnostics": []
+      "file": "src/lang/modes.v"
     }
   },
   {
@@ -42,134 +28,32 @@
     "file": "src/lang/modes.v",
     "result": {
       "status": "complete",
-      "workspace": "$PROJECT",
-      "version": 2,
-      "counts": {
-        "errors": 2,
-        "warnings": 0,
-        "infos": 0
-      },
+      "file": "src/lang/modes.v",
       "diagnostics": [
         {
-          "severity": 1,
+          "level": "error",
           "message": "Unable to unify \"1\" with \"Modes.mode_rank Modes.Shared\".",
-          "range": {
-            "start": {
-              "line": 25,
-              "character": 7
-            },
-            "end": {
-              "line": 25,
-              "character": 18
-            }
-          },
+          "location": "26:8 to 26:19",
           "proof_name": "shared_rank_wrong",
-          "sentence_range": {
-            "start": {
-              "line": 25,
-              "character": 7
-            },
-            "end": {
-              "line": 25,
-              "character": 19
-            }
-          },
           "proof_state": {
-            "textDocument": {
-              "uri": "file://$PROJECT/src/lang/modes.v",
-              "version": 2
-            },
-            "position": {
-              "line": 25,
-              "character": 7
-            },
-            "range": {
-              "start": {
-                "line": 25,
-                "character": 7
-              },
-              "end": {
-                "line": 25,
-                "character": 19
+            "goals": [
+              {
+                "conclusion": "Modes.mode_rank Modes.Shared = 1"
               }
-            },
-            "goals": {
-              "goals": [
-                {
-                  "name": null,
-                  "hyps": [],
-                  "ty": "Modes.mode_rank Modes.Shared = 1"
-                }
-              ],
-              "stack": [],
-              "bullet": null,
-              "shelf": [],
-              "given_up": []
-            },
-            "program": [],
-            "messages": [],
-            "error": "Unable to unify\n \"1\"\nwith\n \"Modes.mode_rank\nModes.Shared\"."
+            ]
           }
         },
         {
-          "severity": 1,
+          "level": "error",
           "message": "Unable to unify \"true\" with \"Modes.can_promote Modes.Capsule\".",
-          "range": {
-            "start": {
-              "line": 28,
-              "character": 7
-            },
-            "end": {
-              "line": 28,
-              "character": 18
-            }
-          },
+          "location": "29:8 to 29:19",
           "proof_name": "capsule_can_promote_wrong",
-          "sentence_range": {
-            "start": {
-              "line": 28,
-              "character": 7
-            },
-            "end": {
-              "line": 28,
-              "character": 19
-            }
-          },
           "proof_state": {
-            "textDocument": {
-              "uri": "file://$PROJECT/src/lang/modes.v",
-              "version": 2
-            },
-            "position": {
-              "line": 28,
-              "character": 7
-            },
-            "range": {
-              "start": {
-                "line": 28,
-                "character": 7
-              },
-              "end": {
-                "line": 28,
-                "character": 19
+            "goals": [
+              {
+                "conclusion": "Modes.can_promote Modes.Capsule = true"
               }
-            },
-            "goals": {
-              "goals": [
-                {
-                  "name": null,
-                  "hyps": [],
-                  "ty": "Modes.can_promote Modes.Capsule = true"
-                }
-              ],
-              "stack": [],
-              "bullet": null,
-              "shelf": [],
-              "given_up": []
-            },
-            "program": [],
-            "messages": [],
-            "error": "Unable to unify\n \"true\"\nwith\n \"Modes.can_promote\nModes.Capsule\"."
+            ]
           }
         }
       ]

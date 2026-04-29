@@ -5,100 +5,23 @@
     "file": "src/first_subgoal_unfinished.v",
     "result": {
       "status": "complete",
-      "workspace": "$PROJECT",
-      "version": 1,
-      "counts": {
-        "errors": 1,
-        "warnings": 0,
-        "infos": 0
-      },
+      "file": "src/first_subgoal_unfinished.v",
       "diagnostics": [
         {
-          "severity": 1,
+          "level": "error",
           "message": "[Focus] Wrong bullet -: Current bullet - is not finished.",
-          "range": {
-            "start": {
-              "line": 5,
-              "character": 2
-            },
-            "end": {
-              "line": 5,
-              "character": 3
-            }
-          },
+          "location": "6:3 to 6:4",
           "proof_name": "foo",
-          "sentence_range": {
-            "start": {
-              "line": 5,
-              "character": 2
-            },
-            "end": {
-              "line": 5,
-              "character": 3
-            }
-          },
           "proof_state": {
-            "textDocument": {
-              "uri": "file://$PROJECT/src/first_subgoal_unfinished.v",
-              "version": 1
-            },
-            "position": {
-              "line": 5,
-              "character": 2
-            },
-            "range": {
-              "start": {
-                "line": 5,
-                "character": 2
-              },
-              "end": {
-                "line": 5,
-                "character": 3
+            "goals": [
+              {
+                "hypotheses": [
+                  "H : True"
+                ],
+                "conclusion": "True"
               }
-            },
-            "goals": {
-              "goals": [
-                {
-                  "name": null,
-                  "hyps": [
-                    {
-                      "names": [
-                        "H"
-                      ],
-                      "def": null,
-                      "ty": "True"
-                    }
-                  ],
-                  "ty": "True"
-                }
-              ],
-              "stack": [
-                [
-                  [],
-                  []
-                ]
-              ],
-              "bullet": "The current bullet - is unfinished.",
-              "shelf": [],
-              "given_up": [
-                {
-                  "name": null,
-                  "hyps": [
-                    {
-                      "names": [
-                        "H"
-                      ],
-                      "def": null,
-                      "ty": "True"
-                    }
-                  ],
-                  "ty": "True"
-                }
-              ]
-            },
-            "program": [],
-            "messages": [],
-            "error": "[Focus]\nWrong bullet -: Current bullet - is not finished."
+            ],
+            "bullet": "The current bullet - is unfinished."
           }
         }
       ]
@@ -110,86 +33,23 @@
     "file": "src/second_subgoal_unfinished.v",
     "result": {
       "status": "complete",
-      "workspace": "$PROJECT",
-      "version": 1,
-      "counts": {
-        "errors": 1,
-        "warnings": 0,
-        "infos": 0
-      },
+      "file": "src/second_subgoal_unfinished.v",
       "diagnostics": [
         {
-          "severity": 1,
+          "level": "error",
           "message": " (in proof foo): Attempt to save an incomplete proof\n(there are remaining open goals).",
-          "range": {
-            "start": {
-              "line": 6,
-              "character": 0
-            },
-            "end": {
-              "line": 6,
-              "character": 4
-            }
-          },
+          "location": "7:1 to 7:5",
           "proof_name": "foo",
-          "sentence_range": {
-            "start": {
-              "line": 6,
-              "character": 0
-            },
-            "end": {
-              "line": 6,
-              "character": 4
-            }
-          },
           "proof_state": {
-            "textDocument": {
-              "uri": "file://$PROJECT/src/second_subgoal_unfinished.v",
-              "version": 1
-            },
-            "position": {
-              "line": 6,
-              "character": 0
-            },
-            "range": {
-              "start": {
-                "line": 6,
-                "character": 0
-              },
-              "end": {
-                "line": 6,
-                "character": 4
+            "goals": [
+              {
+                "hypotheses": [
+                  "H : True"
+                ],
+                "conclusion": "True"
               }
-            },
-            "program": [],
-            "messages": [],
-            "error": " (in proof foo): Attempt to save an incomplete proof\n(there are remaining open goals).",
-            "goals": {
-              "goals": [
-                {
-                  "name": null,
-                  "hyps": [
-                    {
-                      "names": [
-                        "H"
-                      ],
-                      "def": null,
-                      "ty": "True"
-                    }
-                  ],
-                  "ty": "True"
-                }
-              ],
-              "stack": [
-                [
-                  [],
-                  []
-                ]
-              ],
-              "bullet": "The current bullet - is unfinished.",
-              "shelf": [],
-              "given_up": []
-            }
+            ],
+            "bullet": "The current bullet - is unfinished."
           }
         }
       ]
@@ -201,86 +61,23 @@
     "file": "src/empty_second_subgoal.v",
     "result": {
       "status": "complete",
-      "workspace": "$PROJECT",
-      "version": 1,
-      "counts": {
-        "errors": 1,
-        "warnings": 0,
-        "infos": 0
-      },
+      "file": "src/empty_second_subgoal.v",
       "diagnostics": [
         {
-          "severity": 1,
+          "level": "error",
           "message": " (in proof foo): Attempt to save an incomplete proof\n(there are remaining open goals).",
-          "range": {
-            "start": {
-              "line": 6,
-              "character": 0
-            },
-            "end": {
-              "line": 6,
-              "character": 4
-            }
-          },
+          "location": "7:1 to 7:5",
           "proof_name": "foo",
-          "sentence_range": {
-            "start": {
-              "line": 6,
-              "character": 0
-            },
-            "end": {
-              "line": 6,
-              "character": 4
-            }
-          },
           "proof_state": {
-            "textDocument": {
-              "uri": "file://$PROJECT/src/empty_second_subgoal.v",
-              "version": 1
-            },
-            "position": {
-              "line": 6,
-              "character": 0
-            },
-            "range": {
-              "start": {
-                "line": 6,
-                "character": 0
-              },
-              "end": {
-                "line": 6,
-                "character": 4
+            "goals": [
+              {
+                "hypotheses": [
+                  "H : True"
+                ],
+                "conclusion": "True"
               }
-            },
-            "program": [],
-            "messages": [],
-            "error": " (in proof foo): Attempt to save an incomplete proof\n(there are remaining open goals).",
-            "goals": {
-              "goals": [
-                {
-                  "name": null,
-                  "hyps": [
-                    {
-                      "names": [
-                        "H"
-                      ],
-                      "def": null,
-                      "ty": "True"
-                    }
-                  ],
-                  "ty": "True"
-                }
-              ],
-              "stack": [
-                [
-                  [],
-                  []
-                ]
-              ],
-              "bullet": "The current bullet - is unfinished.",
-              "shelf": [],
-              "given_up": []
-            }
+            ],
+            "bullet": "The current bullet - is unfinished."
           }
         }
       ]

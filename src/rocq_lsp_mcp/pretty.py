@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .models import is_empty_value, pruned_dict
+
 
 def pp_to_text(value: Any) -> str:
     """Render rocq-lsp's serialized Pp tree into readable plain text."""
@@ -38,7 +40,11 @@ def normalize_proof_state(value: Any) -> Any:
     if _is_pp(value):
         return pp_to_text(value)
     if isinstance(value, list):
-        return [normalize_proof_state(item) for item in value]
+        return [
+            normalized
+            for item in value
+            if not is_empty_value(normalized := normalize_proof_state(item))
+        ]
     if not isinstance(value, dict):
         return value
 
@@ -49,33 +55,90 @@ def normalize_proof_state(value: Any) -> Any:
     if _looks_like_message(value):
         return _normalize_message(value)
 
-    return {key: normalize_proof_state(item) for key, item in value.items()}
+    result: dict[str, Any] = {}
+    for key, item in value.items():
+        if key in {"textDocument", "position", "range", "error", "program"}:
+            continue
+        normalized = normalize_proof_state(item)
+        if key == "goals" and isinstance(normalized, dict):
+            result.update(normalized)
+            continue
+        if not is_empty_value(normalized):
+            result[key] = normalized
+    return result
 
 
 def _normalize_goal(value: dict[str, Any]) -> dict[str, Any]:
     info = value.get("info") if isinstance(value.get("info"), dict) else {}
-    return {
-        "name": normalize_proof_state(info.get("name")),
-        "hyps": normalize_proof_state(value.get("hyps", [])),
-        "ty": normalize_proof_state(value.get("ty")),
-    }
+    return pruned_dict(
+        {
+            "name": normalize_proof_state(info.get("name")),
+            "hypotheses": _normalize_hypotheses(value.get("hyps", [])),
+            "conclusion": normalize_proof_state(value.get("ty")),
+        }
+    )
 
 
 def _normalize_goal_config(value: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "goals": normalize_proof_state(value.get("goals", [])),
-        "stack": normalize_proof_state(value.get("stack", [])),
+    goals = normalize_proof_state(value.get("goals", []))
+    given_up = normalize_proof_state(value.get("given_up", []))
+    result = {
+        "goals": goals,
         "bullet": normalize_proof_state(value.get("bullet")),
-        "shelf": normalize_proof_state(value.get("shelf", [])),
-        "given_up": normalize_proof_state(value.get("given_up", [])),
+        "shelved_goals": normalize_proof_state(value.get("shelf", [])),
     }
+    if given_up != goals:
+        result["given_up_goals"] = given_up
+    return pruned_dict(result)
 
 
 def _normalize_message(value: dict[str, Any]) -> dict[str, Any]:
     result = dict(value)
     if "text" in result:
         result["text"] = normalize_proof_state(result["text"])
-    return result
+    return pruned_dict(result)
+
+
+def _normalize_hypotheses(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+
+    hypotheses: list[str] = []
+    for item in value:
+        hypothesis = _normalize_hypothesis(item)
+        if hypothesis:
+            hypotheses.append(hypothesis)
+    return hypotheses
+
+
+def _normalize_hypothesis(value: Any) -> str | None:
+    if not isinstance(value, dict):
+        normalized = normalize_proof_state(value)
+        return str(normalized) if normalized is not None else None
+
+    names = _hypothesis_names(value.get("names", []))
+    ty = normalize_proof_state(value.get("ty"))
+    definition = normalize_proof_state(value.get("def"))
+    if not names:
+        return str(ty) if ty is not None else None
+
+    prefix = " ".join(names)
+    if definition is not None and ty is not None:
+        return f"{prefix} := {definition} : {ty}"
+    if ty is not None:
+        return f"{prefix} : {ty}"
+    if definition is not None:
+        return f"{prefix} := {definition}"
+    return prefix
+
+
+def _hypothesis_names(value: Any) -> list[str]:
+    normalized = normalize_proof_state(value)
+    if isinstance(normalized, list):
+        return [str(item) for item in normalized if item is not None]
+    if normalized is None:
+        return []
+    return [str(normalized)]
 
 
 def _is_pp(value: Any) -> bool:

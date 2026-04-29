@@ -320,10 +320,7 @@ async def test_compile_file_enriches_incomplete_proof_save_error(
         }
     ]
     proof_state = result.diagnostics[0].proof_state
-    assert proof_state["program"] == []
-    assert proof_state["goals"]["goals"] == [
-        {"name": None, "hyps": [], "ty": "Foo"}
-    ]
+    assert proof_state == {"goals": [{"conclusion": "Foo"}]}
 
 
 @pytest.mark.asyncio

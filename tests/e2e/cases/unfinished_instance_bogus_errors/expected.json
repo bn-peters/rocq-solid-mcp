@@ -5,73 +5,19 @@
     "file": "src/unfinished_instance.v",
     "result": {
       "status": "complete",
-      "workspace": "$PROJECT",
-      "version": 1,
-      "counts": {
-        "errors": 1,
-        "warnings": 0,
-        "infos": 0
-      },
+      "file": "src/unfinished_instance.v",
       "diagnostics": [
         {
-          "severity": 1,
+          "level": "error",
           "message": " (in proof token_world_le_preorder): Attempt to save an incomplete proof\n(there are remaining open goals).",
-          "range": {
-            "start": {
-              "line": 7,
-              "character": 0
-            },
-            "end": {
-              "line": 7,
-              "character": 4
-            }
-          },
+          "location": "8:1 to 8:5",
           "proof_name": "token_world_le_preorder",
-          "sentence_range": {
-            "start": {
-              "line": 7,
-              "character": 0
-            },
-            "end": {
-              "line": 7,
-              "character": 4
-            }
-          },
           "proof_state": {
-            "textDocument": {
-              "uri": "file://$PROJECT/src/unfinished_instance.v",
-              "version": 1
-            },
-            "position": {
-              "line": 7,
-              "character": 0
-            },
-            "range": {
-              "start": {
-                "line": 7,
-                "character": 0
-              },
-              "end": {
-                "line": 7,
-                "character": 4
+            "goals": [
+              {
+                "conclusion": "Foo"
               }
-            },
-            "program": [],
-            "messages": [],
-            "error": " (in proof token_world_le_preorder): Attempt to save an incomplete proof\n(there are remaining open goals).",
-            "goals": {
-              "goals": [
-                {
-                  "name": null,
-                  "hyps": [],
-                  "ty": "Foo"
-                }
-              ],
-              "stack": [],
-              "bullet": null,
-              "shelf": [],
-              "given_up": []
-            }
+            ]
           }
         }
       ]

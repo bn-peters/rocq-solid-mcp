@@ -3,8 +3,8 @@
 It is the duty of the agent to keep AGENTS.md and README.md up to date.
 
 This package is a Python MCP prototype for compiling Rocq files through a
-persistent `coq-lsp` session. It returns structured diagnostics and, when
-available, proof-state context for the sentence that produced an error.
+persistent `coq-lsp` session. It returns compact structured diagnostics and,
+when available, proof-state context for the sentence that produced an error.
 
 ## Package Layout
 
@@ -22,7 +22,7 @@ available, proof-state context for the sentence that produced an error.
   `textDocument/publishDiagnostics`, tracks latest diagnostic versions by URI,
   and lets callers wait briefly for diagnostics for a requested document
   version.
-- `src/rocq_lsp_mcp/pipeline.py` normalizes raw diagnostics into
+- `src/rocq_lsp_mcp/pipeline.py` normalizes raw diagnostics into compact
   agent-facing `Diagnostic` models. It attaches proof states by matching
   sentence ranges, merges supplemental `proof/goals` results for incomplete
   proof saves, and keeps only the first error for each `proof_name`, while
@@ -33,11 +33,14 @@ available, proof-state context for the sentence that produced an error.
   process cleanup, and dispatches notifications to `NotificationStore`.
 - `src/rocq_lsp_mcp/pretty.py` converts rocq-lsp serialized pretty-print trees
   such as `Pp_glue`, `Pp_box`, and `Pp_print_break` into readable text, then
-  normalizes proof-state payloads into agent-facing JSON.
+  normalizes proof-state payloads into compact agent-facing JSON. Goal
+  hypotheses are rendered as strings like `H : True` or `n := 0 : nat`.
 - `src/rocq_lsp_mcp/models.py` contains the Pydantic response models.
   `CompileResult` separates diagnostics into errors, warnings, and infos.
-  `Diagnostic` keeps the raw LSP diagnostic while exposing normalized fields and
-  optional `proof_name` and `proof_state`.
+  `Diagnostic` keeps raw LSP details internally while serializing only compact
+  fields such as `level`, `location`, `message`, optional `proof_name`, and
+  optional `proof_state`. Serialized compile results include the compiled file
+  relative to the workspace and omit version/workspace internals.
 - `src/rocq_lsp_mcp/config.py` loads environment configuration, defines
   `TimeoutPolicy`, and builds the `coq-lsp` initialization settings.
 
@@ -56,15 +59,17 @@ Compilation is driven by `coq/getDocument` with `goals="Str"`. This asks
 `coq-lsp` for the checked document and proof-state data around spans. The
 `NotificationStore` collects diagnostics from
 `textDocument/publishDiagnostics`. `pipeline.py` normalizes those diagnostics
-for the MCP response. If multiple errors belong to the same `proof_name`, only
-the first is forwarded to the agent.
+for the MCP response, replacing raw LSP ranges with a single 1-based location
+string, replacing numeric LSP severities with `error`, `warning`, or `info`,
+and omitting null or empty fields. If multiple errors belong to the same
+`proof_name`, only the first is forwarded to the agent. Counts are serialized
+only when warnings are present, and zero-valued count fields are omitted.
 
 For `Attempt to save an incomplete proof` diagnostics, the `Qed.` sentence can
 carry only the save error while the open goal is attached to the previous proof
 span. The manager issues a best-effort `proof/goals` request with `mode="Prev"`
-at the diagnostic position and `pipeline.py` merges only the returned `goals`
-field into the existing proof-state payload, preserving the `Qed.` span's
-messages, program, range, and error.
+at the diagnostic position and `pipeline.py` merges the returned compact goals
+and bullet state into the existing proof-state payload.
 
 Caching is delegated to the long-lived `coq-lsp` process. The Python side keeps
 the session, notification, and version state alive so repeated calls for changed

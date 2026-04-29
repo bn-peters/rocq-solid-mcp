@@ -10,14 +10,7 @@
     "file": "clients/UseBase.v",
     "result": {
       "status": "complete",
-      "workspace": "$PROJECT",
-      "version": 1,
-      "counts": {
-        "errors": 0,
-        "warnings": 0,
-        "infos": 0
-      },
-      "diagnostics": []
+      "file": "clients/UseBase.v"
     }
   },
   {
@@ -31,73 +24,19 @@
     "file": "clients/UseBase.v",
     "result": {
       "status": "complete",
-      "workspace": "$PROJECT",
-      "version": 2,
-      "counts": {
-        "errors": 1,
-        "warnings": 0,
-        "infos": 0
-      },
+      "file": "clients/UseBase.v",
       "diagnostics": [
         {
-          "severity": 1,
+          "level": "error",
           "message": "Unable to unify \"40\" with \"imported_value\".",
-          "range": {
-            "start": {
-              "line": 8,
-              "character": 7
-            },
-            "end": {
-              "line": 8,
-              "character": 18
-            }
-          },
+          "location": "9:8 to 9:19",
           "proof_name": "imported_value_wrong",
-          "sentence_range": {
-            "start": {
-              "line": 8,
-              "character": 7
-            },
-            "end": {
-              "line": 8,
-              "character": 19
-            }
-          },
           "proof_state": {
-            "textDocument": {
-              "uri": "file://$PROJECT/clients/UseBase.v",
-              "version": 2
-            },
-            "position": {
-              "line": 8,
-              "character": 7
-            },
-            "range": {
-              "start": {
-                "line": 8,
-                "character": 7
-              },
-              "end": {
-                "line": 8,
-                "character": 19
+            "goals": [
+              {
+                "conclusion": "imported_value = 40"
               }
-            },
-            "goals": {
-              "goals": [
-                {
-                  "name": null,
-                  "hyps": [],
-                  "ty": "imported_value = 40"
-                }
-              ],
-              "stack": [],
-              "bullet": null,
-              "shelf": [],
-              "given_up": []
-            },
-            "program": [],
-            "messages": [],
-            "error": "Unable to unify\n \"40\"\nwith\n \"imported_value\"."
+            ]
           }
         }
       ]

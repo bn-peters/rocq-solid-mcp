@@ -5,73 +5,19 @@
     "file": "src/unfinished_next_obligation.v",
     "result": {
       "status": "complete",
-      "workspace": "$PROJECT",
-      "version": 1,
-      "counts": {
-        "errors": 1,
-        "warnings": 0,
-        "infos": 0
-      },
+      "file": "src/unfinished_next_obligation.v",
       "diagnostics": [
         {
-          "severity": 1,
+          "level": "error",
           "message": " (in proof foo_obligation_2): Attempt to save an incomplete proof\n(there are remaining open goals).",
-          "range": {
-            "start": {
-              "line": 11,
-              "character": 0
-            },
-            "end": {
-              "line": 11,
-              "character": 4
-            }
-          },
+          "location": "12:1 to 12:5",
           "proof_name": "foo_obligation_2",
-          "sentence_range": {
-            "start": {
-              "line": 11,
-              "character": 0
-            },
-            "end": {
-              "line": 11,
-              "character": 4
-            }
-          },
           "proof_state": {
-            "textDocument": {
-              "uri": "file://$PROJECT/src/unfinished_next_obligation.v",
-              "version": 1
-            },
-            "position": {
-              "line": 11,
-              "character": 0
-            },
-            "range": {
-              "start": {
-                "line": 11,
-                "character": 0
-              },
-              "end": {
-                "line": 11,
-                "character": 4
+            "goals": [
+              {
+                "conclusion": "unit"
               }
-            },
-            "program": [],
-            "messages": [],
-            "error": " (in proof foo_obligation_2): Attempt to save an incomplete proof\n(there are remaining open goals).",
-            "goals": {
-              "goals": [
-                {
-                  "name": null,
-                  "hyps": [],
-                  "ty": "unit"
-                }
-              ],
-              "stack": [],
-              "bullet": null,
-              "shelf": [],
-              "given_up": []
-            }
+            ]
           }
         }
       ]

@@ -5,14 +5,7 @@
     "file": "src/support.v",
     "result": {
       "status": "complete",
-      "workspace": "$PROJECT",
-      "version": 1,
-      "counts": {
-        "errors": 0,
-        "warnings": 0,
-        "infos": 0
-      },
-      "diagnostics": []
+      "file": "src/support.v"
     }
   },
   {
@@ -21,73 +14,19 @@
     "file": "src/proof.v",
     "result": {
       "status": "complete",
-      "workspace": "$PROJECT",
-      "version": 1,
-      "counts": {
-        "errors": 1,
-        "warnings": 0,
-        "infos": 0
-      },
+      "file": "src/proof.v",
       "diagnostics": [
         {
-          "severity": 1,
+          "level": "error",
           "message": "Tactic failure.",
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 19
-            },
-            "end": {
-              "line": 0,
-              "character": 24
-            }
-          },
+          "location": "1:20 to 1:25",
           "proof_name": "Unnamed_thm",
-          "sentence_range": {
-            "start": {
-              "line": 0,
-              "character": 19
-            },
-            "end": {
-              "line": 0,
-              "character": 24
-            }
-          },
           "proof_state": {
-            "textDocument": {
-              "uri": "file://$PROJECT/src/proof.v",
-              "version": 1
-            },
-            "position": {
-              "line": 0,
-              "character": 19
-            },
-            "range": {
-              "start": {
-                "line": 0,
-                "character": 19
-              },
-              "end": {
-                "line": 0,
-                "character": 24
+            "goals": [
+              {
+                "conclusion": "0 = 0"
               }
-            },
-            "goals": {
-              "goals": [
-                {
-                  "name": null,
-                  "hyps": [],
-                  "ty": "0 = 0"
-                }
-              ],
-              "stack": [],
-              "bullet": null,
-              "shelf": [],
-              "given_up": []
-            },
-            "program": [],
-            "messages": [],
-            "error": "Tactic failure."
+            ]
           }
         }
       ]
@@ -104,14 +43,7 @@
     "file": "src/proof.v",
     "result": {
       "status": "complete",
-      "workspace": "$PROJECT",
-      "version": 2,
-      "counts": {
-        "errors": 0,
-        "warnings": 0,
-        "infos": 0
-      },
-      "diagnostics": []
+      "file": "src/proof.v"
     }
   }
 ]

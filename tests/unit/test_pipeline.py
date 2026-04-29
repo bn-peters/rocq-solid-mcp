@@ -16,22 +16,52 @@ def test_build_diagnostics_attaches_proof_state_by_sentence_range() -> None:
             "data": {"sentenceRange": range_, "proofName": "foo"},
         }
     ]
-    document = {"spans": [{"range": range_, "goals": {"goals": [], "messages": []}}]}
+    document = {
+        "spans": [
+            {
+                "range": range_,
+                "goals": {
+                    "goals": [
+                        {
+                            "info": {"name": None},
+                            "hyps": [{"names": ["H"], "def": None, "ty": "True"}],
+                            "ty": "True",
+                        }
+                    ],
+                    "stack": [],
+                    "shelf": [],
+                },
+            }
+        ]
+    }
 
     result = build_diagnostics(diagnostics, document)
 
     assert result[0].proof_name == "foo"
-    assert result[0].proof_state == {"goals": [], "messages": []}
+    assert result[0].proof_state == {
+        "goals": [{"hypotheses": ["H : True"], "conclusion": "True"}]
+    }
 
 
 def test_build_diagnostics_falls_back_to_diagnostic_range() -> None:
     range_ = _range(4, 8)
     diagnostics = [{"range": range_, "message": "bad", "severity": 1}]
-    document = {"spans": [{"range": range_, "goals": {"goals": []}}]}
+    document = {
+        "spans": [
+            {
+                "range": range_,
+                "goals": {
+                    "goals": [{"info": {"name": None}, "hyps": [], "ty": "Foo"}],
+                    "stack": [],
+                    "shelf": [],
+                },
+            }
+        ]
+    }
 
     result = build_diagnostics(diagnostics, document)
 
-    assert result[0].proof_state == {"goals": []}
+    assert result[0].proof_state == {"goals": [{"conclusion": "Foo"}]}
 
 
 def test_build_diagnostics_merges_supplemental_incomplete_proof_goals() -> None:
@@ -77,18 +107,7 @@ def test_build_diagnostics_merges_supplemental_incomplete_proof_goals() -> None:
         supplemental_proof_states=supplemental,
     )
 
-    assert result[0].proof_state == {
-        "program": [],
-        "messages": [],
-        "error": "incomplete",
-        "goals": {
-            "goals": [{"name": None, "hyps": [], "ty": "Foo"}],
-            "stack": [],
-            "bullet": None,
-            "shelf": [],
-            "given_up": [],
-        },
-    }
+    assert result[0].proof_state == {"goals": [{"conclusion": "Foo"}]}
 
 
 def test_build_diagnostics_filters_duplicate_proof_errors_only() -> None:

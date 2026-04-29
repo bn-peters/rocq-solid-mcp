@@ -12,7 +12,7 @@ import pytest
 
 from rocq_lsp_mcp.config import RocqLspConfig, TimeoutPolicy
 from rocq_lsp_mcp.manager import RocqLspManager
-from rocq_lsp_mcp.models import CompileResult, Diagnostic
+from rocq_lsp_mcp.models import CompileResult
 
 CASES_DIR = Path(__file__).parent / "cases"
 
@@ -152,54 +152,7 @@ def _step_record(step: dict[str, Any]) -> dict[str, Any]:
 
 
 def _result_record(result: CompileResult, project_root: Path) -> dict[str, Any]:
-    record: dict[str, Any] = {
-        "status": result.status,
-        "workspace": _scrub_value(result.workspace, project_root),
-        "version": result.version,
-        "counts": {
-            "errors": result.error_count,
-            "warnings": result.warning_count,
-            "infos": result.info_count,
-        },
-        "diagnostics": [
-            _diagnostic_record(diagnostic, project_root)
-            for diagnostic in result.diagnostics
-        ],
-    }
-    if result.timed_out:
-        record["timed_out"] = True
-    if result.restarted:
-        record["restarted"] = True
-    if result.message is not None:
-        record["message"] = _scrub_value(result.message, project_root)
-    return record
-
-
-def _diagnostic_record(
-    diagnostic: Diagnostic,
-    project_root: Path,
-) -> dict[str, Any]:
-    record: dict[str, Any] = {
-        "severity": diagnostic.severity,
-        "message": diagnostic.message,
-        "range": _scrub_value(diagnostic.range, project_root),
-    }
-    if diagnostic.code is not None:
-        record["code"] = diagnostic.code
-    if diagnostic.source is not None:
-        record["source"] = diagnostic.source
-    if diagnostic.proof_name is not None:
-        record["proof_name"] = diagnostic.proof_name
-    if isinstance(diagnostic.data, dict) and isinstance(
-        diagnostic.data.get("sentenceRange"), dict
-    ):
-        record["sentence_range"] = _scrub_value(
-            diagnostic.data["sentenceRange"],
-            project_root,
-        )
-    if diagnostic.proof_state is not None:
-        record["proof_state"] = _scrub_value(diagnostic.proof_state, project_root)
-    return record
+    return _scrub_value(result.model_dump(), project_root)
 
 
 def _scrub_value(value: Any, project_root: Path) -> Any:
