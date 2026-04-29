@@ -5,11 +5,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 DEFAULT_COMMAND_TIMEOUT_SECONDS = 5.0
+DEFAULT_OVERALL_TIMEOUT_SECONDS = 60.0
+MAX_OVERALL_TIMEOUT_SECONDS = 3600.0
 
 
 @dataclass(frozen=True)
 class TimeoutPolicy:
-    request_seconds: float = 60.0
+    request_seconds: float = DEFAULT_OVERALL_TIMEOUT_SECONDS
     cancel_grace_seconds: float = 5.0
     command_seconds: float | None = DEFAULT_COMMAND_TIMEOUT_SECONDS
 
@@ -35,6 +37,12 @@ def _optional_positive_float_env(name: str, default: str = "0") -> float | None:
     return value
 
 
+def bounded_overall_timeout_seconds(value: float | None) -> float:
+    if value is None:
+        return DEFAULT_OVERALL_TIMEOUT_SECONDS
+    return min(float(value), MAX_OVERALL_TIMEOUT_SECONDS)
+
+
 def _int_env(name: str, default: str) -> int:
     return int(os.environ.get(name, default))
 
@@ -53,7 +61,9 @@ def load_config() -> RocqLspConfig:
     return RocqLspConfig(
         binary=os.environ.get("ROCQ_LSP_BINARY", "coq-lsp"),
         timeout_policy=TimeoutPolicy(
-            request_seconds=_float_env("ROCQ_LSP_TIMEOUT", "60"),
+            request_seconds=bounded_overall_timeout_seconds(
+                _float_env("ROCQ_LSP_TIMEOUT", str(DEFAULT_OVERALL_TIMEOUT_SECONDS))
+            ),
             cancel_grace_seconds=_float_env("ROCQ_LSP_HARD_TIMEOUT_GRACE", "5"),
             command_seconds=_optional_positive_float_env(
                 "ROCQ_LSP_COMMAND_TIMEOUT", str(DEFAULT_COMMAND_TIMEOUT_SECONDS)

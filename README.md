@@ -14,6 +14,8 @@ callers may request up to the hard cap of 50 per bucket. Timeout results
 include a compact `timeout_context` that reports the request operation, timeout
 kind and settings, the latest checked position, the latest processing range,
 and a small preview of the next unchecked source line when available. Optional
+overall request timeouts can be passed per compile or command/Search call; the
+MCP default is 60 seconds and the maximum is 3600 seconds. Optional
 per-command timeouts use coq-lsp sentence execution notifications, so the
 timeout unit is one Rocq sentence such as `sleep 5.` or `repeat ... .`, not an
 internal Ltac substep. The prototype talks to `coq-lsp` directly over stdio
@@ -67,9 +69,9 @@ notifications during `coq/getDocument`. Each new sentence resets the command
 deadline. If the current sentence exceeds the configured limit, the client sends
 `$/cancelRequest` and returns `status: "timeout"` with
 `timeout_context.timeout_kind: "command"`, the timed-out sentence range, and a
-source preview. The existing global request timeout remains the outer safety
-net for parsing stalls, missing execution notifications, or non-interruptible
-work.
+source preview. The `overall_timeout_seconds` request timeout remains the outer
+safety net for parsing stalls, missing execution notifications, or
+non-interruptible work.
 
 ## Run
 
@@ -80,12 +82,17 @@ uv run rocq-lsp-mcp
 The server exposes two MCP tools:
 
 - `rocq_lsp_compile_file(file: str, message_limit: int = 10,
+  overall_timeout_seconds: float = 60,
   command_timeout_seconds: float | None = None)`
-- `rocq_lsp_run_command(file: str, command: str, line: int, character: int = 1)`
+- `rocq_lsp_run_command(file: str, command: str, line: int, character: int = 1,
+  overall_timeout_seconds: float = 60)`
 
 `message_limit` caps returned diagnostics per severity bucket. Values above 50
 are capped to 50. When diagnostics are omitted, the response includes
 `omitted_counts` and `message_limit` alongside total `counts`.
+`overall_timeout_seconds` controls the outer `coq-lsp` request wait for compile
+and command/Search calls. It defaults to 60 seconds and may be at most 3600
+seconds.
 `command_timeout_seconds` overrides `ROCQ_LSP_COMMAND_TIMEOUT` for one compile:
 `None` uses the server default of 5 seconds, `0` disables the sentence
 watchdog, and positive values enable it for that call.
@@ -98,7 +105,7 @@ added automatically.
 
 - `ROCQ_LSP_BINARY` defaults to `coq-lsp`
 - `ROCQ_LSP_USE_OPAM` defaults to `1`; set to `0` to run the binary directly
-- `ROCQ_LSP_TIMEOUT` defaults to `60`
+- `ROCQ_LSP_TIMEOUT` defaults to `60` and is capped at `3600`
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE` defaults to `5`
 - `ROCQ_LSP_COMMAND_TIMEOUT` defaults to `5`; set `0` to disable per-sentence
   command timeouts by default
@@ -135,15 +142,16 @@ unavailable. E2e scenarios with compiled dependencies also skip when `rocq` is
 unavailable.
 Scenario compile and command steps may include timing assertions for
 cache-sensitive behavior; those timings are asserted by the harness but omitted
-from promoted transcripts. Scenario compile steps may set
-`command_timeout_seconds` to exercise per-call compile timeout overrides.
-Scenario command steps call `rocq_lsp_run_command` through the same cached
-manager. Scenarios may also define a top-level `timeout_policy` to override the
-harness defaults for timeout-specific coverage, including `command_seconds` for
-per-sentence timeout scenarios. The e2e suite covers command output, command
-caching after slow proofs, soft timeout recovery, hard-timeout session reset,
-per-call compile command timeout overrides, and per-sentence command timeout
-behavior.
+from promoted transcripts. Scenario command steps call `rocq_lsp_run_command`
+through the same cached manager. Scenarios may also define a top-level
+`timeout_policy` to override the harness defaults for timeout-specific coverage,
+including `command_seconds` for per-sentence timeout scenarios. Individual
+compile and command steps may pass `overall_timeout_seconds` to override the
+outer request timeout for that step. Scenario compile steps may set
+`command_timeout_seconds` to exercise per-call compile timeout overrides. The
+e2e suite covers command output, command caching after slow proofs, soft timeout
+recovery, hard-timeout session reset, per-call compile command timeout
+overrides, and per-sentence command timeout behavior.
 Use `make promote` to refresh promoted e2e transcripts after intentional output
 changes; promotion runs serially because it rewrites golden files.
 

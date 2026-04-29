@@ -122,6 +122,7 @@ async def _run_steps(
             result = await manager.compile_file(
                 str(path),
                 command_timeout_seconds=step.get("command_timeout_seconds"),
+                overall_timeout_seconds=step.get("overall_timeout_seconds"),
             )
             elapsed = time.monotonic() - start
             _check_timing(step, elapsed)
@@ -140,6 +141,7 @@ async def _run_steps(
                 step["command"],
                 step["line"],
                 step.get("character", 1),
+                overall_timeout_seconds=step.get("overall_timeout_seconds"),
             )
             elapsed = time.monotonic() - start
             _check_timing(step, elapsed)

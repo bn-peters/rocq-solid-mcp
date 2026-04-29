@@ -7,7 +7,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-from .config import RocqLspConfig, load_config
+from .config import RocqLspConfig, bounded_overall_timeout_seconds, load_config
 from .models import (
     DEFAULT_MESSAGE_LIMIT,
     CommandResult,
@@ -57,9 +57,11 @@ class RocqLspManager:
         file: str,
         message_limit: int | None = DEFAULT_MESSAGE_LIMIT,
         command_timeout_seconds: float | None = None,
+        overall_timeout_seconds: float | None = None,
     ) -> CompileResult:
         message_limit = bounded_message_limit(message_limit)
         command_timeout = self._effective_command_timeout(command_timeout_seconds)
+        overall_timeout = self._effective_overall_timeout(overall_timeout_seconds)
         path = self._resolve_file(file)
         if not path.is_file():
             return CompileResult.from_diagnostics(
@@ -82,6 +84,7 @@ class RocqLspManager:
                 path,
                 message_limit,
                 command_timeout,
+                overall_timeout,
             )
         finally:
             session.lock.release()
@@ -89,8 +92,14 @@ class RocqLspManager:
             await self._cleanup_idle_sessions()
 
     async def run_command(
-        self, file: str, command: str, line: int, character: int = 1
+        self,
+        file: str,
+        command: str,
+        line: int,
+        character: int = 1,
+        overall_timeout_seconds: float | None = None,
     ) -> CommandResult:
+        overall_timeout = self._effective_overall_timeout(overall_timeout_seconds)
         path = self._resolve_file(file)
         stripped_command = command.strip()
         location = (
@@ -134,7 +143,12 @@ class RocqLspManager:
         session = await self._checkout_session(workspace)
         try:
             return await self._run_command_with_session(
-                session, path, stripped_command, line, character
+                session,
+                path,
+                stripped_command,
+                line,
+                character,
+                overall_timeout,
             )
         finally:
             session.lock.release()
@@ -147,6 +161,7 @@ class RocqLspManager:
         path: Path,
         message_limit: int,
         command_timeout: float | None,
+        overall_timeout: float,
     ) -> CompileResult:
         client = session.client
         uri = path.as_uri()
@@ -178,7 +193,7 @@ class RocqLspManager:
             get_document_result = await client.request_get_document(
                 uri=uri,
                 version=version,
-                timeout=self.config.timeout_policy.request_seconds,
+                timeout=overall_timeout,
                 hard_timeout_grace=self.config.timeout_policy.cancel_grace_seconds,
                 command_timeout=command_timeout,
                 goals="Str",
@@ -189,7 +204,7 @@ class RocqLspManager:
                 uri, version
             )
             supplemental_proof_states = await self._incomplete_proof_goal_states(
-                client, uri, version, raw_diagnostics
+                client, uri, version, raw_diagnostics, overall_timeout
             )
             diagnostics = build_diagnostics(
                 raw_diagnostics,
@@ -203,6 +218,7 @@ class RocqLspManager:
                     document=completed_doc,
                     progress=session.notifications.latest_file_progress(uri, version),
                     timeout_kind=get_document_result.timeout_kind or "request",
+                    request_timeout_seconds=overall_timeout,
                     command_timeout_seconds=(
                         command_timeout
                         if get_document_result.timeout_kind == "command"
@@ -232,6 +248,7 @@ class RocqLspManager:
                 document=None,
                 progress=session.notifications.latest_file_progress(uri, version),
                 timeout_kind=exc.timeout_kind,
+                request_timeout_seconds=overall_timeout,
                 command_timeout_seconds=(
                     command_timeout if exc.timeout_kind == "command" else None
                 ),
@@ -292,6 +309,7 @@ class RocqLspManager:
         command: str,
         line: int,
         character: int,
+        overall_timeout: float,
     ) -> CommandResult:
         client = session.client
         uri = path.as_uri()
@@ -326,7 +344,7 @@ class RocqLspManager:
                 version=version,
                 position={"line": line - 1, "character": character - 1},
                 command=command,
-                timeout=self.config.timeout_policy.request_seconds,
+                timeout=overall_timeout,
                 hard_timeout_grace=self.config.timeout_policy.cancel_grace_seconds,
             )
             return CommandResult.from_feedback(
@@ -401,6 +419,13 @@ class RocqLspManager:
         if override <= 0:
             return None
         return override
+
+    def _effective_overall_timeout(self, override: float | None) -> float:
+        if override is None:
+            return bounded_overall_timeout_seconds(
+                self.config.timeout_policy.request_seconds
+            )
+        return bounded_overall_timeout_seconds(override)
 
     async def _reserve_session(self, workspace: Path) -> RocqLspSession:
         expired: list[RocqLspSession] = []
@@ -484,6 +509,7 @@ class RocqLspManager:
         uri: str,
         version: int,
         raw_diagnostics: list[dict[str, Any]],
+        overall_timeout: float,
     ) -> dict[str, Any]:
         states: dict[str, Any] = {}
         requested: set[str] = set()
@@ -503,7 +529,7 @@ class RocqLspManager:
                     uri=uri,
                     version=version,
                     position=position,
-                    timeout=self.config.timeout_policy.request_seconds,
+                    timeout=overall_timeout,
                 )
             except Exception:
                 continue
@@ -538,6 +564,7 @@ class RocqLspManager:
         document: dict[str, Any] | None,
         progress: dict[str, Any] | None,
         timeout_kind: str = "request",
+        request_timeout_seconds: float | None = None,
         command_timeout_seconds: float | None = None,
         timed_out_range: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
@@ -557,7 +584,13 @@ class RocqLspManager:
         context: dict[str, Any] = {
             "operation": "coq/getDocument",
             "timeout_kind": timeout_kind,
-            "request_timeout_seconds": self.config.timeout_policy.request_seconds,
+            "request_timeout_seconds": (
+                bounded_overall_timeout_seconds(request_timeout_seconds)
+                if request_timeout_seconds is not None
+                else bounded_overall_timeout_seconds(
+                    self.config.timeout_policy.request_seconds
+                )
+            ),
             "cancel_grace_seconds": self.config.timeout_policy.cancel_grace_seconds,
             "checked_until": self._position_string(checked_until),
             "latest_processing_range": location_string(processing_range),

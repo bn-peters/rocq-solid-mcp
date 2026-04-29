@@ -7,7 +7,11 @@ from typing import Any
 
 import pytest
 
-from rocq_lsp_mcp.config import RocqLspConfig, TimeoutPolicy
+from rocq_lsp_mcp.config import (
+    MAX_OVERALL_TIMEOUT_SECONDS,
+    RocqLspConfig,
+    TimeoutPolicy,
+)
 from rocq_lsp_mcp.manager import RocqLspManager
 from rocq_lsp_mcp.notifications import NotificationStore
 from rocq_lsp_mcp.rocq_client import (
@@ -370,6 +374,26 @@ async def test_compile_file_accepts_requested_message_limit(tmp_path: Path) -> N
 
 
 @pytest.mark.asyncio
+async def test_compile_file_forwards_overall_timeout_override(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    manager = FakeManager(client, notifications, tmp_path)
+
+    await manager.compile_file(str(source), overall_timeout_seconds=2.5)
+    await manager.compile_file(str(source), overall_timeout_seconds=9999)
+
+    assert client.get_document_requests[0]["timeout"] == 2.5
+    assert (
+        client.get_document_requests[1]["timeout"]
+        == MAX_OVERALL_TIMEOUT_SECONDS
+    )
+
+
+@pytest.mark.asyncio
 async def test_compile_file_enriches_incomplete_proof_save_error(
     tmp_path: Path,
 ) -> None:
@@ -430,7 +454,7 @@ async def test_compile_file_enriches_incomplete_proof_save_error(
     )
     manager = FakeManager(client, notifications, tmp_path)
 
-    result = await manager.compile_file(str(source))
+    result = await manager.compile_file(str(source), overall_timeout_seconds=2.5)
 
     assert result.error_count == 1
     assert client.goal_requests == [
@@ -438,7 +462,7 @@ async def test_compile_file_enriches_incomplete_proof_save_error(
             "uri": source.as_uri(),
             "version": 1,
             "position": {"line": 2, "character": 0},
-            "timeout": 1,
+            "timeout": 2.5,
             "pp_format": "Str",
             "compact": True,
             "mode": "Prev",
@@ -492,19 +516,20 @@ async def test_compile_file_adds_timeout_context_from_file_progress(
     )
     manager = FakeManager(client, notifications, tmp_path)
 
-    result = await manager.compile_file(str(source))
+    result = await manager.compile_file(str(source), overall_timeout_seconds=2.5)
 
     assert result.status == "timeout"
     assert result.timed_out is True
     assert result.timeout_context == {
         "operation": "coq/getDocument",
         "timeout_kind": "request",
-        "request_timeout_seconds": 1,
+        "request_timeout_seconds": 2.5,
         "cancel_grace_seconds": 0.01,
         "checked_until": "3:3",
         "latest_processing_range": "3:3 to 5:5",
         "next_unchecked": {"location": "3:3", "line": "sleep 5."},
     }
+    assert client.get_document_requests[0]["timeout"] == 2.5
 
 
 @pytest.mark.asyncio
@@ -585,6 +610,35 @@ async def test_run_command_forwards_position_and_returns_feedback(
             "hard_timeout_grace": 0.01,
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_run_command_forwards_overall_timeout_override(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    manager = FakeManager(client, notifications, tmp_path)
+
+    await manager.run_command(
+        str(source),
+        "Search nat.",
+        1,
+        1,
+        overall_timeout_seconds=2.5,
+    )
+    await manager.run_command(
+        str(source),
+        "Search nat.",
+        1,
+        1,
+        overall_timeout_seconds=9999,
+    )
+
+    assert client.command_requests[0]["timeout"] == 2.5
+    assert client.command_requests[1]["timeout"] == MAX_OVERALL_TIMEOUT_SECONDS
 
 
 @pytest.mark.asyncio

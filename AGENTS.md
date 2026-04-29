@@ -13,8 +13,10 @@ returns compact feedback output for the requested command.
 - `src/rocq_lsp_mcp/server.py` defines the FastMCP server, the lifespan-managed
   `RocqLspManager`, and the MCP tools
   `rocq_lsp_compile_file(file: str, message_limit: int = 10,
+  overall_timeout_seconds: float = 60,
   command_timeout_seconds: float | None = None)` and
-  `rocq_lsp_run_command(file: str, command: str, line: int, character: int = 1)`.
+  `rocq_lsp_run_command(file: str, command: str, line: int, character: int = 1,
+  overall_timeout_seconds: float = 60)`.
 - `src/rocq_lsp_mcp/manager.py` is the orchestration layer. It resolves files,
   infers workspaces from `_RocqProject` or `_CoqProject`, keeps cached
   sessions per workspace, evicts idle sessions, reads files, routes compile and
@@ -64,13 +66,16 @@ LSP client library unless the user explicitly asks for that direction.
 
 ## Runtime Behavior
 
-The compile MCP tool receives a Rocq file path, optional `message_limit`, and
-optional `command_timeout_seconds`; `None` uses `ROCQ_LSP_COMMAND_TIMEOUT`,
-which defaults to 5 seconds, `0` disables the command watchdog for that call,
-and positive values enable it. The
-command MCP tool receives a Rocq file path, one complete command ending in `.`,
-and a 1-based line/character position. On each call, the manager resolves the
-file, infers a workspace by walking upward to the nearest `_RocqProject` or
+The compile MCP tool receives a Rocq file path, optional `message_limit`,
+optional `overall_timeout_seconds`, and optional `command_timeout_seconds`;
+`overall_timeout_seconds` controls the outer `coq-lsp` request wait, defaults to
+60 seconds, and is capped at 3600 seconds. For `command_timeout_seconds`, `None`
+uses `ROCQ_LSP_COMMAND_TIMEOUT`, which defaults to 5 seconds, `0` disables the
+command watchdog for that call, and positive values enable it. The command MCP
+tool receives a Rocq file path, one complete command ending in `.`, a 1-based
+line/character position, and optional `overall_timeout_seconds`; this is the
+same command tool used for `Search` calls. On each call, the manager resolves
+the file, infers a workspace by walking upward to the nearest `_RocqProject` or
 `_CoqProject`, then delegates to the cached `RocqLspSession` for that
 workspace. If no project file is found, the file's parent directory is used.
 The session sends either `textDocument/didOpen` or `textDocument/didChange`
@@ -109,7 +114,8 @@ the start of one Rocq sentence and resets the command deadline. If that sentence
 exceeds the deadline, the client sends `$/cancelRequest` and the manager returns
 `status: "timeout"` with `timeout_kind: "command"`, `command_timeout_seconds`,
 the timed-out sentence range, and a source preview. This is per Rocq sentence,
-not per internal Ltac substep.
+not per internal Ltac substep. The `overall_timeout_seconds` request timeout
+remains the outer limit for compile and command/Search calls.
 
 For `Attempt to save an incomplete proof` diagnostics, the `Qed.` sentence can
 carry only the save error while the open goal is attached to the previous proof
@@ -133,8 +139,10 @@ queued for a compile are not stopped.
 
 Timeout handling has three layers:
 
-- `ROCQ_LSP_TIMEOUT` is the normal `coq/getDocument` or
-  `petanque/run_at_point` wait.
+- `overall_timeout_seconds` is the normal `coq/getDocument` or
+  `petanque/run_at_point` wait for MCP calls; it defaults to 60 seconds and is
+  capped at 3600 seconds. `ROCQ_LSP_TIMEOUT` provides the same bounded default
+  for direct manager usage.
 - `ROCQ_LSP_COMMAND_TIMEOUT` is an optional per-sentence watchdog during
   `coq/getDocument`; unset or non-positive values disable it.
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE` is the extra wait after sending
@@ -151,7 +159,7 @@ The prototype reads these environment variables:
 
 - `ROCQ_LSP_BINARY`, default `coq-lsp`
 - `ROCQ_LSP_USE_OPAM`, default `1`; set to `0` to run the binary directly
-- `ROCQ_LSP_TIMEOUT`, default `60`
+- `ROCQ_LSP_TIMEOUT`, default `60`, capped at `3600`
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE`, default `5`
 - `ROCQ_LSP_COMMAND_TIMEOUT`, default `5`; set `0` to disable per-sentence
   command timeout by default
@@ -213,10 +221,11 @@ The local virtual environment is expected at `.venv/`. Use
   Rocq projects, compile files or run commands through one cached manager, edit
   files, and check concise agent-facing transcripts. Scenario files may define a
   top-level `timeout_policy` for timeout-specific coverage. Scenario compile
-  and command steps may include `min_seconds` or `max_seconds` timing assertions
-  for cache-sensitive behavior; timings are asserted by the harness but omitted
-  from promoted transcripts. Scenario compile steps may also include
-  `command_timeout_seconds` to cover per-call compile timeout overrides.
+  and command steps may include `overall_timeout_seconds`, plus `min_seconds` or
+  `max_seconds` timing assertions for cache-sensitive behavior; timings are
+  asserted by the harness but omitted from promoted transcripts. Scenario
+  compile steps may also include `command_timeout_seconds` to cover per-call
+  compile timeout overrides.
   `diagnostic_message_limit` covers default
   per-severity diagnostic truncation. `run_command_search` covers promoted
   command output for a narrow `Search` query. `run_command_cached_after_slow_proof`

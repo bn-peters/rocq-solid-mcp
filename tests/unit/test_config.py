@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from rocq_lsp_mcp.config import (
     DEFAULT_COMMAND_TIMEOUT_SECONDS,
+    MAX_OVERALL_TIMEOUT_SECONDS,
     load_config,
     rocq_lsp_command,
     rocq_lsp_settings,
@@ -47,6 +48,14 @@ def test_load_config_reads_command_timeout(monkeypatch) -> None:
     config = load_config()
 
     assert config.timeout_policy.command_seconds == 2.5
+
+
+def test_load_config_caps_overall_timeout(monkeypatch) -> None:
+    monkeypatch.setenv("ROCQ_LSP_TIMEOUT", "9999")
+
+    config = load_config()
+
+    assert config.timeout_policy.request_seconds == MAX_OVERALL_TIMEOUT_SECONDS
 
 
 def test_load_config_disables_non_positive_command_timeout(monkeypatch) -> None:

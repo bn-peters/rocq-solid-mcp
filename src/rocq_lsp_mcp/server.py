@@ -6,6 +6,7 @@ from fastmcp import Context, FastMCP
 from fastmcp.server.lifespan import lifespan
 from pydantic import Field
 
+from .config import DEFAULT_OVERALL_TIMEOUT_SECONDS, MAX_OVERALL_TIMEOUT_SECONDS
 from .manager import RocqLspManager
 from .models import DEFAULT_MESSAGE_LIMIT, CommandResult, CompileResult
 
@@ -29,19 +30,29 @@ async def rocq_lsp_compile_file(
     file: Annotated[
         str,
         Field(
-            description=(
-                "Absolute path to a .v file"
-                ),
-            ),
-    ]
+            description="Absolute path to a .v file.",
+        ),
+    ],
     message_limit: Annotated[
         int,
         Field(
             description=(
-                "Optional maximum returned diagnostics per category (error, warning, info). Default 10, maximum 50"
+                "Optional maximum returned diagnostics per category "
+                "(error, warning, info). Default 10, maximum 50."
             ),
         ),
     ] = DEFAULT_MESSAGE_LIMIT,
+    overall_timeout_seconds: Annotated[
+        float,
+        Field(
+            gt=0,
+            le=MAX_OVERALL_TIMEOUT_SECONDS,
+            description=(
+                "Optional overall coq-lsp request timeout, in seconds. "
+                "Default 60s, maximum 3600s."
+            ),
+        ),
+    ] = DEFAULT_OVERALL_TIMEOUT_SECONDS,
     command_timeout_seconds: Annotated[
         float | None,
         Field(
@@ -61,6 +72,7 @@ async def rocq_lsp_compile_file(
     return await manager.compile_file(
         file,
         message_limit=message_limit,
+        overall_timeout_seconds=overall_timeout_seconds,
         command_timeout_seconds=command_timeout_seconds,
     )
 
@@ -90,6 +102,17 @@ async def rocq_lsp_run_command(
         int,
         Field(description="1-based column offset. Defaults to 1 (start of line)."),
     ] = 1,
+    overall_timeout_seconds: Annotated[
+        float,
+        Field(
+            gt=0,
+            le=MAX_OVERALL_TIMEOUT_SECONDS,
+            description=(
+                "Optional overall coq-lsp request timeout, in seconds. "
+                "Default 60s, maximum 3600s."
+            ),
+        ),
+    ] = DEFAULT_OVERALL_TIMEOUT_SECONDS,
 ) -> CommandResult:
     """Run one Rocq command at a file position and return its output.
 
@@ -97,9 +120,18 @@ async def rocq_lsp_run_command(
 
     Prefer calling this right after imports. If local definitions, scopes, or
     modules are needed, call it between lemmas or definitions.
+
+    overall_timeout_seconds is the outer coq-lsp request timeout. It defaults to
+    60 seconds and may be at most 3600 seconds.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
-    return await manager.run_command(file, command, line, character)
+    return await manager.run_command(
+        file,
+        command,
+        line,
+        character,
+        overall_timeout_seconds=overall_timeout_seconds,
+    )
 
 
 def main() -> None:
