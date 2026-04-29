@@ -1,0 +1,150 @@
+[
+  {
+    "step": "compile many failing proofs",
+    "action": "compile",
+    "file": "src/many_failures.v",
+    "result": {
+      "status": "complete",
+      "file": "src/many_failures.v",
+      "counts": {
+        "errors": 20
+      },
+      "omitted_counts": {
+        "errors": 10
+      },
+      "message_limit": 10,
+      "diagnostics": [
+        {
+          "level": "error",
+          "message": "Tactic failure: Cannot solve this goal.",
+          "location": "2:8 to 2:12",
+          "proof_name": "test1",
+          "proof_state": {
+            "goals": [
+              {
+                "conclusion": "False"
+              }
+            ]
+          }
+        },
+        {
+          "level": "error",
+          "message": "Tactic failure: Cannot solve this goal.",
+          "location": "5:8 to 5:12",
+          "proof_name": "test2",
+          "proof_state": {
+            "goals": [
+              {
+                "conclusion": "False"
+              }
+            ]
+          }
+        },
+        {
+          "level": "error",
+          "message": "Tactic failure: Cannot solve this goal.",
+          "location": "8:8 to 8:12",
+          "proof_name": "test3",
+          "proof_state": {
+            "goals": [
+              {
+                "conclusion": "False"
+              }
+            ]
+          }
+        },
+        {
+          "level": "error",
+          "message": "Tactic failure: Cannot solve this goal.",
+          "location": "11:8 to 11:12",
+          "proof_name": "test4",
+          "proof_state": {
+            "goals": [
+              {
+                "conclusion": "False"
+              }
+            ]
+          }
+        },
+        {
+          "level": "error",
+          "message": "Tactic failure: Cannot solve this goal.",
+          "location": "14:8 to 14:12",
+          "proof_name": "test5",
+          "proof_state": {
+            "goals": [
+              {
+                "conclusion": "False"
+              }
+            ]
+          }
+        },
+        {
+          "level": "error",
+          "message": "Tactic failure: Cannot solve this goal.",
+          "location": "17:8 to 17:12",
+          "proof_name": "test6",
+          "proof_state": {
+            "goals": [
+              {
+                "conclusion": "False"
+              }
+            ]
+          }
+        },
+        {
+          "level": "error",
+          "message": "Tactic failure: Cannot solve this goal.",
+          "location": "20:8 to 20:12",
+          "proof_name": "test7",
+          "proof_state": {
+            "goals": [
+              {
+                "conclusion": "False"
+              }
+            ]
+          }
+        },
+        {
+          "level": "error",
+          "message": "Tactic failure: Cannot solve this goal.",
+          "location": "23:8 to 23:12",
+          "proof_name": "test8",
+          "proof_state": {
+            "goals": [
+              {
+                "conclusion": "False"
+              }
+            ]
+          }
+        },
+        {
+          "level": "error",
+          "message": "Tactic failure: Cannot solve this goal.",
+          "location": "26:8 to 26:12",
+          "proof_name": "test9",
+          "proof_state": {
+            "goals": [
+              {
+                "conclusion": "False"
+              }
+            ]
+          }
+        },
+        {
+          "level": "error",
+          "message": "Tactic failure: Cannot solve this goal.",
+          "location": "29:8 to 29:12",
+          "proof_name": "test10",
+          "proof_state": {
+            "goals": [
+              {
+                "conclusion": "False"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]

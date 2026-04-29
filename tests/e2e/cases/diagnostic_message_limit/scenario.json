@@ -1,0 +1,9 @@
+{
+  "steps": [
+    {
+      "label": "compile many failing proofs",
+      "action": "compile",
+      "file": "src/many_failures.v"
+    }
+  ]
+}

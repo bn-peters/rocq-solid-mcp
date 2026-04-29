@@ -7,8 +7,10 @@ compact proof-state context when available. Results include the compiled file
 relative to the workspace. Raw LSP plumbing such as document URIs, positions,
 duplicated ranges, versions, empty lists, and null fields is omitted from the MCP
 response. Agent-facing results keep only the first error for each `proof_name`,
-while preserving warnings, infos, and errors without a proof name. The prototype
-talks to `coq-lsp` directly over stdio JSON-RPC.
+while preserving warnings, infos, and errors without a proof name. Returned
+diagnostics are limited per severity bucket: the default is 10 errors, 10
+warnings, and 10 info/hint messages, and callers may request up to the hard cap
+of 50 per bucket. The prototype talks to `coq-lsp` directly over stdio JSON-RPC.
 Timeout results include a compact `timeout_context` that reports the request
 operation, timeout settings, the latest checked position, the latest processing
 range, and a small preview of the next unchecked source line when available.
@@ -57,7 +59,11 @@ uv run rocq-lsp-mcp
 
 The server exposes one MCP tool:
 
-- `rocq_lsp_compile_file(file: str)`
+- `rocq_lsp_compile_file(file: str, message_limit: int = 10)`
+
+`message_limit` caps returned diagnostics per severity bucket. Values above 50
+are capped to 50. When diagnostics are omitted, the response includes
+`omitted_counts` and `message_limit` alongside total `counts`.
 
 ## Environment
 

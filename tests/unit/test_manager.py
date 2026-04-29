@@ -279,6 +279,41 @@ async def test_compile_file_keeps_only_first_error_per_proof_name(
 
 
 @pytest.mark.asyncio
+async def test_compile_file_accepts_requested_message_limit(tmp_path: Path) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(
+        notifications,
+        [
+            *[diagnostic(f"bad {index}", 1, line=index) for index in range(3)],
+            *[diagnostic(f"warn {index}", 2, line=index + 3) for index in range(3)],
+            *[diagnostic(f"note {index}", 3, line=index + 6) for index in range(3)],
+        ],
+    )
+    manager = FakeManager(client, notifications, tmp_path)
+
+    result = await manager.compile_file(str(source), message_limit=2)
+
+    assert [diagnostic.message for diagnostic in result.diagnostics] == [
+        "bad 0",
+        "bad 1",
+        "warn 0",
+        "warn 1",
+        "note 0",
+        "note 1",
+    ]
+    assert result.error_count == 3
+    assert result.warning_count == 3
+    assert result.info_count == 3
+    assert result.model_dump()["omitted_counts"] == {
+        "errors": 1,
+        "warnings": 1,
+        "infos": 1,
+    }
+
+
+@pytest.mark.asyncio
 async def test_compile_file_enriches_incomplete_proof_save_error(
     tmp_path: Path,
 ) -> None:
