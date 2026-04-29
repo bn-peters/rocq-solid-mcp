@@ -176,6 +176,8 @@ def _step_record(step: dict[str, Any]) -> dict[str, Any]:
     }
     if "file" in step:
         record["file"] = step["file"]
+    if "command_timeout_seconds" in step:
+        record["command_timeout_seconds"] = step["command_timeout_seconds"]
     return record
 
 

@@ -215,7 +215,9 @@ The local virtual environment is expected at `.venv/`. Use
   top-level `timeout_policy` for timeout-specific coverage. Scenario compile
   and command steps may include `min_seconds` or `max_seconds` timing assertions
   for cache-sensitive behavior; timings are asserted by the harness but omitted
-  from promoted transcripts. `diagnostic_message_limit` covers default
+  from promoted transcripts. Scenario compile steps may also include
+  `command_timeout_seconds` to cover per-call compile timeout overrides.
+  `diagnostic_message_limit` covers default
   per-severity diagnostic truncation. `run_command_search` covers promoted
   command output for a narrow `Search` query. `run_command_cached_after_slow_proof`
   checks that `Search` after a cached slow proof is quick. `timeout_recovery`
@@ -223,9 +225,10 @@ The local virtual environment is expected at `.venv/`. Use
   followed by a successful recompile in the same manager.
   `hard_timeout_resets_cache` sets the cancel grace to zero and checks that a
   hard timeout drops the old `coq-lsp` process by requiring a later recompile to
-  rerun an unchanged slow proof. `command_timeout` uses the same local `sleep`
-  tactic with a long global timeout and short command timeout to cover
-  per-sentence cancellation.
+  rerun an unchanged slow proof. `compile_command_timeout_argument` covers the
+  compile tool call's per-call `command_timeout_seconds` override.
+  `command_timeout` uses the same local `sleep` tactic with a long global
+  timeout and short command timeout to cover per-sentence cancellation.
 
 When changing output shape, update exact-output tests rather than weakening
 assertions. The MCP output should be useful to agents and humans; raw Rocq

@@ -1,0 +1,45 @@
+[
+  {
+    "step": "compile slow command with per-call sentence timeout",
+    "action": "compile",
+    "file": "src/timeout.v",
+    "command_timeout_seconds": 1,
+    "result": {
+      "status": "timeout",
+      "file": "src/timeout.v",
+      "timed_out": true,
+      "timeout_context": {
+        "operation": "coq/getDocument",
+        "timeout_kind": "command",
+        "request_timeout_seconds": 10,
+        "cancel_grace_seconds": 1,
+        "checked_until": "5:7",
+        "latest_processing_range": "5:7 to 9:1",
+        "next_unchecked": {
+          "location": "6:3",
+          "line": "sleep 5."
+        },
+        "command_timeout_seconds": 1,
+        "timed_out_range": "6:3 to 6:11",
+        "timed_out_command": {
+          "location": "6:3",
+          "line": "sleep 5."
+        }
+      }
+    }
+  },
+  {
+    "step": "remove slow command",
+    "action": "replace",
+    "file": "src/timeout.v"
+  },
+  {
+    "step": "recompile without per-call timeout",
+    "action": "compile",
+    "file": "src/timeout.v",
+    "result": {
+      "status": "complete",
+      "file": "src/timeout.v"
+    }
+  }
+]

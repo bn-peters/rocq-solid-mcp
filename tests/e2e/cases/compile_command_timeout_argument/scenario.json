@@ -1,0 +1,29 @@
+{
+  "timeout_policy": {
+    "request_seconds": 10,
+    "cancel_grace_seconds": 1
+  },
+  "steps": [
+    {
+      "label": "compile slow command with per-call sentence timeout",
+      "action": "compile",
+      "file": "src/timeout.v",
+      "command_timeout_seconds": 1,
+      "min_seconds": 1,
+      "max_seconds": 3
+    },
+    {
+      "label": "remove slow command",
+      "action": "replace",
+      "file": "src/timeout.v",
+      "old": "sleep 5",
+      "new": "sleep 0"
+    },
+    {
+      "label": "recompile without per-call timeout",
+      "action": "compile",
+      "file": "src/timeout.v",
+      "max_seconds": 3
+    }
+  ]
+}
