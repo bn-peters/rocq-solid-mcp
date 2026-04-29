@@ -134,12 +134,15 @@ async def _run_steps(
             continue
 
         if action == "command":
+            start = time.monotonic()
             result = await manager.run_command(
                 str(path),
                 step["command"],
                 step["line"],
                 step.get("character", 1),
             )
+            elapsed = time.monotonic() - start
+            _check_timing(step, elapsed)
             transcript.append(
                 {
                     **_step_record(step),
@@ -156,12 +159,12 @@ async def _run_steps(
 def _check_timing(step: dict[str, Any], elapsed: float) -> None:
     if "min_seconds" in step and elapsed < step["min_seconds"]:
         raise AssertionError(
-            f"{step['label']}: expected compile to take at least "
+            f"{step['label']}: expected {step['action']} to take at least "
             f"{step['min_seconds']:.3f}s, took {elapsed:.3f}s"
         )
     if "max_seconds" in step and elapsed >= step["max_seconds"]:
         raise AssertionError(
-            f"{step['label']}: expected compile to take less than "
+            f"{step['label']}: expected {step['action']} to take less than "
             f"{step['max_seconds']:.3f}s, took {elapsed:.3f}s"
         )
 

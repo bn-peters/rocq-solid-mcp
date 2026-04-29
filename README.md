@@ -133,14 +133,14 @@ default. Override the worker count with a Make variable, for example
 Integration and e2e tests skip themselves when `opam` or `coq-lsp` is
 unavailable. E2e scenarios with compiled dependencies also skip when `rocq` is
 unavailable.
-Scenario compile steps may include timing assertions for cache-sensitive
-behavior; those timings are asserted by the harness but omitted from promoted
-transcripts. Scenarios may also define a top-level `timeout_policy` to override
-the harness defaults for timeout-specific coverage, including
-`command_seconds` for per-sentence timeout scenarios. Scenario command steps
-call `rocq_lsp_run_command` through the same cached manager. The e2e suite
-covers command output, soft timeout recovery, hard-timeout session reset, and
-per-sentence command timeout behavior.
+Scenario compile and command steps may include timing assertions for
+cache-sensitive behavior; those timings are asserted by the harness but omitted
+from promoted transcripts. Scenario command steps call `rocq_lsp_run_command`
+through the same cached manager. Scenarios may also define a top-level
+`timeout_policy` to override the harness defaults for timeout-specific coverage,
+including `command_seconds` for per-sentence timeout scenarios. The e2e suite
+covers command output, command caching after slow proofs, soft timeout recovery,
+hard-timeout session reset, and per-sentence command timeout behavior.
 Use `make promote` to refresh promoted e2e transcripts after intentional output
 changes; promotion runs serially because it rewrites golden files.
 
