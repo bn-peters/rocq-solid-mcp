@@ -157,9 +157,13 @@ The local virtual environment is expected at `.venv/`. Use
   after changing `fail` to `reflexivity`.
 - `tests/e2e/test_scenarios.py` runs promoted scenario fixtures that copy whole
   Rocq projects, compile files through one cached manager, edit files, and check
-  concise agent-facing transcripts. Scenario compile steps may include
-  `min_seconds` or `max_seconds` timing assertions for cache-sensitive behavior;
-  timings are asserted by the harness but omitted from promoted transcripts.
+  concise agent-facing transcripts. Scenario files may define a top-level
+  `timeout_policy` for timeout-specific coverage. Scenario compile steps may
+  include `min_seconds` or `max_seconds` timing assertions for cache-sensitive
+  behavior; timings are asserted by the harness but omitted from promoted
+  transcripts. `timeout_recovery` uses the local `sleep` tactic to cover a soft
+  `coq/getDocument` timeout followed by a successful recompile in the same
+  manager.
 
 When changing output shape, update exact-output tests rather than weakening
 assertions. The MCP output should be useful to agents and humans; raw Rocq

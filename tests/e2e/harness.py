@@ -32,10 +32,7 @@ async def run_case(case_dir: Path, tmp_path: Path, *, promote: bool) -> None:
     manager = RocqLspManager(
         RocqLspConfig(
             binary="coq-lsp",
-            timeout_policy=TimeoutPolicy(
-                request_seconds=30,
-                cancel_grace_seconds=5,
-            ),
+            timeout_policy=_timeout_policy(scenario),
             max_errors=1000000,
             workspace=None,
         )
@@ -78,6 +75,14 @@ def _run_rocq_c(project_root: Path, step: dict[str, Any]) -> None:
     except subprocess.CalledProcessError as exc:
         output = "\n".join(part for part in (exc.stdout, exc.stderr) if part)
         raise AssertionError(f"rocq c failed for {file}\n{output}") from exc
+
+
+def _timeout_policy(scenario: dict[str, Any]) -> TimeoutPolicy:
+    policy = scenario.get("timeout_policy", {})
+    return TimeoutPolicy(
+        request_seconds=policy.get("request_seconds", 30),
+        cancel_grace_seconds=policy.get("cancel_grace_seconds", 5),
+    )
 
 
 async def _run_steps(

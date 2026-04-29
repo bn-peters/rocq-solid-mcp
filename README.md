@@ -86,7 +86,8 @@ unavailable. E2e scenarios with compiled dependencies also skip when `rocq` is
 unavailable.
 Scenario compile steps may include timing assertions for cache-sensitive
 behavior; those timings are asserted by the harness but omitted from promoted
-transcripts.
+transcripts. Scenarios may also define a top-level `timeout_policy` to override
+the harness defaults for timeout-specific coverage.
 Use `make promote` to refresh promoted e2e transcripts after intentional output
 changes; promotion runs serially because it rewrites golden files.
 

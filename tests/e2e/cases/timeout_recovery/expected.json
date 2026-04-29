@@ -1,0 +1,26 @@
+[
+  {
+    "step": "compile slow proof with short timeout",
+    "action": "compile",
+    "file": "src/timeout.v",
+    "result": {
+      "status": "timeout",
+      "file": "src/timeout.v",
+      "timed_out": true
+    }
+  },
+  {
+    "step": "remove slow tactic",
+    "action": "replace",
+    "file": "src/timeout.v"
+  },
+  {
+    "step": "recompile after timeout",
+    "action": "compile",
+    "file": "src/timeout.v",
+    "result": {
+      "status": "complete",
+      "file": "src/timeout.v"
+    }
+  }
+]
