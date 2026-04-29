@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from contextlib import suppress
 from pathlib import Path
 
@@ -19,6 +20,8 @@ class RocqLspSession:
         self.workspace = workspace
         self.config = config
         self.lock = asyncio.Lock()
+        self.active_requests = 0
+        self.last_used_at = time.monotonic()
         self.versions: dict[str, int] = {}
         self._client: RocqLspClient | None = None
         self._notifications = NotificationStore()
@@ -46,6 +49,7 @@ class RocqLspSession:
         )
         client = RocqLspClient(
             binary=self.config.binary,
+            use_opam=self.config.use_opam,
             workspace=self.workspace,
             max_errors=self.config.max_errors,
             request_timeout=request_timeout,

@@ -7,7 +7,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-from .config import rocq_lsp_settings
+from .config import rocq_lsp_command, rocq_lsp_settings
 from .notifications import NotificationStore
 
 
@@ -39,12 +39,13 @@ class RocqLspClient:
         self,
         *,
         binary: str,
+        use_opam: bool,
         workspace: Path,
         max_errors: int,
         request_timeout: float,
         notifications: NotificationStore,
     ) -> None:
-        self.binary = binary
+        self.command = rocq_lsp_command(binary, use_opam=use_opam)
         self.workspace = workspace
         self.max_errors = max_errors
         self.request_timeout = request_timeout
@@ -58,7 +59,7 @@ class RocqLspClient:
 
     async def start(self) -> None:
         self.process = await asyncio.create_subprocess_exec(
-            self.binary,
+            *self.command,
             cwd=self.workspace,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,

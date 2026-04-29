@@ -11,8 +11,8 @@ from rocq_lsp_mcp.manager import RocqLspManager
 
 
 pytestmark = pytest.mark.skipif(
-    shutil.which("coq-lsp") is None,
-    reason="install coq-lsp to run integration tests",
+    shutil.which("opam") is None or shutil.which("coq-lsp") is None,
+    reason="install opam and coq-lsp to run integration tests",
 )
 
 

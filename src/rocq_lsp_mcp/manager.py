@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import time
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -19,10 +22,26 @@ class RocqLspManager:
     def __init__(self, config: RocqLspConfig | None = None) -> None:
         self.config = config or load_config()
         self._sessions: dict[Path, RocqLspSession] = {}
+        self._sessions_lock = asyncio.Lock()
+        self._cleanup_task: asyncio.Task[None] | None = None
+
+    def start_idle_cleanup(self) -> None:
+        if self.config.idle_ttl_seconds <= 0:
+            return
+        if self._cleanup_task is None or self._cleanup_task.done():
+            self._cleanup_task = asyncio.create_task(self._idle_cleanup_loop())
 
     async def close(self) -> None:
-        sessions = list(self._sessions.values())
-        self._sessions.clear()
+        cleanup_task = self._cleanup_task
+        self._cleanup_task = None
+        if cleanup_task is not None:
+            cleanup_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await cleanup_task
+
+        async with self._sessions_lock:
+            sessions = list(self._sessions.values())
+            self._sessions.clear()
         for session in sessions:
             await session.stop()
 
@@ -41,9 +60,13 @@ class RocqLspManager:
             )
 
         workspace = self._infer_workspace(path)
-        session = await self._get_or_create_session(workspace)
-        async with session.lock:
+        session = await self._checkout_session(workspace)
+        try:
             return await self._compile_with_session(session, path)
+        finally:
+            session.lock.release()
+            await self._release_session(session)
+            await self._cleanup_idle_sessions()
 
     async def _compile_with_session(
         self, session: RocqLspSession, path: Path
@@ -151,17 +174,94 @@ class RocqLspManager:
                 message=str(exc),
             )
 
-    async def _get_or_create_session(self, workspace: Path) -> RocqLspSession:
-        if session := self._sessions.get(workspace):
-            return session
+    async def _checkout_session(self, workspace: Path) -> RocqLspSession:
+        while True:
+            session = await self._reserve_session(workspace)
+            try:
+                await session.lock.acquire()
+            except BaseException:
+                await self._release_session(session)
+                raise
 
-        session = RocqLspSession(workspace=workspace, config=self.config)
-        await session.start()
-        self._sessions[workspace] = session
+            if await self._is_current_session(workspace, session):
+                return session
+
+            session.lock.release()
+            await self._release_session(session)
+
+    async def _reserve_session(self, workspace: Path) -> RocqLspSession:
+        expired: list[RocqLspSession] = []
+        session: RocqLspSession | None = None
+        try:
+            async with self._sessions_lock:
+                expired = self._pop_idle_sessions_locked()
+                session = self._sessions.get(workspace)
+                if session is None:
+                    session = await self._create_session(workspace)
+                    self._sessions[workspace] = session
+                session.active_requests += 1
+        finally:
+            for expired_session in expired:
+                await expired_session.stop()
+
+        if session is None:
+            raise RuntimeError("failed to create rocq-lsp session")
         return session
 
+    async def _is_current_session(
+        self, workspace: Path, session: RocqLspSession
+    ) -> bool:
+        async with self._sessions_lock:
+            return self._sessions.get(workspace) is session
+
+    async def _create_session(self, workspace: Path) -> RocqLspSession:
+        session = RocqLspSession(workspace=workspace, config=self.config)
+        await session.start()
+        return session
+
+    async def _release_session(self, session: RocqLspSession) -> None:
+        async with self._sessions_lock:
+            if session.active_requests > 0:
+                session.active_requests -= 1
+            session.last_used_at = time.monotonic()
+
+    async def _cleanup_idle_sessions(self) -> None:
+        async with self._sessions_lock:
+            expired = self._pop_idle_sessions_locked()
+        for session in expired:
+            await session.stop()
+
+    async def _idle_cleanup_loop(self) -> None:
+        interval = self._idle_cleanup_interval()
+        while True:
+            await asyncio.sleep(interval)
+            await self._cleanup_idle_sessions()
+
+    def _idle_cleanup_interval(self) -> float:
+        ttl = self.config.idle_ttl_seconds
+        if ttl <= 0:
+            return 60.0
+        return max(1.0, min(60.0, ttl / 2))
+
+    def _pop_idle_sessions_locked(self) -> list[RocqLspSession]:
+        ttl = self.config.idle_ttl_seconds
+        if ttl <= 0:
+            return []
+
+        now = time.monotonic()
+        expired: list[RocqLspSession] = []
+        for workspace, session in list(self._sessions.items()):
+            if session.active_requests > 0 or session.lock.locked():
+                continue
+            if now - session.last_used_at < ttl:
+                continue
+            expired.append(session)
+            del self._sessions[workspace]
+        return expired
+
     async def _reset_session(self, workspace: Path) -> None:
-        session = self._sessions.pop(workspace, None)
+        async with self._sessions_lock:
+            session = self._sessions.pop(workspace, None)
         if session is not None:
             await session.stop(hard=True)
 

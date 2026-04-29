@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import time
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +30,7 @@ class FakeClient:
         self.changed: list[tuple[Path, int]] = []
         self.goal_requests: list[dict[str, Any]] = []
         self.killed = False
+        self.closed = False
         self.pending_cleared = False
         self.hard_timeout = False
 
@@ -102,6 +105,9 @@ class FakeClient:
     async def kill_server(self) -> None:
         self.killed = True
 
+    async def close(self) -> None:
+        self.closed = True
+
 
 class SpyNotificationStore(NotificationStore):
     def __init__(self) -> None:
@@ -132,7 +138,8 @@ class FakeManager(RocqLspManager):
         self,
         client: FakeClient,
         notifications: SpyNotificationStore,
-        workspace: Path,
+        workspace: Path | None,
+        idle_ttl_seconds: float = 1800,
     ) -> None:
         config = RocqLspConfig(
             binary="coq-lsp",
@@ -142,22 +149,19 @@ class FakeManager(RocqLspManager):
             ),
             max_errors=1000000,
             workspace=workspace,
+            idle_ttl_seconds=idle_ttl_seconds,
         )
         super().__init__(config=config)
         self.client = client
         self.notifications = notifications
 
-    async def _get_or_create_session(self, workspace: Path) -> RocqLspSession:
-        if session := self._sessions.get(workspace):
-            return session
-        session = FakeSession(
+    async def _create_session(self, workspace: Path) -> RocqLspSession:
+        return FakeSession(
             workspace=workspace,
             config=self.config,
             client=self.client,
             notifications=self.notifications,
         )
-        self._sessions[workspace] = session
-        return session
 
 
 def diagnostic(
@@ -361,6 +365,125 @@ async def test_hard_timeout_resets_session(tmp_path: Path) -> None:
     assert client.pending_cleared is True
     assert client.killed is True
     assert tmp_path not in manager._sessions
+
+
+@pytest.mark.asyncio
+async def test_compile_file_uses_separate_sessions_for_project_roots(
+    tmp_path: Path,
+) -> None:
+    project_a = tmp_path / "a"
+    project_b = tmp_path / "b"
+    project_a.mkdir()
+    project_b.mkdir()
+    (project_a / "_RocqProject").write_text("-Q . A\n", encoding="utf-8")
+    (project_b / "_CoqProject").write_text("-Q . B\n", encoding="utf-8")
+    source_a = project_a / "A.v"
+    source_b = project_b / "B.v"
+    source_a.write_text("Check nat.\n", encoding="utf-8")
+    source_b.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    manager = FakeManager(client, notifications, None)
+
+    await manager.compile_file(str(source_a))
+    await manager.compile_file(str(source_b))
+
+    assert set(manager._sessions) == {project_a.resolve(), project_b.resolve()}
+    assert client.opened == [(source_a.resolve(), 1), (source_b.resolve(), 1)]
+
+
+@pytest.mark.asyncio
+async def test_idle_cleanup_stops_stale_unlocked_sessions(tmp_path: Path) -> None:
+    notifications = SpyNotificationStore()
+    manager = FakeManager(
+        FakeClient(notifications),
+        notifications,
+        None,
+        idle_ttl_seconds=1,
+    )
+    stale_workspace = tmp_path / "stale"
+    fresh_workspace = tmp_path / "fresh"
+    stale_workspace.mkdir()
+    fresh_workspace.mkdir()
+    stale_client = FakeClient(notifications)
+    fresh_client = FakeClient(notifications)
+    stale_session = FakeSession(
+        workspace=stale_workspace,
+        config=manager.config,
+        client=stale_client,
+        notifications=notifications,
+    )
+    fresh_session = FakeSession(
+        workspace=fresh_workspace,
+        config=manager.config,
+        client=fresh_client,
+        notifications=notifications,
+    )
+    stale_session.last_used_at = time.monotonic() - 2
+    fresh_session.last_used_at = time.monotonic()
+    manager._sessions[stale_workspace] = stale_session
+    manager._sessions[fresh_workspace] = fresh_session
+
+    await manager._cleanup_idle_sessions()
+
+    assert stale_workspace not in manager._sessions
+    assert fresh_workspace in manager._sessions
+    assert stale_client.closed is True
+    assert fresh_client.closed is False
+
+
+@pytest.mark.asyncio
+async def test_idle_cleanup_keeps_locked_sessions(tmp_path: Path) -> None:
+    notifications = SpyNotificationStore()
+    manager = FakeManager(
+        FakeClient(notifications),
+        notifications,
+        None,
+        idle_ttl_seconds=1,
+    )
+    workspace = tmp_path / "locked"
+    workspace.mkdir()
+    client = FakeClient(notifications)
+    session = FakeSession(
+        workspace=workspace,
+        config=manager.config,
+        client=client,
+        notifications=notifications,
+    )
+    session.last_used_at = time.monotonic() - 2
+    manager._sessions[workspace] = session
+    await session.lock.acquire()
+
+    try:
+        await manager._cleanup_idle_sessions()
+    finally:
+        session.lock.release()
+
+    assert manager._sessions[workspace] is session
+    assert client.closed is False
+
+
+@pytest.mark.asyncio
+async def test_checkout_retries_when_waiting_on_reset_session(tmp_path: Path) -> None:
+    notifications = SpyNotificationStore()
+    manager = FakeManager(FakeClient(notifications), notifications, tmp_path)
+    original = await manager._checkout_session(tmp_path)
+
+    waiting = asyncio.create_task(manager._checkout_session(tmp_path))
+    while original.active_requests < 2:
+        await asyncio.sleep(0)
+
+    await manager._reset_session(tmp_path)
+    original.lock.release()
+    await manager._release_session(original)
+    replacement = await asyncio.wait_for(waiting, timeout=1)
+
+    try:
+        assert replacement is not original
+        assert manager._sessions[tmp_path] is replacement
+    finally:
+        replacement.lock.release()
+        await manager._release_session(replacement)
 
 
 def test_workspace_inference_prefers_project_file(tmp_path: Path) -> None:

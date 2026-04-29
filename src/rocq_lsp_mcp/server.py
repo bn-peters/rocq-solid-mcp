@@ -12,6 +12,7 @@ from .models import CompileResult
 @lifespan
 async def app_lifespan(server: Any) -> Any:
     manager = RocqLspManager()
+    manager.start_idle_cleanup()
     try:
         yield manager
     finally:

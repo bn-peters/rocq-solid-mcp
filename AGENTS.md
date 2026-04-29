@@ -2,9 +2,10 @@
 
 It is the duty of the agent to keep AGENTS.md and README.md up to date.
 
-This package is a Python MCP prototype for compiling Rocq files through a
-persistent `coq-lsp` session. It returns compact structured diagnostics and,
-when available, proof-state context for the sentence that produced an error.
+This package is a Python MCP prototype for compiling Rocq files through
+persistent project-scoped `coq-lsp` sessions. It returns compact structured
+diagnostics and, when available, proof-state context for the sentence that
+produced an error.
 
 ## Package Layout
 
@@ -13,8 +14,8 @@ when available, proof-state context for the sentence that produced an error.
   `rocq_lsp_compile_file(file: str)`.
 - `src/rocq_lsp_mcp/manager.py` is the orchestration layer. It resolves files,
   infers workspaces from `_RocqProject` or `_CoqProject`, keeps cached
-  sessions per workspace, reads files, routes compile requests, and converts
-  outcomes into `CompileResult`.
+  sessions per workspace, evicts idle sessions, reads files, routes compile
+  requests, and converts outcomes into `CompileResult`.
 - `src/rocq_lsp_mcp/session.py` owns the lifecycle for one workspace-backed
   `coq-lsp` session. It starts and stops the client, keeps the session lock,
   tracks document versions, and owns the session `NotificationStore`.
@@ -42,7 +43,8 @@ when available, proof-state context for the sentence that produced an error.
   optional `proof_state`. Serialized compile results include the compiled file
   relative to the workspace and omit version/workspace internals.
 - `src/rocq_lsp_mcp/config.py` loads environment configuration, defines
-  `TimeoutPolicy`, and builds the `coq-lsp` initialization settings.
+  `TimeoutPolicy`, builds the `opam exec -- coq-lsp` command, and builds the
+  `coq-lsp` initialization settings.
 
 The prototype intentionally talks to `coq-lsp` directly. Do not reintroduce an
 LSP client library unless the user explicitly asks for that direction.
@@ -50,10 +52,18 @@ LSP client library unless the user explicitly asks for that direction.
 ## Runtime Behavior
 
 The MCP tool receives only a Rocq file path. On each call, the manager resolves
-the file and workspace, then delegates to the cached `RocqLspSession` for that
-workspace. The session sends either `textDocument/didOpen` or
-`textDocument/didChange` through its client. The document version increments on
-every call.
+the file, infers a workspace by walking upward to the nearest `_RocqProject` or
+`_CoqProject`, then delegates to the cached `RocqLspSession` for that
+workspace. If no project file is found, the file's parent directory is used.
+The session sends either `textDocument/didOpen` or `textDocument/didChange`
+through its client. The document version increments on every call.
+
+Each inferred workspace gets a separate long-lived `coq-lsp` process. The
+process starts with `cwd` set to that workspace and, by default, with
+`opam exec -- coq-lsp` so local opam switches select the appropriate Rocq and
+`coq-lsp` versions. Calls for different workspaces may use different
+`coq-lsp` processes concurrently. Calls inside the same workspace share one
+session and serialize on that session's lock.
 
 Compilation is driven by `coq/getDocument` with `goals="Str"`. This asks
 `coq-lsp` for the checked document and proof-state data around spans. The
@@ -73,7 +83,10 @@ and bullet state into the existing proof-state payload.
 
 Caching is delegated to the long-lived `coq-lsp` process. The Python side keeps
 the session, notification, and version state alive so repeated calls for changed
-files can use rocq-lsp's incremental checking behavior.
+files can use rocq-lsp's incremental checking behavior. Idle sessions are
+cleaned up by the MCP server's background reaper and opportunistically during
+compile calls after `ROCQ_LSP_IDLE_TTL_SECONDS`; sessions that are compiling or
+queued for a compile are not stopped.
 
 Timeout handling has two layers:
 
@@ -89,10 +102,12 @@ so the next call starts with a fresh `coq-lsp`.
 The prototype reads these environment variables:
 
 - `ROCQ_LSP_BINARY`, default `coq-lsp`
+- `ROCQ_LSP_USE_OPAM`, default `1`; set to `0` to run the binary directly
 - `ROCQ_LSP_TIMEOUT`, default `60`
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE`, default `5`
 - `ROCQ_LSP_MAX_ERRORS`, default `1000000`
 - `ROCQ_LSP_WORKSPACE`, optional workspace override
+- `ROCQ_LSP_IDLE_TTL_SECONDS`, default `1800`
 
 The prototype is intentionally not security-hardened. Do not add path sandboxing
 or command restrictions unless the task specifically asks for it.
@@ -114,11 +129,11 @@ make clean
 narrower suites by directory via `make unit`, `make integration`, or `make e2e`;
 do not use environment variables to select test classes. Override parallelism
 with a Make variable such as `make test PYTEST_WORKERS=4`. Tests that need a
-real `coq-lsp` skip themselves if it is unavailable. E2e scenarios with compiled
-dependencies also skip themselves if `rocq` is unavailable. `make promote`
-refreshes promoted e2e transcripts and runs serially because it rewrites golden
-files. `make clean` removes pytest caches, Python bytecode caches, and egg-info
-directories while preserving `.venv/`.
+real `coq-lsp` skip themselves if `opam` or `coq-lsp` is unavailable. E2e
+scenarios with compiled dependencies also skip themselves if `rocq` is
+unavailable. `make promote` refreshes promoted e2e transcripts and runs serially
+because it rewrites golden files. `make clean` removes pytest caches, Python
+bytecode caches, and egg-info directories while preserving `.venv/`.
 
 The local virtual environment is expected at `.venv/`. Use
 `.venv/bin/python -m pytest ...` for focused test runs.
@@ -126,7 +141,10 @@ The local virtual environment is expected at `.venv/`. Use
 ## Test Suite
 
 - `tests/unit/test_manager.py` uses fakes to cover manager behavior, versioning,
-  workspace inference, language IDs, and hard-timeout reset logic.
+  workspace inference, per-workspace session separation, idle cleanup, language
+  IDs, and hard-timeout reset logic.
+- `tests/unit/test_config.py` covers command construction and environment
+  configuration.
 - `tests/unit/test_notifications.py` covers diagnostic notification storage,
   clearing, waiting, fallback behavior, and ignored notifications.
 - `tests/unit/test_pipeline.py` covers proof-state attachment and agent-facing

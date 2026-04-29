@@ -8,8 +8,8 @@ import pytest
 from harness import run_case, scenario_cases
 
 pytestmark = pytest.mark.skipif(
-    shutil.which("coq-lsp") is None,
-    reason="install coq-lsp to run e2e tests",
+    shutil.which("opam") is None or shutil.which("coq-lsp") is None,
+    reason="install opam and coq-lsp to run e2e tests",
 )
 
 

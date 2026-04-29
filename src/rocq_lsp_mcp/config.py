@@ -17,6 +17,8 @@ class RocqLspConfig:
     timeout_policy: TimeoutPolicy
     max_errors: int
     workspace: Path | None
+    use_opam: bool = True
+    idle_ttl_seconds: float = 1800.0
 
 
 def _float_env(name: str, default: str) -> float:
@@ -25,6 +27,15 @@ def _float_env(name: str, default: str) -> float:
 
 def _int_env(name: str, default: str) -> int:
     return int(os.environ.get(name, default))
+
+
+def _bool_env(name: str, default: str) -> bool:
+    value = os.environ.get(name, default).strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} must be a boolean value")
 
 
 def load_config() -> RocqLspConfig:
@@ -37,7 +48,15 @@ def load_config() -> RocqLspConfig:
         ),
         max_errors=_int_env("ROCQ_LSP_MAX_ERRORS", "1000000"),
         workspace=Path(workspace).expanduser().resolve() if workspace else None,
+        use_opam=_bool_env("ROCQ_LSP_USE_OPAM", "1"),
+        idle_ttl_seconds=_float_env("ROCQ_LSP_IDLE_TTL_SECONDS", "1800"),
     )
+
+
+def rocq_lsp_command(binary: str, *, use_opam: bool) -> tuple[str, ...]:
+    if use_opam:
+        return ("opam", "exec", "--", binary)
+    return (binary,)
 
 
 def rocq_lsp_settings(max_errors: int) -> dict[str, object]:
