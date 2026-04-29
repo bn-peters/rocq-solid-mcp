@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -7,6 +8,7 @@ from .config import RocqLspConfig, load_config
 from .models import CompileResult
 from .pipeline import build_diagnostics
 from .rocq_client import (
+    RocqLspClient,
     RocqLspHardTimeout,
     RocqLspResponseError,
 )
@@ -82,7 +84,14 @@ class RocqLspManager:
             raw_diagnostics = await session.notifications.wait_for_diagnostics(
                 uri, version
             )
-            diagnostics = build_diagnostics(raw_diagnostics, completed_doc)
+            supplemental_proof_states = await self._incomplete_proof_goal_states(
+                client, uri, version, raw_diagnostics
+            )
+            diagnostics = build_diagnostics(
+                raw_diagnostics,
+                completed_doc,
+                supplemental_proof_states=supplemental_proof_states,
+            )
             return CompileResult.from_diagnostics(
                 status="timeout" if request_timed_out else "complete",
                 file=str(path),
@@ -156,6 +165,37 @@ class RocqLspManager:
         if session is not None:
             await session.stop(hard=True)
 
+    async def _incomplete_proof_goal_states(
+        self,
+        client: RocqLspClient,
+        uri: str,
+        version: int,
+        raw_diagnostics: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        states: dict[str, Any] = {}
+        requested: set[str] = set()
+        for diagnostic in raw_diagnostics:
+            if not self._needs_incomplete_proof_goal_request(diagnostic):
+                continue
+            range_ = self._diagnostic_sentence_range(diagnostic)
+            position = self._range_start(range_)
+            if position is None:
+                continue
+            key = self._range_key(range_)
+            if key in requested:
+                continue
+            requested.add(key)
+            try:
+                states[key] = await client.request_goals(
+                    uri=uri,
+                    version=version,
+                    position=position,
+                    timeout=self.config.timeout_policy.request_seconds,
+                )
+            except Exception:
+                continue
+        return states
+
     def _resolve_file(self, file: str) -> Path:
         path = Path(file).expanduser()
         if not path.is_absolute():
@@ -177,3 +217,38 @@ class RocqLspManager:
     def _completed_only(document: dict[str, Any]) -> dict[str, Any] | None:
         completed = document.get("completed")
         return completed if isinstance(completed, dict) else None
+
+    @staticmethod
+    def _needs_incomplete_proof_goal_request(diagnostic: Any) -> bool:
+        if not isinstance(diagnostic, dict) or diagnostic.get("severity") != 1:
+            return False
+        message = diagnostic.get("message", "")
+        return (
+            isinstance(message, str)
+            and "Attempt to save an incomplete proof" in message
+        )
+
+    @staticmethod
+    def _diagnostic_sentence_range(diagnostic: Any) -> dict[str, Any]:
+        if not isinstance(diagnostic, dict):
+            return {}
+        data = diagnostic.get("data")
+        if isinstance(data, dict) and isinstance(data.get("sentenceRange"), dict):
+            return data["sentenceRange"]
+        range_ = diagnostic.get("range")
+        return range_ if isinstance(range_, dict) else {}
+
+    @staticmethod
+    def _range_start(range_: dict[str, Any]) -> dict[str, int] | None:
+        start = range_.get("start")
+        if not isinstance(start, dict):
+            return None
+        line = start.get("line")
+        character = start.get("character")
+        if isinstance(line, int) and isinstance(character, int):
+            return {"line": line, "character": character}
+        return None
+
+    @staticmethod
+    def _range_key(range_: dict[str, Any]) -> str:
+        return json.dumps(range_, sort_keys=True, separators=(",", ":"))

@@ -17,10 +17,15 @@ JSON-RPC.
 - `session.py` owns each workspace session lifecycle, document versions, and
   notification store.
 - `rocq_client.py` is transport-only JSON-RPC framing, requests, notifications,
-  cancellation, and process cleanup.
+  cancellation, `coq/getDocument`, `proof/goals`, and process cleanup.
 - `notifications.py` stores diagnostics published by `coq-lsp`.
-- `pipeline.py` converts raw diagnostics plus `coq/getDocument` proof-state data
-  into agent-facing `Diagnostic` models.
+- `pipeline.py` converts raw diagnostics plus proof-state data into
+  agent-facing `Diagnostic` models.
+
+For `Attempt to save an incomplete proof` diagnostics, the `Qed.` span may only
+contain the save error. The manager asks `proof/goals` with `mode: "Prev"` at
+that diagnostic position and merges just the returned `goals` field into the
+existing proof state.
 
 ## Run
 

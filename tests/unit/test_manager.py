@@ -17,11 +17,16 @@ class FakeClient:
         self,
         notifications: NotificationStore,
         diagnostics: list[Any] | None = None,
+        document: dict[str, Any] | None = None,
+        goals_response: dict[str, Any] | Exception | None = None,
     ) -> None:
         self.notifications = notifications
         self.diagnostics = diagnostics or []
+        self.document = document
+        self.goals_response = goals_response
         self.opened: list[tuple[Path, int]] = []
         self.changed: list[tuple[Path, int]] = []
+        self.goal_requests: list[dict[str, Any]] = []
         self.killed = False
         self.pending_cleared = False
         self.hard_timeout = False
@@ -52,7 +57,8 @@ class FakeClient:
         if self.hard_timeout:
             raise RocqLspHardTimeout("stuck")
         return (
-            {
+            self.document
+            or {
                 "completed": {
                     "status": "Yes",
                     "range": {
@@ -63,6 +69,32 @@ class FakeClient:
             },
             False,
         )
+
+    async def request_goals(
+        self,
+        *,
+        uri: str,
+        version: int,
+        position: dict[str, int],
+        timeout: float | None = None,
+        pp_format: str = "Str",
+        compact: bool = True,
+        mode: str = "Prev",
+    ) -> dict[str, Any]:
+        self.goal_requests.append(
+            {
+                "uri": uri,
+                "version": version,
+                "position": position,
+                "timeout": timeout,
+                "pp_format": pp_format,
+                "compact": compact,
+                "mode": mode,
+            }
+        )
+        if isinstance(self.goals_response, Exception):
+            raise self.goals_response
+        return self.goals_response or {}
 
     def clear_pending_requests(self) -> None:
         self.pending_cleared = True
@@ -210,6 +242,107 @@ async def test_compile_file_keeps_only_first_error_per_proof_name(
         "global first",
         "global second",
     ]
+
+
+@pytest.mark.asyncio
+async def test_compile_file_enriches_incomplete_proof_save_error(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Goal Foo.\nProof.\nQed.\n", encoding="utf-8")
+    range_ = {
+        "start": {"line": 2, "character": 0},
+        "end": {"line": 2, "character": 4},
+    }
+    notifications = SpyNotificationStore()
+    client = FakeClient(
+        notifications,
+        [
+            {
+                "range": range_,
+                "message": " (in proof foo): Attempt to save an incomplete proof\n"
+                "(there are remaining open goals).",
+                "severity": 1,
+                "data": {"sentenceRange": range_, "proofName": "foo"},
+            }
+        ],
+        document={
+            "completed": {
+                "status": "Yes",
+                "range": {
+                    "start": {"line": 0, "character": 0},
+                    "end": {"line": 2, "character": 4},
+                },
+            },
+            "spans": [
+                {
+                    "range": range_,
+                    "goals": {
+                        "program": [],
+                        "messages": [],
+                        "error": " (in proof foo): Attempt to save an incomplete proof\n"
+                        "(there are remaining open goals).",
+                    },
+                }
+            ],
+        },
+        goals_response={
+            "goals": {
+                "goals": [
+                    {
+                        "info": {"name": None},
+                        "hyps": [],
+                        "ty": "Foo",
+                    }
+                ],
+                "stack": [],
+                "bullet": None,
+                "shelf": [],
+                "given_up": [],
+            },
+            "program": [["noisy"]],
+        },
+    )
+    manager = FakeManager(client, notifications, tmp_path)
+
+    result = await manager.compile_file(str(source))
+
+    assert result.error_count == 1
+    assert client.goal_requests == [
+        {
+            "uri": source.as_uri(),
+            "version": 1,
+            "position": {"line": 2, "character": 0},
+            "timeout": 1,
+            "pp_format": "Str",
+            "compact": True,
+            "mode": "Prev",
+        }
+    ]
+    proof_state = result.diagnostics[0].proof_state
+    assert proof_state["program"] == []
+    assert proof_state["goals"]["goals"] == [
+        {"name": None, "hyps": [], "ty": "Foo"}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_compile_file_skips_goal_request_for_regular_proof_error(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Goal 0 = 0. Proof. fail. Qed.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(
+        notifications,
+        [diagnostic("Tactic failure.", 1, proof_name="foo", line=0)],
+    )
+    manager = FakeManager(client, notifications, tmp_path)
+
+    result = await manager.compile_file(str(source))
+
+    assert result.error_count == 1
+    assert client.goal_requests == []
 
 
 @pytest.mark.asyncio

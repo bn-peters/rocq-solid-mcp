@@ -10,8 +10,10 @@ from .pretty import normalize_proof_state
 def build_diagnostics(
     raw: list[dict[str, Any]],
     document: dict[str, Any] | None,
+    supplemental_proof_states: dict[str, Any] | None = None,
 ) -> list[Diagnostic]:
     proof_states = _proof_states_by_range(document)
+    _merge_supplemental_proof_states(proof_states, supplemental_proof_states)
     diagnostics = [
         Diagnostic.from_lsp(
             diagnostic,
@@ -48,6 +50,24 @@ def _proof_states_by_range(document: dict[str, Any] | None) -> dict[str, Any]:
         if goals is not None and isinstance(range_, dict):
             states[_range_key(range_)] = normalize_proof_state(goals)
     return states
+
+
+def _merge_supplemental_proof_states(
+    states: dict[str, Any],
+    supplemental: dict[str, Any] | None,
+) -> None:
+    if not supplemental:
+        return
+    for key, proof_state in supplemental.items():
+        normalized = normalize_proof_state(proof_state)
+        if not isinstance(normalized, dict) or "goals" not in normalized:
+            continue
+        current = states.get(key)
+        if isinstance(current, dict):
+            if "goals" not in current:
+                current["goals"] = normalized["goals"]
+            continue
+        states[key] = {"goals": normalized["goals"]}
 
 
 def _diagnostic_sentence_range(diagnostic: Any) -> dict[str, Any]:

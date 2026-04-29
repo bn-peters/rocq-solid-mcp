@@ -58,7 +58,20 @@
             },
             "program": [],
             "messages": [],
-            "error": " (in proof foo_obligation_2): Attempt to save an incomplete proof\n(there are remaining open goals)."
+            "error": " (in proof foo_obligation_2): Attempt to save an incomplete proof\n(there are remaining open goals).",
+            "goals": {
+              "goals": [
+                {
+                  "name": null,
+                  "hyps": [],
+                  "ty": "unit"
+                }
+              ],
+              "stack": [],
+              "bullet": null,
+              "shelf": [],
+              "given_up": []
+            }
           }
         }
       ]

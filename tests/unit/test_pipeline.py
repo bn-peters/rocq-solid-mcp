@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from rocq_lsp_mcp.pipeline import build_diagnostics
@@ -31,6 +32,63 @@ def test_build_diagnostics_falls_back_to_diagnostic_range() -> None:
     result = build_diagnostics(diagnostics, document)
 
     assert result[0].proof_state == {"goals": []}
+
+
+def test_build_diagnostics_merges_supplemental_incomplete_proof_goals() -> None:
+    range_ = _range(0, 4)
+    diagnostics = [
+        {
+            "range": range_,
+            "message": "Attempt to save an incomplete proof",
+            "severity": 1,
+            "data": {"sentenceRange": range_, "proofName": "foo"},
+        }
+    ]
+    document = {
+        "spans": [
+            {
+                "range": range_,
+                "goals": {"program": [], "messages": [], "error": "incomplete"},
+            }
+        ]
+    }
+    supplemental = {
+        _range_key(range_): {
+            "goals": {
+                "goals": [
+                    {
+                        "info": {"name": None},
+                        "hyps": [],
+                        "ty": "Foo",
+                    }
+                ],
+                "stack": [],
+                "bullet": None,
+                "shelf": [],
+                "given_up": [],
+            },
+            "program": [["noisy"]],
+        }
+    }
+
+    result = build_diagnostics(
+        diagnostics,
+        document,
+        supplemental_proof_states=supplemental,
+    )
+
+    assert result[0].proof_state == {
+        "program": [],
+        "messages": [],
+        "error": "incomplete",
+        "goals": {
+            "goals": [{"name": None, "hyps": [], "ty": "Foo"}],
+            "stack": [],
+            "bullet": None,
+            "shelf": [],
+            "given_up": [],
+        },
+    }
 
 
 def test_build_diagnostics_filters_duplicate_proof_errors_only() -> None:
@@ -80,3 +138,7 @@ def _range(start_character: int, end_character: int) -> dict[str, object]:
         "start": {"line": 0, "character": start_character},
         "end": {"line": 0, "character": end_character},
     }
+
+
+def _range_key(range_: dict[str, object]) -> str:
+    return json.dumps(range_, sort_keys=True, separators=(",", ":"))

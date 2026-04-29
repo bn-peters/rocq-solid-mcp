@@ -209,6 +209,29 @@ class RocqLspClient:
                 return {}, True
             return self._result_or_raise(raw), True
 
+    async def request_goals(
+        self,
+        *,
+        uri: str,
+        version: int,
+        position: dict[str, int],
+        timeout: float | None = None,
+        pp_format: str = "Str",
+        compact: bool = True,
+        mode: str = "Prev",
+    ) -> dict[str, Any]:
+        return await self.request(
+            "proof/goals",
+            {
+                "textDocument": {"uri": uri, "version": version},
+                "position": position,
+                "pp_format": pp_format,
+                "compact": compact,
+                "mode": mode,
+            },
+            timeout=timeout,
+        )
+
     async def request(
         self, method: str, params: Any | None, *, timeout: float | None = None
     ) -> dict[str, Any]:

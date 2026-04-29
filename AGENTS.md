@@ -24,12 +24,13 @@ available, proof-state context for the sentence that produced an error.
   version.
 - `src/rocq_lsp_mcp/pipeline.py` normalizes raw diagnostics into
   agent-facing `Diagnostic` models. It attaches proof states by matching
-  sentence ranges and keeps only the first error for each `proof_name`, while
+  sentence ranges, merges supplemental `proof/goals` results for incomplete
+  proof saves, and keeps only the first error for each `proof_name`, while
   preserving warnings, infos, and errors without a proof name.
 - `src/rocq_lsp_mcp/rocq_client.py` is the manual stdio JSON-RPC client for
   `coq-lsp`. It handles `Content-Length` framing, `initialize`, server
-  requests, request timeouts, cancellation, process cleanup, and dispatches
-  notifications to `NotificationStore`.
+  requests, `coq/getDocument`, `proof/goals`, request timeouts, cancellation,
+  process cleanup, and dispatches notifications to `NotificationStore`.
 - `src/rocq_lsp_mcp/pretty.py` converts rocq-lsp serialized pretty-print trees
   such as `Pp_glue`, `Pp_box`, and `Pp_print_break` into readable text, then
   normalizes proof-state payloads into agent-facing JSON.
@@ -57,6 +58,13 @@ Compilation is driven by `coq/getDocument` with `goals="Str"`. This asks
 `textDocument/publishDiagnostics`. `pipeline.py` normalizes those diagnostics
 for the MCP response. If multiple errors belong to the same `proof_name`, only
 the first is forwarded to the agent.
+
+For `Attempt to save an incomplete proof` diagnostics, the `Qed.` sentence can
+carry only the save error while the open goal is attached to the previous proof
+span. The manager issues a best-effort `proof/goals` request with `mode="Prev"`
+at the diagnostic position and `pipeline.py` merges only the returned `goals`
+field into the existing proof-state payload, preserving the `Qed.` span's
+messages, program, range, and error.
 
 Caching is delegated to the long-lived `coq-lsp` process. The Python side keeps
 the session, notification, and version state alive so repeated calls for changed

@@ -58,7 +58,20 @@
             },
             "program": [],
             "messages": [],
-            "error": " (in proof token_world_le_preorder): Attempt to save an incomplete proof\n(there are remaining open goals)."
+            "error": " (in proof token_world_le_preorder): Attempt to save an incomplete proof\n(there are remaining open goals).",
+            "goals": {
+              "goals": [
+                {
+                  "name": null,
+                  "hyps": [],
+                  "ty": "Foo"
+                }
+              ],
+              "stack": [],
+              "bullet": null,
+              "shelf": [],
+              "given_up": []
+            }
           }
         }
       ]
