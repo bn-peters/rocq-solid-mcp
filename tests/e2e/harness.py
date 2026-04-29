@@ -12,7 +12,7 @@ import pytest
 
 from rocq_lsp_mcp.config import RocqLspConfig, TimeoutPolicy
 from rocq_lsp_mcp.manager import RocqLspManager
-from rocq_lsp_mcp.models import CompileResult
+from rocq_lsp_mcp.models import CommandResult, CompileResult
 
 CASES_DIR = Path(__file__).parent / "cases"
 
@@ -129,6 +129,22 @@ async def _run_steps(
             )
             continue
 
+        if action == "command":
+            result = await manager.run_command(
+                str(path),
+                step["command"],
+                step["line"],
+                step.get("character", 1),
+            )
+            transcript.append(
+                {
+                    **_step_record(step),
+                    "command": step["command"],
+                    "result": _result_record(result, project_root),
+                }
+            )
+            continue
+
         raise AssertionError(f"unknown e2e action: {action}")
     return transcript
 
@@ -156,7 +172,9 @@ def _step_record(step: dict[str, Any]) -> dict[str, Any]:
     return record
 
 
-def _result_record(result: CompileResult, project_root: Path) -> dict[str, Any]:
+def _result_record(
+    result: CompileResult | CommandResult, project_root: Path
+) -> dict[str, Any]:
     return _scrub_value(result.model_dump(), project_root)
 
 

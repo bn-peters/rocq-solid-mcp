@@ -2,20 +2,23 @@
 
 It is the duty of the agent to keep AGENTS.md and README.md up to date.
 
-This package is a Python MCP prototype for compiling Rocq files through
-persistent project-scoped `coq-lsp` sessions. It returns compact structured
-diagnostics and, when available, proof-state context for the sentence that
-produced an error.
+This package is a Python MCP prototype for compiling Rocq files and running
+single Rocq commands through persistent project-scoped `coq-lsp` sessions.
+Compilation returns compact structured diagnostics and, when available,
+proof-state context for the sentence that produced an error. Command execution
+returns compact feedback output for the requested command.
 
 ## Package Layout
 
 - `src/rocq_lsp_mcp/server.py` defines the FastMCP server, the lifespan-managed
-  `RocqLspManager`, and the single MCP tool
-  `rocq_lsp_compile_file(file: str)`.
+  `RocqLspManager`, and the MCP tools
+  `rocq_lsp_compile_file(file: str)` and
+  `rocq_lsp_run_command(file: str, command: str, line: int, character: int = 1)`.
 - `src/rocq_lsp_mcp/manager.py` is the orchestration layer. It resolves files,
   infers workspaces from `_RocqProject` or `_CoqProject`, keeps cached
-  sessions per workspace, evicts idle sessions, reads files, routes compile
-  requests, and converts outcomes into `CompileResult`.
+  sessions per workspace, evicts idle sessions, reads files, routes compile and
+  command requests, and converts outcomes into `CompileResult` or
+  `CommandResult`.
 - `src/rocq_lsp_mcp/session.py` owns the lifecycle for one workspace-backed
   `coq-lsp` session. It starts and stops the client, keeps the session lock,
   tracks document versions, and owns the session `NotificationStore`.
@@ -30,8 +33,9 @@ produced an error.
   preserving warnings, infos, and errors without a proof name.
 - `src/rocq_lsp_mcp/rocq_client.py` is the manual stdio JSON-RPC client for
   `coq-lsp`. It handles `Content-Length` framing, `initialize`, server
-  requests, `coq/getDocument`, `proof/goals`, request timeouts, cancellation,
-  process cleanup, and dispatches notifications to `NotificationStore`.
+  requests, `coq/getDocument`, `proof/goals`, `petanque/run_at_point`, request
+  timeouts, cancellation, process cleanup, and dispatches notifications to
+  `NotificationStore`.
 - `src/rocq_lsp_mcp/pretty.py` converts rocq-lsp serialized pretty-print trees
   such as `Pp_glue`, `Pp_box`, and `Pp_print_break` into readable text, then
   normalizes proof-state payloads into compact agent-facing JSON. Goal
@@ -40,8 +44,9 @@ produced an error.
   `CompileResult` separates diagnostics into errors, warnings, and infos.
   `Diagnostic` keeps raw LSP details internally while serializing only compact
   fields such as `level`, `location`, `message`, optional `proof_name`, and
-  optional `proof_state`. Serialized compile results include the compiled file
-  relative to the workspace and omit version/workspace internals.
+  optional `proof_state`. `CommandResult` serializes command status, file,
+  location, command, and compact feedback output. Serialized results include
+  files relative to the workspace and omit version/workspace internals.
 - `src/rocq_lsp_mcp/config.py` loads environment configuration, defines
   `TimeoutPolicy`, builds the `opam exec -- coq-lsp` command, and builds the
   `coq-lsp` initialization settings.
@@ -51,12 +56,14 @@ LSP client library unless the user explicitly asks for that direction.
 
 ## Runtime Behavior
 
-The MCP tool receives only a Rocq file path. On each call, the manager resolves
-the file, infers a workspace by walking upward to the nearest `_RocqProject` or
-`_CoqProject`, then delegates to the cached `RocqLspSession` for that
-workspace. If no project file is found, the file's parent directory is used.
-The session sends either `textDocument/didOpen` or `textDocument/didChange`
-through its client. The document version increments on every call.
+The compile MCP tool receives only a Rocq file path. The command MCP tool
+receives a Rocq file path, one complete command ending in `.`, and a 1-based
+line/character position. On each call, the manager resolves the file, infers a
+workspace by walking upward to the nearest `_RocqProject` or `_CoqProject`, then
+delegates to the cached `RocqLspSession` for that workspace. If no project file
+is found, the file's parent directory is used. The session sends either
+`textDocument/didOpen` or `textDocument/didChange` through its client. The
+document version increments on every call.
 
 Each inferred workspace gets a separate long-lived `coq-lsp` process. The
 process starts with `cwd` set to that workspace and, by default, with
@@ -81,6 +88,13 @@ span. The manager issues a best-effort `proof/goals` request with `mode="Prev"`
 at the diagnostic position and `pipeline.py` merges the returned compact goals
 and bullet state into the existing proof-state payload.
 
+Command execution is driven by `petanque/run_at_point`, because
+`proof/goals` with the `command` parameter does not surface feedback from
+commands such as `Search` or `Print` in current `coq-lsp`. The command tool
+should be called right after imports when possible, or between
+lemmas/definitions when local declarations, scopes, or modules are required.
+The command is ephemeral and does not edit the source file.
+
 Caching is delegated to the long-lived `coq-lsp` process. The Python side keeps
 the session, notification, and version state alive so repeated calls for changed
 files can use rocq-lsp's incremental checking behavior. Idle sessions are
@@ -90,7 +104,8 @@ queued for a compile are not stopped.
 
 Timeout handling has two layers:
 
-- `ROCQ_LSP_TIMEOUT` is the normal `coq/getDocument` wait.
+- `ROCQ_LSP_TIMEOUT` is the normal `coq/getDocument` or
+  `petanque/run_at_point` wait.
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE` is the extra wait after sending
   `$/cancelRequest`.
 
@@ -142,8 +157,8 @@ The local virtual environment is expected at `.venv/`. Use
 ## Test Suite
 
 - `tests/unit/test_manager.py` uses fakes to cover manager behavior, versioning,
-  workspace inference, per-workspace session separation, idle cleanup, language
-  IDs, and hard-timeout reset logic.
+  workspace inference, per-workspace session separation, command execution,
+  idle cleanup, language IDs, and hard-timeout reset logic.
 - `tests/unit/test_config.py` covers command construction and environment
   configuration.
 - `tests/unit/test_notifications.py` covers diagnostic notification storage,
@@ -152,19 +167,21 @@ The local virtual environment is expected at `.venv/`. Use
   diagnostic filtering.
 - `tests/unit/test_pretty.py` covers readable rendering of rocq-lsp Pp structures
   and proof-state normalization.
-- `tests/integration/test_integration.py` talks to a real `coq-lsp`. It checks clean files,
-  multiple errors, and file-change behavior where a failing proof
-  `Goal 0 = 0. Proof. fail. Qed.` reports proof state, then recompiles cleanly
-  after changing `fail` to `reflexivity`.
+- `tests/integration/test_integration.py` talks to a real `coq-lsp`. It checks
+  clean files, multiple errors, command feedback and command failures, and
+  file-change behavior where a failing proof `Goal 0 = 0. Proof. fail. Qed.`
+  reports proof state, then recompiles cleanly after changing `fail` to
+  `reflexivity`.
 - `tests/e2e/test_scenarios.py` runs promoted scenario fixtures that copy whole
-  Rocq projects, compile files through one cached manager, edit files, and check
-  concise agent-facing transcripts. Scenario files may define a top-level
-  `timeout_policy` for timeout-specific coverage. Scenario compile steps may
-  include `min_seconds` or `max_seconds` timing assertions for cache-sensitive
-  behavior; timings are asserted by the harness but omitted from promoted
-  transcripts. `timeout_recovery` uses the local `sleep` tactic to cover a soft
-  `coq/getDocument` timeout followed by a successful recompile in the same
-  manager.
+  Rocq projects, compile files or run commands through one cached manager, edit
+  files, and check concise agent-facing transcripts. Scenario files may define a
+  top-level `timeout_policy` for timeout-specific coverage. Scenario compile
+  steps may include `min_seconds` or `max_seconds` timing assertions for
+  cache-sensitive behavior; timings are asserted by the harness but omitted
+  from promoted transcripts. `run_command_search` covers promoted command
+  output for a narrow `Search` query. `timeout_recovery` uses the local `sleep`
+  tactic to cover a soft `coq/getDocument` timeout followed by a successful
+  recompile in the same manager.
 
 When changing output shape, update exact-output tests rather than weakening
 assertions. The MCP output should be useful to agents and humans; raw Rocq

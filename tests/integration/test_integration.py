@@ -128,6 +128,70 @@ async def test_file_change_rechecks_and_reports_failure_proof_state(
     assert fixed.errors == []
 
 
+@pytest.mark.asyncio
+async def test_run_command_search_returns_feedback(tmp_path: Path) -> None:
+    import_line = "From Stdlib Require Import Arith.PeanoNat."
+    source = tmp_path / "Search.v"
+    source.write_text(f"{import_line}\n", encoding="utf-8")
+    manager = RocqLspManager(
+        RocqLspConfig(
+            binary="coq-lsp",
+            timeout_policy=TimeoutPolicy(
+                request_seconds=30,
+                cancel_grace_seconds=5,
+            ),
+            max_errors=1000000,
+            workspace=tmp_path,
+        )
+    )
+    try:
+        result = await manager.run_command(
+            str(source),
+            "Search (_ + 0 = _).",
+            line=1,
+            character=len(import_line) + 1,
+        )
+    finally:
+        await manager.close()
+
+    assert result.status == "complete"
+    assert any(
+        "Nat.add_0_r: forall n : nat, n + 0 = n" in item.text
+        for item in result.output
+    )
+
+
+@pytest.mark.asyncio
+async def test_run_command_reports_command_failure(tmp_path: Path) -> None:
+    source = tmp_path / "BadCommand.v"
+    sentence = "Check nat."
+    source.write_text(f"{sentence}\n", encoding="utf-8")
+    manager = RocqLspManager(
+        RocqLspConfig(
+            binary="coq-lsp",
+            timeout_policy=TimeoutPolicy(
+                request_seconds=30,
+                cancel_grace_seconds=5,
+            ),
+            max_errors=1000000,
+            workspace=tmp_path,
+        )
+    )
+    try:
+        result = await manager.run_command(
+            str(source),
+            "Check does_not_exist.",
+            line=1,
+            character=len(sentence) + 1,
+        )
+    finally:
+        await manager.close()
+
+    assert result.status == "failed"
+    assert result.message is not None
+    assert "does_not_exist" in result.message
+
+
 def _expected_tactic_failure() -> dict[str, object]:
     return {
         "level": "error",
