@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from rocq_lsp_mcp.config import load_config, rocq_lsp_command, rocq_lsp_settings
+from rocq_lsp_mcp.config import (
+    DEFAULT_COMMAND_TIMEOUT_SECONDS,
+    load_config,
+    rocq_lsp_command,
+    rocq_lsp_settings,
+)
 
 
 def test_rocq_lsp_command_defaults_to_opam_exec() -> None:
@@ -33,7 +38,7 @@ def test_load_config_reads_opam_and_idle_ttl(monkeypatch) -> None:
 
     assert config.use_opam is False
     assert config.idle_ttl_seconds == 12.5
-    assert config.timeout_policy.command_seconds is None
+    assert config.timeout_policy.command_seconds == DEFAULT_COMMAND_TIMEOUT_SECONDS
 
 
 def test_load_config_reads_command_timeout(monkeypatch) -> None:

@@ -4,12 +4,14 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+DEFAULT_COMMAND_TIMEOUT_SECONDS = 5.0
+
 
 @dataclass(frozen=True)
 class TimeoutPolicy:
     request_seconds: float = 60.0
     cancel_grace_seconds: float = 5.0
-    command_seconds: float | None = None
+    command_seconds: float | None = DEFAULT_COMMAND_TIMEOUT_SECONDS
 
 
 @dataclass(frozen=True)
@@ -26,8 +28,8 @@ def _float_env(name: str, default: str) -> float:
     return float(os.environ.get(name, default))
 
 
-def _optional_positive_float_env(name: str) -> float | None:
-    value = float(os.environ.get(name, "0"))
+def _optional_positive_float_env(name: str, default: str = "0") -> float | None:
+    value = float(os.environ.get(name, default))
     if value <= 0:
         return None
     return value
@@ -53,7 +55,9 @@ def load_config() -> RocqLspConfig:
         timeout_policy=TimeoutPolicy(
             request_seconds=_float_env("ROCQ_LSP_TIMEOUT", "60"),
             cancel_grace_seconds=_float_env("ROCQ_LSP_HARD_TIMEOUT_GRACE", "5"),
-            command_seconds=_optional_positive_float_env("ROCQ_LSP_COMMAND_TIMEOUT"),
+            command_seconds=_optional_positive_float_env(
+                "ROCQ_LSP_COMMAND_TIMEOUT", str(DEFAULT_COMMAND_TIMEOUT_SECONDS)
+            ),
         ),
         max_errors=_int_env("ROCQ_LSP_MAX_ERRORS", "1000000"),
         workspace=Path(workspace).expanduser().resolve() if workspace else None,

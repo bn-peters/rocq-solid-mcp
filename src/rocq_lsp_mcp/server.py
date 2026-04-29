@@ -41,7 +41,7 @@ async def rocq_lsp_compile_file(
         Field(
             description=(
                 "Optional per Rocq sentence timeout in seconds. None uses the "
-                "server default; 0 disables it for this call."
+                "server default, normally 5 seconds; 0 disables it for this call."
             ),
         ),
     ] = None,
@@ -52,7 +52,8 @@ async def rocq_lsp_compile_file(
     and values above the hard limit of 50 are capped.
 
     command_timeout_seconds optionally cancels a compile when one Rocq sentence
-    runs longer than the requested number of seconds. A value of 0 disables the
+    runs longer than the requested number of seconds. By default, the server
+    uses 5 seconds unless configured otherwise. A value of 0 disables the
     per-command timeout for this call.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context

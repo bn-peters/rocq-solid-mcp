@@ -65,8 +65,9 @@ LSP client library unless the user explicitly asks for that direction.
 ## Runtime Behavior
 
 The compile MCP tool receives a Rocq file path, optional `message_limit`, and
-optional `command_timeout_seconds`; `None` uses `ROCQ_LSP_COMMAND_TIMEOUT`, `0`
-disables the command watchdog for that call, and positive values enable it. The
+optional `command_timeout_seconds`; `None` uses `ROCQ_LSP_COMMAND_TIMEOUT`,
+which defaults to 5 seconds, `0` disables the command watchdog for that call,
+and positive values enable it. The
 command MCP tool receives a Rocq file path, one complete command ending in `.`,
 and a 1-based line/character position. On each call, the manager resolves the
 file, infers a workspace by walking upward to the nearest `_RocqProject` or
@@ -152,8 +153,8 @@ The prototype reads these environment variables:
 - `ROCQ_LSP_USE_OPAM`, default `1`; set to `0` to run the binary directly
 - `ROCQ_LSP_TIMEOUT`, default `60`
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE`, default `5`
-- `ROCQ_LSP_COMMAND_TIMEOUT`, default unset/disabled; positive values enable
-  per-sentence command timeout
+- `ROCQ_LSP_COMMAND_TIMEOUT`, default `5`; set `0` to disable per-sentence
+  command timeout by default
 - `ROCQ_LSP_MAX_ERRORS`, default `1000000`
 - `ROCQ_LSP_WORKSPACE`, optional workspace override
 - `ROCQ_LSP_IDLE_TTL_SECONDS`, default `1800`

@@ -87,8 +87,8 @@ The server exposes two MCP tools:
 are capped to 50. When diagnostics are omitted, the response includes
 `omitted_counts` and `message_limit` alongside total `counts`.
 `command_timeout_seconds` overrides `ROCQ_LSP_COMMAND_TIMEOUT` for one compile:
-`None` uses the server default, `0` disables the sentence watchdog, and positive
-values enable it for that call.
+`None` uses the server default of 5 seconds, `0` disables the sentence
+watchdog, and positive values enable it for that call.
 
 `rocq_lsp_run_command` takes a 1-based line and character position in `file`.
 The command must be one complete Rocq command ending in `.`; punctuation is not
@@ -100,8 +100,8 @@ added automatically.
 - `ROCQ_LSP_USE_OPAM` defaults to `1`; set to `0` to run the binary directly
 - `ROCQ_LSP_TIMEOUT` defaults to `60`
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE` defaults to `5`
-- `ROCQ_LSP_COMMAND_TIMEOUT` is unset by default; set a positive number of
-  seconds to enable per-sentence command timeouts
+- `ROCQ_LSP_COMMAND_TIMEOUT` defaults to `5`; set `0` to disable per-sentence
+  command timeouts by default
 - `ROCQ_LSP_MAX_ERRORS` defaults to `1000000`
 - `ROCQ_LSP_WORKSPACE` optionally pins the workspace root
 - `ROCQ_LSP_IDLE_TTL_SECONDS` defaults to `1800`
