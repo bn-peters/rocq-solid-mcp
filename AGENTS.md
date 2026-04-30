@@ -43,9 +43,9 @@ returns compact feedback output for the requested command.
 - `src/rocq_lsp_mcp/rocq_client.py` is the manual stdio JSON-RPC client for
   `coq-lsp`. It handles `Content-Length` framing, `initialize`, server
   requests, `coq/getDocument`, `proof/goals`, `petanque/run_at_point`,
-  `coq/workspace_update`, request timeouts, cancellation, optional per-command
-  watchdog cancellation, process cleanup, and dispatches notifications to
-  `NotificationStore`.
+  `coq/workspace_update`, soft request deadlines, host cancellation cleanup,
+  optional per-command watchdog cancellation, process cleanup, and dispatches
+  notifications to `NotificationStore`.
 - `src/rocq_lsp_mcp/pretty.py` converts rocq-lsp serialized pretty-print trees
   such as `Pp_glue`, `Pp_box`, and `Pp_print_break` into readable text, then
   normalizes proof-state payloads into compact agent-facing JSON. Goal
@@ -87,8 +87,13 @@ optional `severity`, optional `overall_timeout_seconds`, optional
 `restart`; `message_limit` and `severity` are render-only and do not truncate
 the internal `CompileResult`. `severity` may be `info`, `warning`, or `error`;
 only diagnostics at or above that level are returned. `overall_timeout_seconds`
-controls the outer
-`coq-lsp` request wait, defaults to 60 seconds, and is capped at 3600 seconds.
+controls a soft `coq-lsp` partial-result deadline. If it fires before the MCP
+host cancels the tool call, the server cancels the underlying `coq-lsp`
+request and returns partial diagnostics, progress context, or partial command
+output when available. It defaults to 60 seconds and is capped at 3600 seconds.
+Host-level MCP timeouts should be greater than
+`overall_timeout_seconds + ROCQ_LSP_HARD_TIMEOUT_GRACE` when callers want
+partial timeout results back.
 For `command_timeout_seconds`, `None` uses `ROCQ_LSP_COMMAND_TIMEOUT`, which
 defaults to 5 seconds, `0` disables the command watchdog for that call, and
 positive values enable it. `long_running_seconds` defaults to 3 seconds and
@@ -140,14 +145,15 @@ execution ranges are available, and renders at most 10
 location in the same format used by diagnostics, without precise per-command
 times so promoted e2e transcripts stay reproducible.
 
-When `coq/getDocument` times out, the manager returns status `timeout` with an
-internal `TimeoutContext`. `TimeoutContext.from_manager_state(...)` builds the
-timeout state from source content, the partial document, the latest
-`$/coq/fileProgress` notification, timeout settings, and any timed-out command
-range. Rendering presents `checked_until` from partial `completed.range.end`
-when available, otherwise the start of the latest processing range, plus the
-operation name, `timeout_kind`, timeout settings, `latest_processing_range`,
-and `next_unchecked` as 1-based human-facing locations.
+When the soft `coq/getDocument` deadline fires, the manager returns status
+`timeout` with an internal `TimeoutContext`.
+`TimeoutContext.from_manager_state(...)` builds the timeout state from source
+content, the partial document, the latest `$/coq/fileProgress` notification,
+timeout settings, and any timed-out command range. Rendering presents
+`checked_until` from partial `completed.range.end` when available, otherwise
+the start of the latest processing range, plus the operation name,
+`timeout_kind`, timeout settings, `latest_processing_range`, and
+`next_unchecked` as 1-based human-facing locations.
 
 When command timeout is enabled, the Python client watches
 `$/coq/executionInformation` during `coq/getDocument`. Each notification marks
@@ -155,8 +161,11 @@ the start of one Rocq sentence and resets the command deadline. If that sentence
 exceeds the deadline, the client sends `$/cancelRequest` and the manager returns
 `status: "timeout"` with `timeout_kind: "command"`, `command_timeout_seconds`,
 the timed-out sentence range, and a source preview. This is per Rocq sentence,
-not per internal Ltac substep. The `overall_timeout_seconds` request timeout
-remains the outer limit for compile and command/Search calls.
+not per internal Ltac substep. The `overall_timeout_seconds` soft deadline
+remains the outer server-side partial-result deadline for compile and
+command/Search calls. MCP host cancellation is a harder outer abort: the server
+sends `$/cancelRequest` to `coq-lsp` and may reset the workspace session, but
+the client may already have abandoned the result.
 
 For `Attempt to save an incomplete proof` diagnostics, the `Qed.` sentence can
 carry only the save error while the open goal is attached to the previous proof
@@ -178,16 +187,16 @@ cleaned up by the MCP server's background reaper and opportunistically during
 compile calls after `ROCQ_LSP_IDLE_TTL_SECONDS`; sessions that are compiling or
 queued for a compile are not stopped.
 
-Timeout handling has three layers:
+Timeout and cancellation handling has three layers:
 
-- `overall_timeout_seconds` is the normal `coq/getDocument` or
-  `petanque/run_at_point` wait for MCP calls; it defaults to 60 seconds and is
-  capped at 3600 seconds. `ROCQ_LSP_TIMEOUT` provides the same bounded default
-  for direct manager usage.
+- `overall_timeout_seconds` is the soft `coq/getDocument` or
+  `petanque/run_at_point` partial-result deadline; it defaults to 60 seconds
+  and is capped at 3600 seconds. `ROCQ_LSP_TIMEOUT` provides the same bounded
+  default.
 - `ROCQ_LSP_COMMAND_TIMEOUT` is an optional per-sentence watchdog during
   `coq/getDocument`; unset or non-positive values disable it.
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE` is the extra wait after sending
-  `$/cancelRequest`.
+  `$/cancelRequest`, including cleanup after host-level MCP cancellation.
 
 If the hard timeout is hit, the manager kills and drops that workspace session
 so the next call starts with a fresh `coq-lsp`. Hard-timeout responses still
@@ -200,7 +209,8 @@ The prototype reads these environment variables:
 
 - `ROCQ_LSP_BINARY`, default `coq-lsp`
 - `ROCQ_LSP_USE_OPAM`, default `1`; set to `0` to run the binary directly
-- `ROCQ_LSP_TIMEOUT`, default `60`, capped at `3600`
+- `ROCQ_LSP_TIMEOUT`, default soft partial-result deadline `60`, capped at
+  `3600`
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE`, default `5`
 - `ROCQ_LSP_COMMAND_TIMEOUT`, default `5`; set `0` to disable per-sentence
   command timeout by default
@@ -273,9 +283,10 @@ relies on the existing Makefile so tests run through
   Rocq projects, compile files or run commands through one cached manager, edit
   files, and check concise agent-facing transcripts. Scenario files may define a
   top-level `timeout_policy` for timeout-specific coverage. Scenario compile
-  and command steps may include `overall_timeout_seconds`, plus `min_seconds` or
-  `max_seconds` timing assertions for cache-sensitive behavior; timings are
-  asserted by the harness but omitted from promoted transcripts. Scenario
+  and command steps may include `overall_timeout_seconds` to override the soft
+  partial-result deadline, plus `min_seconds` or `max_seconds` timing
+  assertions for cache-sensitive behavior; timings are asserted by the harness
+  but omitted from promoted transcripts. Scenario
   compile steps may also include `command_timeout_seconds` to cover per-call
   compile timeout overrides, `long_running_seconds` to opt in or out of
   long-running command reporting, or `severity` and `message_limit` to cover
@@ -296,11 +307,11 @@ relies on the existing Makefile so tests run through
   compile tool call's per-call `command_timeout_seconds` override.
   `command_timeout` uses the same local `sleep` tactic with a long global
   timeout and short command timeout to cover per-sentence cancellation.
-  `request_timeout_resume_and_error_cache` covers repeated soft request
+  `request_timeout_resume_and_error_cache` covers repeated soft partial-result
   timeouts resuming from cached progress while preserving an earlier error
   diagnostic, including the final cached successful compile.
   `request_timeout_resume_then_success` covers the two-call case where a soft
-  request timeout reports an earlier error, then the next cached compile
+  partial-result timeout reports an earlier error, then the next cached compile
   succeeds and reports the same error.
   `repeated_compile_error_cached` calls compile twice on the same file with a
   slow cached prefix and verifies both calls report the same error while the

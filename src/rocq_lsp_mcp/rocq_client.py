@@ -74,6 +74,7 @@ class RocqLspClient:
         self._reader_task: asyncio.Task[None] | None = None
         self._stderr_task: asyncio.Task[None] | None = None
         self.stderr_lines: list[str] = []
+        self.restart_required_after_external_cancellation = False
 
     async def start(self) -> None:
         self.process = await asyncio.create_subprocess_exec(
@@ -196,6 +197,7 @@ class RocqLspClient:
     ) -> GetDocumentResult:
         request_id = self._reserve_request()
         future = self._pending[request_id]
+        self.restart_required_after_external_cancellation = False
         command_state: dict[str, Any] = {
             "timed_out": False,
             "range": None,
@@ -276,6 +278,13 @@ class RocqLspClient:
                     raw, command_state["range"]
                 )
             return GetDocumentResult(document=self._result_or_raise(raw))
+        except asyncio.CancelledError:
+            await self._cancel_lsp_request_after_external_cancellation(
+                request_id=request_id,
+                future=future,
+                hard_timeout_grace=hard_timeout_grace,
+            )
+            raise
         finally:
             if watchdog is not None:
                 watchdog.cancel()
@@ -335,6 +344,13 @@ class RocqLspClient:
             raw = await asyncio.wait_for(
                 asyncio.shield(future), timeout=hard_timeout_grace
             )
+        except asyncio.CancelledError:
+            await self._cancel_lsp_request_after_external_cancellation(
+                request_id=request_id,
+                future=future,
+                hard_timeout_grace=hard_timeout_grace,
+            )
+            raise
         except TimeoutError as exc:
             self._pending.pop(request_id, None)
             future.cancel()
@@ -391,6 +407,7 @@ class RocqLspClient:
     ) -> tuple[dict[str, Any], bool]:
         request_id = self._reserve_request()
         future = self._pending[request_id]
+        self.restart_required_after_external_cancellation = False
         await self._send(
             {
                 "jsonrpc": "2.0",
@@ -414,6 +431,13 @@ class RocqLspClient:
                 raw = await asyncio.wait_for(
                     asyncio.shield(future), timeout=hard_timeout_grace
                 )
+            except asyncio.CancelledError:
+                await self._cancel_lsp_request_after_external_cancellation(
+                    request_id=request_id,
+                    future=future,
+                    hard_timeout_grace=hard_timeout_grace,
+                )
+                raise
             except TimeoutError:
                 self._pending.pop(request_id, None)
                 future.cancel()
@@ -427,6 +451,13 @@ class RocqLspClient:
             if "error" in raw:
                 return {}, True
             return self._result_or_raise(raw), True
+        except asyncio.CancelledError:
+            await self._cancel_lsp_request_after_external_cancellation(
+                request_id=request_id,
+                future=future,
+                hard_timeout_grace=hard_timeout_grace,
+            )
+            raise
 
     async def request(
         self, method: str, params: Any | None, *, timeout: float | None = None
@@ -451,6 +482,27 @@ class RocqLspClient:
 
     async def notify(self, method: str, params: Any | None = None) -> None:
         await self._send({"jsonrpc": "2.0", "method": method, "params": params})
+
+    async def _cancel_lsp_request_after_external_cancellation(
+        self,
+        *,
+        request_id: int,
+        future: asyncio.Future[dict[str, Any]],
+        hard_timeout_grace: float,
+    ) -> None:
+        try:
+            await self.notify("$/cancelRequest", {"id": request_id})
+            await asyncio.wait_for(
+                asyncio.shield(future), timeout=hard_timeout_grace
+            )
+        except TimeoutError:
+            self.restart_required_after_external_cancellation = True
+            future.cancel()
+        except Exception:
+            self.restart_required_after_external_cancellation = True
+            future.cancel()
+        finally:
+            self._pending.pop(request_id, None)
 
     def _reserve_request(self) -> int:
         request_id = self._next_request_id

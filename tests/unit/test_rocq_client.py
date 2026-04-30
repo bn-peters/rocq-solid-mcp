@@ -167,3 +167,80 @@ async def test_request_get_document_hard_timeout_preserves_command_context(
 
     assert exc_info.value.timeout_kind == "command"
     assert exc_info.value.timed_out_range == execution_info(uri, version, 4)["range"]
+
+
+@pytest.mark.asyncio
+async def test_request_get_document_external_cancellation_sends_cancel(
+    tmp_path: Path,
+) -> None:
+    store = NotificationStore()
+    client = client_with_store(tmp_path, store)
+    sent: list[dict[str, Any]] = []
+    uri = "file:///Demo.v"
+    version = 1
+
+    async def fake_send(message: dict[str, Any]) -> None:
+        sent.append(message)
+        if message.get("method") == "$/cancelRequest":
+            request_id = message["params"]["id"]
+            client._pending[request_id].set_result(
+                {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {"code": -32800, "message": "Cancelled by client"},
+                }
+            )
+
+    client._send = fake_send  # type: ignore[method-assign]
+
+    task = asyncio.create_task(
+        client.request_get_document(
+            uri=uri,
+            version=version,
+            timeout=10,
+            hard_timeout_grace=0.1,
+        )
+    )
+    await asyncio.sleep(0)
+
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert any(message.get("method") == "$/cancelRequest" for message in sent)
+    assert client._pending == {}
+    assert client.restart_required_after_external_cancellation is False
+
+
+@pytest.mark.asyncio
+async def test_request_get_document_external_cancellation_marks_stuck_session(
+    tmp_path: Path,
+) -> None:
+    store = NotificationStore()
+    client = client_with_store(tmp_path, store)
+    sent: list[dict[str, Any]] = []
+    uri = "file:///Demo.v"
+    version = 1
+
+    async def fake_send(message: dict[str, Any]) -> None:
+        sent.append(message)
+
+    client._send = fake_send  # type: ignore[method-assign]
+
+    task = asyncio.create_task(
+        client.request_get_document(
+            uri=uri,
+            version=version,
+            timeout=10,
+            hard_timeout_grace=0.01,
+        )
+    )
+    await asyncio.sleep(0)
+
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert any(message.get("method") == "$/cancelRequest" for message in sent)
+    assert client._pending == {}
+    assert client.restart_required_after_external_cancellation is True

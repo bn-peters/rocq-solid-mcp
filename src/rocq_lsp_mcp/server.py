@@ -63,8 +63,10 @@ async def rocq_lsp_compile_file(
             gt=0,
             le=MAX_OVERALL_TIMEOUT_SECONDS,
             description=(
-                "Optional overall coq-lsp request timeout, in seconds. "
-                "Default 60s, maximum 3600s."
+                "Optional soft coq-lsp request deadline, in seconds. If it "
+                "fires before the MCP host cancels the tool call, the result "
+                "returns partial diagnostics and timeout context. Default 60s, "
+                "maximum 3600s."
             ),
         ),
     ] = DEFAULT_OVERALL_TIMEOUT_SECONDS,
@@ -72,7 +74,9 @@ async def rocq_lsp_compile_file(
         float | None,
         Field(
             description=(
-                "Optional per Rocq sentence timeout, in seconds. Default 5s, 0 disables"
+                "Optional per Rocq sentence watchdog, in seconds. If it fires, "
+                "the result returns partial diagnostics and the slow sentence. "
+                "Default 5s, 0 disables."
             ),
         ),
     ] = None,
@@ -104,7 +108,7 @@ async def rocq_lsp_compile_file(
 
     External dependencies are not automatically recompiled, and no compilation artifacts are saved. If you edit upstream files, recompile them first using external tools. Pass restart=True after rebuilding dependencies to refresh coq-lsp's import cache without restarting the server process.
 
-    Adjust the request timeout only when a file is known to take a long time to compile. Adjust the command timeout only when specific tactics in a file are known to be slow. Set long_running_seconds=0 to disable long-running command reporting. The message limit and severity filter should only rarely be adjusted.
+    overall_timeout_seconds is a soft coq-lsp deadline for returning partial diagnostics before the MCP host's own tool-call timeout or cancellation fires. The host timeout should be greater than overall_timeout_seconds plus the hard timeout grace. Adjust the per-sentence command watchdog only when specific tactics in a file are known to be slow. Set long_running_seconds=0 to disable long-running command reporting. The message limit and severity filter should only rarely be adjusted.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
     result = await manager.compile_file(
@@ -148,8 +152,10 @@ async def rocq_lsp_run_command(
             gt=0,
             le=MAX_OVERALL_TIMEOUT_SECONDS,
             description=(
-                "Optional overall coq-lsp request timeout, in seconds. "
-                "Default 60s, maximum 3600s."
+                "Optional soft coq-lsp request deadline, in seconds. If it "
+                "fires before the MCP host cancels the tool call, the result "
+                "returns partial output when available. Default 60s, maximum "
+                "3600s."
             ),
         ),
     ] = DEFAULT_OVERALL_TIMEOUT_SECONDS,
@@ -161,8 +167,10 @@ async def rocq_lsp_run_command(
     Prefer calling this right after imports. If local definitions, scopes, or
     modules are needed, call it between lemmas/definitions.
 
-    overall_timeout_seconds is the outer coq-lsp request timeout. It defaults to
-    60 seconds and may be at most 3600 seconds.
+    overall_timeout_seconds is a soft coq-lsp deadline, not the MCP host's
+    tool-call timeout. The host timeout should be greater than
+    overall_timeout_seconds plus the hard timeout grace if callers want this
+    tool to return a timeout result.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
     result = await manager.run_command(

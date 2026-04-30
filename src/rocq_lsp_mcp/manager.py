@@ -263,6 +263,10 @@ class RocqLspManager:
                 timeout_context=timeout_context,
                 long_running_commands=long_running_commands,
             )
+        except asyncio.CancelledError:
+            if getattr(client, "restart_required_after_external_cancellation", False):
+                await self._reset_session(session.workspace)
+            raise
         except RocqLspHardTimeout as exc:
             raw_diagnostics = await session.notifications.wait_for_diagnostics(
                 uri, version
@@ -381,6 +385,10 @@ class RocqLspManager:
                 feedback=result,
                 timed_out=request_timed_out,
             )
+        except asyncio.CancelledError:
+            if getattr(client, "restart_required_after_external_cancellation", False):
+                await self._reset_session(session.workspace)
+            raise
         except RocqLspHardTimeout as exc:
             await self._reset_session(session.workspace)
             return CommandResult.from_feedback(

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, get_args, get_type_hints
 
 import pytest
+from pydantic.fields import FieldInfo
 
 from rocq_lsp_mcp.models import CompileResult, Diagnostic
-from rocq_lsp_mcp.server import rocq_lsp_compile_file
+from rocq_lsp_mcp.server import rocq_lsp_compile_file, rocq_lsp_run_command
 
 
 class FakeManager:
@@ -59,3 +60,31 @@ async def test_compile_tool_applies_severity_filter(tmp_path: Path) -> None:
         "bad",
         "careful",
     ]
+
+
+def test_timeout_tool_descriptions_distinguish_soft_and_host_timeouts() -> None:
+    compile_description = _field_description(
+        rocq_lsp_compile_file, "overall_timeout_seconds"
+    )
+    command_description = _field_description(
+        rocq_lsp_compile_file, "command_timeout_seconds"
+    )
+    run_command_description = _field_description(
+        rocq_lsp_run_command, "overall_timeout_seconds"
+    )
+
+    assert "soft coq-lsp request deadline" in compile_description
+    assert "MCP host cancels" in compile_description
+    assert "partial diagnostics" in compile_description
+    assert "per Rocq sentence watchdog" in command_description
+    assert "slow sentence" in command_description
+    assert "soft coq-lsp request deadline" in run_command_description
+    assert "MCP host cancels" in run_command_description
+
+
+def _field_description(function: Any, parameter: str) -> str:
+    annotation = get_type_hints(function, include_extras=True)[parameter]
+    for item in get_args(annotation):
+        if isinstance(item, FieldInfo):
+            return item.description or ""
+    raise AssertionError(f"{parameter} has no FieldInfo")

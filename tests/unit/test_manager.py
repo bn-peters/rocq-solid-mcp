@@ -978,6 +978,54 @@ async def test_hard_timeout_resets_session(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_compile_file_external_cancellation_resets_stuck_session(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Slow.v"
+    source.write_text("Goal True.\nProof.\n  sleep 5.\nQed.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    manager = FakeManager(client, notifications, tmp_path)
+
+    async def cancelled_get_document(**kwargs: Any) -> GetDocumentResult:
+        client.restart_required_after_external_cancellation = True
+        raise asyncio.CancelledError
+
+    client.request_get_document = cancelled_get_document  # type: ignore[method-assign]
+
+    with pytest.raises(asyncio.CancelledError):
+        await manager.compile_file(str(source))
+
+    assert client.pending_cleared is True
+    assert client.killed is True
+    assert tmp_path not in manager._sessions
+
+
+@pytest.mark.asyncio
+async def test_run_command_external_cancellation_resets_stuck_session(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Slow.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    manager = FakeManager(client, notifications, tmp_path)
+
+    async def cancelled_run_at_point(**kwargs: Any) -> tuple[dict[str, Any], bool]:
+        client.restart_required_after_external_cancellation = True
+        raise asyncio.CancelledError
+
+    client.request_run_at_point = cancelled_run_at_point  # type: ignore[method-assign]
+
+    with pytest.raises(asyncio.CancelledError):
+        await manager.run_command(str(source), "Search nat.", 1, 1)
+
+    assert client.pending_cleared is True
+    assert client.killed is True
+    assert tmp_path not in manager._sessions
+
+
+@pytest.mark.asyncio
 async def test_compile_file_uses_separate_sessions_for_project_roots(
     tmp_path: Path,
 ) -> None:
