@@ -14,7 +14,7 @@ returns compact feedback output for the requested command.
   `RocqLspManager`, and the MCP tools
   `rocq_lsp_compile_file(file: str, message_limit: int = 10,
   overall_timeout_seconds: float = 60,
-  command_timeout_seconds: float | None = None)` and
+  command_timeout_seconds: float | None = None, restart: bool = False)` and
   `rocq_lsp_run_command(file: str, command: str, line: int, character: int = 1,
   overall_timeout_seconds: float = 60)`.
   Tool handlers render internal result models before returning MCP output.
@@ -38,9 +38,10 @@ returns compact feedback output for the requested command.
   proof saves, and leaves response filtering and truncation to the render step.
 - `src/rocq_lsp_mcp/rocq_client.py` is the manual stdio JSON-RPC client for
   `coq-lsp`. It handles `Content-Length` framing, `initialize`, server
-  requests, `coq/getDocument`, `proof/goals`, `petanque/run_at_point`, request
-  timeouts, cancellation, optional per-command watchdog cancellation, process
-  cleanup, and dispatches notifications to `NotificationStore`.
+  requests, `coq/getDocument`, `proof/goals`, `petanque/run_at_point`,
+  `coq/workspace_update`, request timeouts, cancellation, optional per-command
+  watchdog cancellation, process cleanup, and dispatches notifications to
+  `NotificationStore`.
 - `src/rocq_lsp_mcp/pretty.py` converts rocq-lsp serialized pretty-print trees
   such as `Pp_glue`, `Pp_box`, and `Pp_print_break` into readable text, then
   normalizes proof-state payloads into compact agent-facing JSON. Goal
@@ -68,16 +69,21 @@ https://github.com/rocq-community/rocq-lsp/blob/main/etc/doc/PROTOCOL.md
 ## Runtime Behavior
 
 The compile MCP tool receives a Rocq file path, optional `message_limit`,
-optional `overall_timeout_seconds`, and optional `command_timeout_seconds`;
-`message_limit` is render-only and does not truncate the internal
-`CompileResult`. `overall_timeout_seconds` controls the outer `coq-lsp` request
-wait, defaults to 60 seconds, and is capped at 3600 seconds. For
-`command_timeout_seconds`, `None` uses `ROCQ_LSP_COMMAND_TIMEOUT`, which
+optional `overall_timeout_seconds`, optional `command_timeout_seconds`, and
+optional `restart`; `message_limit` is render-only and does not truncate the
+internal `CompileResult`. `overall_timeout_seconds` controls the outer
+`coq-lsp` request wait, defaults to 60 seconds, and is capped at 3600 seconds.
+For `command_timeout_seconds`, `None` uses `ROCQ_LSP_COMMAND_TIMEOUT`, which
 defaults to 5 seconds, `0` disables the command watchdog for that call, and
-positive values enable it. The command MCP tool receives a Rocq file path, one
-complete command ending in `.`, a 1-based line/character position, and optional
-`overall_timeout_seconds`; this is the same command tool used for `Search`
-calls. On each call, the manager resolves the file, infers a workspace by
+positive values enable it. `restart=True` sends `coq/workspace_update` with
+empty object params before the file's `didOpen` or `didChange`, asking the
+existing `coq-lsp` process to invalidate cached `Require` state after external
+`.vo` files have changed. It does not restart the server process and does not
+rebuild dependencies; callers must recompile edited dependencies first. The
+command MCP tool receives a Rocq file path, one complete command ending in `.`,
+a 1-based line/character position, and optional `overall_timeout_seconds`; this
+is the same command tool used for `Search` calls. On each call, the manager
+resolves the file, infers a workspace by
 walking upward to the nearest `_RocqProject` or
 `_CoqProject`, then delegates to the cached `RocqLspSession` for that
 workspace. If no project file is found, the file's parent directory is used.
@@ -252,6 +258,9 @@ The local virtual environment is expected at `.venv/`. Use
   `repeated_compile_error_cached` calls compile twice on the same file with a
   slow cached prefix and verifies both calls report the same error while the
   second call is quick.
+- `tests/e2e/test_compile_restart.py` covers the compile tool's `restart`
+  argument by recompiling a dependency externally, showing a stale import
+  without `restart`, then refreshing it through `coq/workspace_update`.
 
 When changing output shape, update exact-output tests rather than weakening
 assertions. The MCP output should be useful to agents and humans; raw Rocq

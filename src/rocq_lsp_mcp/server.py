@@ -61,6 +61,15 @@ async def rocq_lsp_compile_file(
             ),
         ),
     ] = None,
+    restart: Annotated[
+        bool,
+        Field(
+            description=(
+                "Notify coq-lsp that compiled dependencies may have changed before "
+                "checking this file."
+            ),
+        ),
+    ] = False,
 ) -> dict[str, Any]:
     """Compile a Rocq file and report diagnostics.
 
@@ -68,7 +77,7 @@ async def rocq_lsp_compile_file(
 
     This command is entirely stateless, but is very efficient due to caching.
 
-    External dependencies are not automatically recompiled, and no compilation artifacts are saved. If you edit upstream files, recompile them first using external tools.
+    External dependencies are not automatically recompiled, and no compilation artifacts are saved. If you edit upstream files, recompile them first using external tools. Pass restart=True after rebuilding dependencies to refresh coq-lsp's import cache without restarting the server process.
 
     Adjust the request timeout only when a file is known to take a long time to compile. Adjust the command timeout only when specific tactics in a file are known to be slow. The message limit should only rarely be adjusted.
     """
@@ -77,6 +86,7 @@ async def rocq_lsp_compile_file(
         file,
         overall_timeout_seconds=overall_timeout_seconds,
         command_timeout_seconds=command_timeout_seconds,
+        restart=restart,
     )
     return result.render(RenderOptions(message_limit=message_limit))
 

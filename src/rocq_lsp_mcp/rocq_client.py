@@ -155,6 +155,9 @@ class RocqLspClient:
             {"settings": rocq_lsp_settings(self.max_errors)},
         )
 
+    async def notify_workspace_update(self) -> None:
+        await self.notify("coq/workspace_update", {})
+
     async def notify_document_opened(
         self, file_path: Path, content: str, version: int
     ) -> None:

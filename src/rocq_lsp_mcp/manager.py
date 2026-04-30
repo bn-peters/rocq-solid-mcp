@@ -55,6 +55,7 @@ class RocqLspManager:
         file: str,
         command_timeout_seconds: float | None = None,
         overall_timeout_seconds: float | None = None,
+        restart: bool = False,
     ) -> CompileResult:
         command_timeout = self._effective_command_timeout(command_timeout_seconds)
         overall_timeout = self._effective_overall_timeout(overall_timeout_seconds)
@@ -79,6 +80,7 @@ class RocqLspManager:
                 path,
                 command_timeout,
                 overall_timeout,
+                restart,
             )
         finally:
             session.lock.release()
@@ -155,6 +157,7 @@ class RocqLspManager:
         path: Path,
         command_timeout: float | None,
         overall_timeout: float,
+        restart: bool,
     ) -> CompileResult:
         client = session.client
         uri = path.as_uri()
@@ -176,6 +179,8 @@ class RocqLspManager:
         session.notifications.clear(uri, version)
 
         try:
+            if restart:
+                await client.notify_workspace_update()
             if uri in session.versions:
                 await client.notify_document_changed(path, content, version)
             else:

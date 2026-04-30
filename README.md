@@ -21,6 +21,9 @@ timeout unit is one Rocq sentence such as `sleep 5.` or `repeat ... .`, not an
 internal Ltac substep. The prototype talks to `coq-lsp` directly over stdio
 JSON-RPC.
 
+Compile calls can pass `restart=True` to tell `coq-lsp` that externally
+compiled dependencies may have changed before checking the requested file.
+
 ## Architecture
 
 - `server.py` registers the MCP tools, manages one `RocqLspManager`
@@ -29,9 +32,9 @@ JSON-RPC.
   evicts idle sessions, and orchestrates internal compile and command results.
 - `session.py` owns each workspace session lifecycle, document versions, and
   notification store.
-- `rocq_client.py` is transport-only JSON-RPC framing, requests, notifications,
-  cancellation, `coq/getDocument`, `proof/goals`, `petanque/run_at_point`, and
-  process cleanup.
+- `rocq_client.py` is transport-only JSON-RPC framing, requests, notifications
+  such as `coq/workspace_update`, cancellation, `coq/getDocument`,
+  `proof/goals`, `petanque/run_at_point`, and process cleanup.
 - `notifications.py` stores diagnostics, latest file-progress notifications,
   and sentence execution notifications published by `coq-lsp`.
 - `pipeline.py` converts raw diagnostics plus proof-state data into internal
@@ -61,6 +64,12 @@ process starts as `opam exec -- coq-lsp` with `cwd` set to the inferred
 workspace so local opam switches select the matching Rocq and `coq-lsp`
 versions.
 
+If a compile call has `restart=True`, the manager sends `coq/workspace_update`
+with empty object params before sending the file's `didOpen` or `didChange`.
+This asks the existing `coq-lsp` process to invalidate cached `Require` state
+after `.vo` files have changed; it does not restart the server process and does
+not rebuild dependencies. Recompile edited dependencies externally first.
+
 When `coq/getDocument` times out, the response status is `timeout` and the
 rendered result includes `timeout_context`. `checked_until` is taken from the
 partial `completed.range.end` when cancellation returns a partial document; if
@@ -87,7 +96,7 @@ The server exposes two MCP tools:
 
 - `rocq_lsp_compile_file(file: str, message_limit: int = 10,
   overall_timeout_seconds: float = 60,
-  command_timeout_seconds: float | None = None)`
+  command_timeout_seconds: float | None = None, restart: bool = False)`
 - `rocq_lsp_run_command(file: str, command: str, line: int, character: int = 1,
   overall_timeout_seconds: float = 60)`
 
@@ -102,6 +111,9 @@ seconds.
 `command_timeout_seconds` overrides `ROCQ_LSP_COMMAND_TIMEOUT` for one compile:
 `None` uses the server default of 5 seconds, `0` disables the sentence
 watchdog, and positive values enable it for that call.
+`restart=True` sends `coq/workspace_update` before compiling so `coq-lsp`
+refreshes imports from recompiled dependencies while keeping the same server
+process alive.
 
 `rocq_lsp_run_command` takes a 1-based line and character position in `file`.
 The command must be one complete Rocq command ending in `.`; punctuation is not
@@ -160,6 +172,8 @@ recovery, hard-timeout session reset, per-call compile command timeout
 overrides, per-sentence command timeout behavior, request timeouts resuming
 from cached progress while preserving diagnostics, and cached repeated compile
 errors.
+`tests/e2e/test_compile_restart.py` covers refreshing a client file after a
+dependency `.vo` is rebuilt.
 Use `make promote` to refresh promoted e2e transcripts after intentional output
 changes; promotion runs serially because it rewrites golden files.
 

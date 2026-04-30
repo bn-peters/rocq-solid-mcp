@@ -48,23 +48,31 @@ class FakeClient:
         self.timed_out_range = timed_out_range
         self.opened: list[tuple[Path, int]] = []
         self.changed: list[tuple[Path, int]] = []
+        self.workspace_updates = 0
         self.goal_requests: list[dict[str, Any]] = []
         self.get_document_requests: list[dict[str, Any]] = []
         self.command_requests: list[dict[str, Any]] = []
+        self.events: list[str] = []
         self.killed = False
         self.closed = False
         self.pending_cleared = False
         self.hard_timeout = False
 
+    async def notify_workspace_update(self) -> None:
+        self.workspace_updates += 1
+        self.events.append("workspace_update")
+
     async def notify_document_opened(
         self, file_path: Path, content: str, version: int
     ) -> None:
         self.opened.append((file_path, version))
+        self.events.append(f"opened:{version}")
 
     async def notify_document_changed(
         self, file_path: Path, content: str, version: int
     ) -> None:
         self.changed.append((file_path, version))
+        self.events.append(f"changed:{version}")
 
     async def request_get_document(
         self,
@@ -76,6 +84,7 @@ class FakeClient:
         command_timeout: float | None = None,
         goals: str | None = None,
     ) -> GetDocumentResult:
+        self.events.append(f"get_document:{version}")
         self.get_document_requests.append(
             {
                 "uri": uri,
@@ -298,6 +307,34 @@ async def test_compile_file_opens_then_changes(tmp_path: Path) -> None:
     assert client.opened == [(source.resolve(), 1)]
     assert client.changed == [(source.resolve(), 2)]
     assert notifications.cleared == [(source.as_uri(), 1), (source.as_uri(), 2)]
+
+
+@pytest.mark.asyncio
+async def test_compile_file_restart_notifies_workspace_before_change(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    manager = FakeManager(client, notifications, tmp_path)
+
+    first = await manager.compile_file(str(source))
+    second = await manager.compile_file(str(source), restart=True)
+
+    assert first.status == "complete"
+    assert second.status == "complete"
+    assert second.restarted is False
+    assert client.workspace_updates == 1
+    assert client.opened == [(source.resolve(), 1)]
+    assert client.changed == [(source.resolve(), 2)]
+    assert client.events == [
+        "opened:1",
+        "get_document:1",
+        "workspace_update",
+        "changed:2",
+        "get_document:2",
+    ]
 
 
 @pytest.mark.asyncio
