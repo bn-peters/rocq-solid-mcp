@@ -230,7 +230,8 @@ of the Makefile. Use `make clean` to remove test artifacts.
 The GitLab pipeline is defined entirely in `.gitlab-ci.yml`. It runs
 `make test` in a matrix over `rocq-core` 9.0.0, 9.1.0, and 9.2.0. Each job uses
 the `ocaml/opam:ubuntu-24.04-ocaml-5.2` image, adds the `coq-released` and
-`bpeters` opam repositories, installs the pinned `rocq-core` version plus
-unconstrained `rocq-stdlib` and `bens-rocq-lsp`, creates the repository-local
-`.venv/`, and installs the Python package with development test dependencies
-before running the Makefile target.
+`bpeters` opam repositories, installs native apt prerequisites including
+`build-essential`, `libgmp-dev`, `m4`, and `pkg-config`, installs the pinned
+`rocq-core` version plus unconstrained `rocq-stdlib` and `bens-rocq-lsp`,
+creates the repository-local `.venv/`, and installs the Python package with
+development test dependencies before running the Makefile target.

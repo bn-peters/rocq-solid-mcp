@@ -28,7 +28,7 @@ test:
         ROCQ_CORE_VERSION: "9.2.0"
   before_script:
     - sudo apt-get update
-    - sudo apt-get install -y --no-install-recommends ca-certificates git make python3-pip python3-venv
+    - sudo apt-get install -y --no-install-recommends build-essential ca-certificates git libgmp-dev m4 make pkg-config python3-pip python3-venv
     - test -w "$CI_PROJECT_DIR" || sudo chown -R "$(id -u):$(id -g)" "$CI_PROJECT_DIR"
     - python3 --version
     - opam --version
