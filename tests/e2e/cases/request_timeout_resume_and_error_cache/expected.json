@@ -8,9 +8,7 @@
       "file": "src/resume_timeout.v",
       "compilation_time_seconds": "$SECONDS",
       "counts": {
-        "errors": 1,
-        "warnings": 0,
-        "infos": 0
+        "errors": 1
       },
       "diagnostics": [
         {
@@ -43,9 +41,7 @@
       "file": "src/resume_timeout.v",
       "compilation_time_seconds": "$SECONDS",
       "counts": {
-        "errors": 1,
-        "warnings": 0,
-        "infos": 0
+        "errors": 1
       },
       "diagnostics": [
         {
@@ -78,9 +74,7 @@
       "file": "src/resume_timeout.v",
       "compilation_time_seconds": "$SECONDS",
       "counts": {
-        "errors": 1,
-        "warnings": 0,
-        "infos": 0
+        "errors": 1
       },
       "diagnostics": [
         {

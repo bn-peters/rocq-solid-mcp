@@ -18,8 +18,8 @@ top-level errors that also lack `proof_name`. Returned diagnostics are limited
 per severity bucket: the default is 10 errors, 10 warnings, and 10 info/hint
 callers may request up to the hard cap of 50 per bucket. Callers may also set
 `severity` to `info`, `warning`, or `error` to return only diagnostics at or
-above that level. Compile results always include `counts` with `errors`,
-`warnings`, and `infos`, including zero-valued buckets. Timeout results include
+above that level. Compile results include `counts` for nonzero diagnostic
+buckets only; clean results omit `counts`. Timeout results include
 a compact `timeout_context` that reports the request operation, timeout
 kind and settings, the latest checked position, the latest processing range,
 and a small preview of the next unchecked source line when available. Optional
@@ -132,8 +132,8 @@ The server exposes two MCP tools:
 are capped to 50. When diagnostics are omitted, the response includes
 `omitted_counts` and `message_limit` alongside total `counts`. The limit is
 applied only while rendering the MCP response; internal compile results retain
-all normalized diagnostics. `counts` is always rendered and includes `errors`,
-`warnings`, and `infos`, including zero-valued buckets.
+all normalized diagnostics. `counts` includes only nonzero `errors`, `warnings`,
+and `infos` buckets and is omitted when no diagnostics remain after filtering.
 `severity` is a render-only minimum diagnostic level. Allowed values are
 `info`, `warning`, and `error`; `info` preserves the default behavior,
 `warning` returns warnings and errors, and `error` returns errors only.

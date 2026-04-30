@@ -8,9 +8,7 @@
       "file": "src/many_failures.v",
       "compilation_time_seconds": "$SECONDS",
       "counts": {
-        "errors": 20,
-        "warnings": 0,
-        "infos": 0
+        "errors": 20
       },
       "omitted_counts": {
         "errors": 10
