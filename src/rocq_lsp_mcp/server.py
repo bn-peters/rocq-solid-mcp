@@ -62,8 +62,7 @@ async def rocq_lsp_check_file(
             gt=0,
             le=MAX_OVERALL_TIMEOUT_SECONDS,
             description=(
-                "Soft coq-lsp request deadline for partial diagnostics before the "
-                "MCP host cancels, in seconds. Default 60s, maximum 3600s."
+                "Timeout at which partial diagnostics are returned. Default 60s, maximum 3600s."
             ),
         ),
     ] = DEFAULT_OVERALL_TIMEOUT_SECONDS,
@@ -71,8 +70,8 @@ async def rocq_lsp_check_file(
         float | None,
         Field(
             description=(
-                "Optional per Rocq sentence watchdog for check requests. Default "
-                "5s, 0 disables; a slow sentence returns timeout context."
+                "Maximal per Rocq sentence compile time. Default "
+                "5s, 0 disables."
             ),
         ),
     ] = None,
@@ -88,11 +87,11 @@ async def rocq_lsp_check_file(
 ) -> dict[str, Any]:
     """Check a Rocq file and report diagnostics.
 
-    Use this to check files for errors. The diagnostics include the current
-    proof state at the error position and precise ranges.
+    Use this to check files for errors. The diagnostics include the proof state
+    at error position and precise ranges.
 
-    This file reports at least the first error in the file, and usually more.
-    It also reports tactics and commands taking a long time.
+    The first error in the file is always reported, and usually later errors as
+    well. The tool also reports Rocq sentences taking a long time.
 
     This check is efficient due to caching. It creates no build artifacts, and
     does not recompile upstream dependencies itself. Use `restart = true` to
@@ -100,7 +99,7 @@ async def rocq_lsp_check_file(
 
     overall_timeout_seconds is a soft deadline for returning partial diagnostics
     before the MCP host cancels the tool call. It should be lower than the
-    host's tool call timeout. Repeated checks after timeouts respect the cache.
+    host's tool call timeout. Repeated checks after timeouts use the cache.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
     result = await manager.check_file(
@@ -131,8 +130,8 @@ async def rocq_lsp_run_at(
         int,
         Field(
             description=(
-                "1-based line number in the file before which the commands "
-                "string is injected."
+                "1-based line number in the file at which the commands "
+                "string is ran."
             ),
         ),
     ],
