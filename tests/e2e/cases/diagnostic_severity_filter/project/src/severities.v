@@ -1,5 +1,5 @@
-Notation "'foo' x" := x (at level 0).
-Notation "'foo' x" := x (at level 0).
+Inductive foo := A | B.
+Definition food (x : foo) := match x with | A => 0 | b => 1 end.
 
 Lemma bad_missing_tactic : True.
 Proof.
