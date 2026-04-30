@@ -1,0 +1,47 @@
+stages:
+  - test
+
+variables:
+  OPAMCONFIRMLEVEL: "unsafe-yes"
+  OPAMERRLOGLEN: "0"
+  OPAMJOBS: "2"
+  OPAMYES: "1"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  PYTEST_WORKERS: "auto"
+
+cache:
+  key: "pip-${CI_COMMIT_REF_SLUG}"
+  paths:
+    - .cache/pip/
+
+test:
+  stage: test
+  image: ocaml/opam:ubuntu-24.04-ocaml-5.2
+  timeout: 2h
+  parallel:
+    matrix:
+      - ROCQ_SERIES: "9.0"
+        ROCQ_CORE_VERSION: "9.0.0"
+      - ROCQ_SERIES: "9.1"
+        ROCQ_CORE_VERSION: "9.1.0"
+      - ROCQ_SERIES: "9.2"
+        ROCQ_CORE_VERSION: "9.2.0"
+  before_script:
+    - sudo apt-get update
+    - sudo apt-get install -y --no-install-recommends ca-certificates git make python3-pip python3-venv
+    - test -w "$CI_PROJECT_DIR" || sudo chown -R "$(id -u):$(id -g)" "$CI_PROJECT_DIR"
+    - python3 --version
+    - opam --version
+    - opam init --reinit --disable-sandboxing --no-setup --yes
+    - opam switch show
+    - opam repository add coq-released https://coq.inria.fr/opam/released --yes || opam repository set-url coq-released https://coq.inria.fr/opam/released
+    - opam repository add bpeters https://gitlab.mpi-sws.org/bpeters/opam.git --yes || opam repository set-url bpeters https://gitlab.mpi-sws.org/bpeters/opam.git
+    - opam update
+    - opam install -y "rocq-core=${ROCQ_CORE_VERSION}" rocq-stdlib bens-rocq-lsp
+    - opam exec -- rocq --version
+    - opam exec -- coq-lsp --version
+    - python3 -m venv .venv
+    - .venv/bin/python -m pip install --upgrade pip
+    - .venv/bin/python -m pip install -e ".[dev]"
+  script:
+    - make test

@@ -238,6 +238,17 @@ preserving `.venv/`.
 The local virtual environment is expected at `.venv/`. Use
 `opam exec -- .venv/bin/python -m pytest ...` for focused test runs.
 
+## GitLab CI
+
+The GitLab pipeline lives entirely in `.gitlab-ci.yml`; do not move CI setup
+into an auxiliary script unless the user explicitly asks for that. The pipeline
+runs `make test` in a matrix over `rocq-core` 9.0.0, 9.1.0, and 9.2.0. Each job
+uses `ocaml/opam:ubuntu-24.04-ocaml-5.2`, adds the `coq-released` and `bpeters`
+opam repositories, installs the pinned `rocq-core` plus unconstrained
+`rocq-stdlib` and `bens-rocq-lsp`, creates `.venv/`, installs `.[dev]`, and then
+relies on the existing Makefile so tests run through
+`opam exec -- .venv/bin/python`.
+
 ## Test Suite
 
 - `tests/unit/test_manager.py` uses fakes to cover manager behavior, versioning,
