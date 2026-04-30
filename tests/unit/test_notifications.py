@@ -175,6 +175,25 @@ def test_notification_store_clears_versioned_file_perf_data() -> None:
     assert store.latest_file_perf_data("file:///Demo.v", 3) is None
 
 
+def test_notification_store_replaces_stale_file_perf_data_versions() -> None:
+    store = NotificationStore()
+    first = file_perf_data(version=3)
+    unversioned = file_perf_data(version=None)
+    second = file_perf_data(version=4)
+
+    store.handle("$/coq/filePerfData", first)
+    store.handle("$/coq/filePerfData", unversioned)
+
+    assert set(store._file_perf_data) == {("file:///Demo.v", None)}
+    assert store.latest_file_perf_data("file:///Demo.v", 4) == unversioned
+
+    store.handle("$/coq/filePerfData", second)
+
+    assert set(store._file_perf_data) == {("file:///Demo.v", 4)}
+    assert store.latest_file_perf_data("file:///Demo.v", 4) == second
+    assert store.latest_file_perf_data("file:///Demo.v", 5) is None
+
+
 @pytest.mark.asyncio
 async def test_notification_store_returns_versioned_execution_info() -> None:
     store = NotificationStore()
@@ -233,6 +252,20 @@ def test_notification_store_clears_versioned_execution_info() -> None:
     assert store.latest_execution_sequence("file:///Demo.v", 3) == 0
     assert store.latest_execution_info("file:///Demo.v", 3) is None
     assert store.execution_ranges("file:///Demo.v", 3) == []
+
+
+def test_notification_store_replaces_stale_execution_versions() -> None:
+    store = NotificationStore()
+    first = execution_info(version=3)
+    second = execution_info(version=4)
+
+    store.handle("$/coq/executionInformation", first)
+    store.handle("$/coq/executionInformation", second)
+
+    assert store.latest_execution_info("file:///Demo.v", 3) is None
+    assert store.execution_ranges("file:///Demo.v", 3) == []
+    assert store.latest_execution_info("file:///Demo.v", 4) == second
+    assert store.execution_ranges("file:///Demo.v", 4) == [second["range"]]
 
 
 @pytest.mark.asyncio

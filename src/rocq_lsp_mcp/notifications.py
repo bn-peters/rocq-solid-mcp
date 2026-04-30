@@ -46,6 +46,19 @@ class NotificationStore:
         if self._latest_perf_versions_by_uri.get(uri) == version:
             self._latest_perf_versions_by_uri.pop(uri, None)
 
+    def _clear_stale_perf_data(self, uri: str, version: int | None) -> None:
+        for key in list(self._file_perf_data):
+            if key[0] == uri and key[1] != version:
+                self._file_perf_data.pop(key, None)
+                self._perf_events.pop(key, None)
+
+    def _clear_stale_execution_data(self, uri: str, version: int | None) -> None:
+        for key in list(self._execution_info):
+            if key[0] == uri and key[1] != version:
+                self._execution_info.pop(key, None)
+                self._execution_ranges.pop(key, None)
+                self._execution_events.pop(key, None)
+
     def latest_file_progress(self, uri: str, version: int) -> dict[str, Any] | None:
         key = (uri, version)
         if key in self._file_progress:
@@ -163,6 +176,7 @@ class NotificationStore:
             return
 
         key = (uri, version)
+        self._clear_stale_perf_data(uri, version)
         self._file_perf_data[key] = params
         self._latest_perf_versions_by_uri[uri] = version
         if event := self._perf_events.get(key):
@@ -181,6 +195,7 @@ class NotificationStore:
 
         self._execution_sequence += 1
         key = (uri, version)
+        self._clear_stale_execution_data(uri, version)
         self._execution_info[key] = (self._execution_sequence, params)
         self._execution_ranges.setdefault(key, []).append(range_)
         if event := self._execution_events.get(key):
