@@ -26,7 +26,7 @@ async def app_lifespan(server: Any) -> Any:
         await manager.close()
 
 
-mcp = FastMCP("rocq-lsp-mcp", lifespan=app_lifespan)
+mcp = FastMCP("bens-rocq-mcp", lifespan=app_lifespan)
 
 
 @mcp.tool()

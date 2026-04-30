@@ -35,7 +35,7 @@ uv tool install -e .
 
 To teach Codex about Ben's Rocq MCP:
 ```bash
-codex mcp add bens-rocq-mcp rocq-lsp-mcp
+codex mcp add bens-rocq-mcp bens-rocq-mcp
 ```
 
 The MCP figures out the right switch itself if you have linked with `opam
@@ -72,7 +72,7 @@ those!**
 **The rest of this file is a long AI-generated repository summary. I didn't
 feel like deleting it, but I'm not convinced it's useful :)**
 
-# rocq-lsp-mcp-prototype
+# bens-rocq-mcp
 
 
 Prototype MCP server that checks Rocq files and runs one-off Rocq commands
@@ -194,7 +194,7 @@ long-running commands.
 ## Run
 
 ```bash
-uv run rocq-lsp-mcp
+uv run bens-rocq-mcp
 ```
 
 The server exposes two MCP tools:

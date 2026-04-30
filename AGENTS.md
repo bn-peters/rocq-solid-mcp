@@ -1,4 +1,4 @@
-# rocq-lsp-mcp-prototype Guide
+# bens-rocq-mcp Guide
 
 It is the duty of the agent to keep AGENTS.md and README.md up to date.
 

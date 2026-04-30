@@ -1,5 +1,5 @@
 [project]
-name = "rocq-lsp-mcp-prototype"
+name = "bens-rocq-mcp"
 version = "0.1.0"
 description = "Prototype MCP server for cached Rocq checking via rocq-lsp"
 license = "Apache-2.0"
@@ -17,7 +17,7 @@ dev = [
 ]
 
 [project.scripts]
-rocq-lsp-mcp = "rocq_lsp_mcp.server:main"
+bens-rocq-mcp = "rocq_lsp_mcp.server:main"
 
 [build-system]
 requires = ["setuptools>=68.0"]
