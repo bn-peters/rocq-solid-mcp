@@ -338,7 +338,7 @@ async def test_compile_file_restart_notifies_workspace_before_change(
 
 
 @pytest.mark.asyncio
-async def test_compile_file_keeps_only_first_error_per_proof_name(
+async def test_compile_file_keeps_only_first_error_per_proof_name_and_global_errors(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -381,7 +381,6 @@ async def test_compile_file_keeps_only_first_error_per_proof_name(
         "foo warning",
         "first bar",
         "global first",
-        "global second",
     ]
 
 
@@ -393,7 +392,15 @@ async def test_compile_file_accepts_requested_message_limit(tmp_path: Path) -> N
     client = FakeClient(
         notifications,
         [
-            *[diagnostic(f"bad {index}", 1, line=index) for index in range(3)],
+            *[
+                diagnostic(
+                    f"bad {index}",
+                    1,
+                    proof_name=f"proof_{index}",
+                    line=index,
+                )
+                for index in range(3)
+            ],
             *[diagnostic(f"warn {index}", 2, line=index + 3) for index in range(3)],
             *[diagnostic(f"note {index}", 3, line=index + 6) for index in range(3)],
         ],

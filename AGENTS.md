@@ -53,9 +53,12 @@ returns compact feedback output for the requested command.
   MCP output shape: file display, severity labels, location format, proof-state
   inclusion, duplicate proof-error filtering, per-severity message limits,
   timeout formatting, and empty-field pruning. Default rendering keeps only the
-  first error for each `proof_name`, preserves warnings, infos, and global
-  errors, caps returned diagnostics at 10 per severity bucket with a hard cap
-  of 50, and includes compact `timeout_context` only for timeout results.
+  first error for each `proof_name` and, after the first error without a
+  `proof_name`, suppresses later errors that also lack a `proof_name`; warnings
+  and infos are preserved. This broad cascade guard can hide later independent
+  top-level errors that also lack `proof_name`. Rendering caps returned
+  diagnostics at 10 per severity bucket with a hard cap of 50, and includes
+  compact `timeout_context` only for timeout results.
 - `src/rocq_lsp_mcp/config.py` loads environment configuration, defines
   `TimeoutPolicy`, builds the `opam exec -- coq-lsp` command, and builds the
   `coq-lsp` initialization settings. `send_execinfo` is enabled so per-call
@@ -104,7 +107,8 @@ Compilation is driven by `coq/getDocument` with `goals="Str"`. This asks
 and attaches proof states without applying agent-facing filtering. The
 `CompileResult.render(RenderOptions(...))` step converts raw LSP ranges to
 1-based locations, severity numbers to `error`, `warning`, or `info`, removes
-empty fields, filters duplicate proof errors by default, and applies
+empty fields, filters duplicate proof errors by default, suppresses later
+global errors after the first error without `proof_name`, and applies
 per-severity diagnostic limits. Counts are rendered only when warnings or
 omitted diagnostics are present, and zero-valued count fields are omitted. When
 diagnostics are omitted because of `message_limit`, the response includes
@@ -261,6 +265,9 @@ The local virtual environment is expected at `.venv/`. Use
 - `tests/e2e/test_compile_restart.py` covers the compile tool's `restart`
   argument by recompiling a dependency externally, showing a stale import
   without `restart`, then refreshing it through `coq/workspace_update`.
+  `lemma_header_cascade_error` covers malformed lemma headers that should report
+  only the originating lemma diagnostic instead of downstream proof-mode
+  cascade errors.
 
 When changing output shape, update exact-output tests rather than weakening
 assertions. The MCP output should be useful to agents and humans; raw Rocq

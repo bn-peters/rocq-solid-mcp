@@ -209,7 +209,7 @@ def test_compile_result_limits_diagnostics_per_level_by_default(
         *[
             Diagnostic.from_lsp(
                 {"range": {}, "message": f"bad {index}", "severity": 1}
-            )
+            ).model_copy(update={"proof_name": f"proof_{index}"})
             for index in range(12)
         ],
         *[
@@ -264,7 +264,7 @@ def test_compile_result_hard_caps_requested_message_limit(tmp_path: Path) -> Non
         diagnostics=[
             Diagnostic.from_lsp(
                 {"range": {}, "message": f"bad {index}", "severity": 1}
-            )
+            ).model_copy(update={"proof_name": f"proof_{index}"})
             for index in range(51)
         ],
     )
@@ -312,6 +312,81 @@ def test_compile_result_render_deduplicates_proof_errors(tmp_path: Path) -> None
             RenderOptions(deduplicate_proof_errors=False)
         )["diagnostics"]
     ] == ["first foo", "second foo", "foo warning"]
+    assert result.error_count == 2
+
+
+def test_compile_result_render_suppresses_later_global_errors(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    result = CompileResult.from_diagnostics(
+        status="complete",
+        file=str(source),
+        uri=source.as_uri(),
+        workspace=str(tmp_path),
+        version=1,
+        completed=None,
+        diagnostics=[
+            Diagnostic.from_lsp(
+                {"range": {}, "message": "first global", "severity": 1},
+            ),
+            Diagnostic.from_lsp(
+                {"range": {}, "message": "global cascade", "severity": 1},
+            ),
+            Diagnostic.from_lsp(
+                {"range": {}, "message": "global warning", "severity": 2},
+            ),
+            Diagnostic.from_lsp(
+                {"range": {}, "message": "proof error", "severity": 1},
+            ).model_copy(update={"proof_name": "foo"}),
+        ],
+    )
+
+    assert [item["message"] for item in result.render()["diagnostics"]] == [
+        "first global",
+        "global warning",
+        "proof error",
+    ]
+    assert [
+        item["message"]
+        for item in result.render(
+            RenderOptions(deduplicate_proof_errors=False)
+        )["diagnostics"]
+    ] == [
+        "first global",
+        "global cascade",
+        "global warning",
+        "proof error",
+    ]
+    assert result.error_count == 3
+
+
+def test_compile_result_global_error_suppression_is_file_wide_for_now(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    result = CompileResult.from_diagnostics(
+        status="complete",
+        file=str(source),
+        uri=source.as_uri(),
+        workspace=str(tmp_path),
+        version=1,
+        completed=None,
+        diagnostics=[
+            Diagnostic.from_lsp(
+                {"range": {}, "message": "bad lemma header 1", "severity": 1},
+            ),
+            Diagnostic.from_lsp(
+                {"range": {}, "message": "bad lemma header 2", "severity": 1},
+            ),
+        ],
+    )
+
+    assert [item["message"] for item in result.render()["diagnostics"]] == [
+        "bad lemma header 1",
+    ]
     assert result.error_count == 2
 
 

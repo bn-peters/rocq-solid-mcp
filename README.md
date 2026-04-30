@@ -7,12 +7,14 @@ proof-state context when available. Command results expose compact feedback
 output. Results include the file relative to the workspace. Raw LSP plumbing
 such as document URIs, positions, duplicated ranges, versions, empty lists, and
 null fields is omitted from the MCP response. Agent-facing compile results keep
-only the first error for each `proof_name`, while preserving warnings, infos,
-and errors without a proof name. Returned diagnostics are limited per severity
-bucket: the default is 10 errors, 10 warnings, and 10 info/hint messages, and
-callers may request up to the hard cap of 50 per bucket. Timeout results
-include a compact `timeout_context` that reports the request operation, timeout
-kind and settings, the latest checked position, the latest processing range,
+only the first error for each `proof_name` and, after the first error without a
+`proof_name`, suppress later errors that also lack a `proof_name`. Warnings and
+infos are preserved. This broad cascade guard can hide later independent
+top-level errors that also lack `proof_name`. Returned diagnostics are limited
+per severity bucket: the default is 10 errors, 10 warnings, and 10 info/hint
+messages, and callers may request up to the hard cap of 50 per bucket. Timeout
+results include a compact `timeout_context` that reports the request operation,
+timeout kind and settings, the latest checked position, the latest processing range,
 and a small preview of the next unchecked source line when available. Optional
 overall request timeouts can be passed per compile or command/Search call; the
 MCP default is 60 seconds and the maximum is 3600 seconds. Optional
@@ -171,7 +173,8 @@ e2e suite covers command output, command caching after slow proofs, soft timeout
 recovery, hard-timeout session reset, per-call compile command timeout
 overrides, per-sentence command timeout behavior, request timeouts resuming
 from cached progress while preserving diagnostics, and cached repeated compile
-errors.
+errors, and lemma-header errors that would otherwise cascade into proof-mode
+diagnostics.
 `tests/e2e/test_compile_restart.py` covers refreshing a client file after a
 dependency `.vo` is rebuilt.
 Use `make promote` to refresh promoted e2e transcripts after intentional output

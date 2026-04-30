@@ -517,12 +517,20 @@ def _render_diagnostics(
         return diagnostics
 
     seen_error_proofs: set[str] = set()
+    # A failed top-level sentence can make later proof commands surface as
+    # proof_name-less errors; keep only the first such error in rendered output.
+    seen_global_error = False
     filtered: list[Diagnostic] = []
     for diagnostic in diagnostics:
-        if diagnostic.severity == 1 and diagnostic.proof_name is not None:
-            if diagnostic.proof_name in seen_error_proofs:
+        if diagnostic.severity == 1:
+            if diagnostic.proof_name is None:
+                if seen_global_error:
+                    continue
+                seen_global_error = True
+            elif diagnostic.proof_name in seen_error_proofs:
                 continue
-            seen_error_proofs.add(diagnostic.proof_name)
+            else:
+                seen_error_proofs.add(diagnostic.proof_name)
         filtered.append(diagnostic)
     return filtered
 

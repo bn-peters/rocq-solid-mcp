@@ -1,0 +1,18 @@
+[
+  {
+    "step": "compile lemma header cascade error",
+    "action": "compile",
+    "file": "src/lemma_header_cascade.v",
+    "result": {
+      "status": "complete",
+      "file": "src/lemma_header_cascade.v",
+      "diagnostics": [
+        {
+          "level": "error",
+          "message": "Cannot infer the implicit parameter A of eq whose type is \"Type\".",
+          "location": "1:15 to 1:20"
+        }
+      ]
+    }
+  }
+]
