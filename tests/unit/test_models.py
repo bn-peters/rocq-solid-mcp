@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from rocq_lsp_mcp.models import (
-    CommandResult,
-    CompileResult,
+    RunAtResult,
+    CheckResult,
     Diagnostic,
     LongRunningCommand,
     RenderOptions,
@@ -62,11 +62,11 @@ def test_diagnostic_render_options_control_proof_state_and_location() -> None:
     }
 
 
-def test_compile_result_renders_nonzero_counts(tmp_path: Path) -> None:
+def test_check_result_renders_nonzero_counts(tmp_path: Path) -> None:
     source = tmp_path / "src" / "Demo.v"
     source.parent.mkdir()
     source.write_text("Check nat.\n", encoding="utf-8")
-    result = CompileResult.from_diagnostics(
+    result = CheckResult.from_diagnostics(
         status="complete",
         file=str(source),
         uri=source.as_uri(),
@@ -88,12 +88,12 @@ def test_compile_result_renders_nonzero_counts(tmp_path: Path) -> None:
     }
 
 
-def test_compile_result_counts_omit_zero_fields(
+def test_check_result_counts_omit_zero_fields(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
     source.write_text("Check nat.\n", encoding="utf-8")
-    result = CompileResult.from_diagnostics(
+    result = CheckResult.from_diagnostics(
         status="complete",
         file=str(source),
         uri=source.as_uri(),
@@ -110,10 +110,10 @@ def test_compile_result_counts_omit_zero_fields(
     assert result.render()["counts"] == {"warnings": 1}
 
 
-def test_compile_result_omits_counts_without_diagnostics(tmp_path: Path) -> None:
+def test_check_result_omits_counts_without_diagnostics(tmp_path: Path) -> None:
     source = tmp_path / "Demo.v"
     source.write_text("Check nat.\n", encoding="utf-8")
-    result = CompileResult.from_diagnostics(
+    result = CheckResult.from_diagnostics(
         status="complete",
         file=str(source),
         uri=source.as_uri(),
@@ -129,12 +129,12 @@ def test_compile_result_omits_counts_without_diagnostics(tmp_path: Path) -> None
     }
 
 
-def test_compile_result_renders_compilation_time_and_long_running_commands(
+def test_check_result_renders_checking_time_and_long_running_commands(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
     source.write_text("Goal True.\nProof.\n  sleep 5.\nQed.\n", encoding="utf-8")
-    result = CompileResult.from_diagnostics(
+    result = CheckResult.from_diagnostics(
         status="complete",
         file=str(source),
         uri=source.as_uri(),
@@ -142,7 +142,7 @@ def test_compile_result_renders_compilation_time_and_long_running_commands(
         version=1,
         completed=None,
         diagnostics=[],
-        compilation_time_seconds=1.23456,
+        checking_time_seconds=1.23456,
         long_running_commands=[
             LongRunningCommand(
                 range={
@@ -158,7 +158,7 @@ def test_compile_result_renders_compilation_time_and_long_running_commands(
     assert result.render() == {
         "status": "complete",
         "file": "Demo.v",
-        "compilation_time_seconds": 1.235,
+        "checking_time_seconds": 1.235,
         "long_running_commands": [
             {
                 "location": "3:3 to 3:11",
@@ -220,7 +220,7 @@ def test_long_running_commands_from_perf_data_filters_cached_and_caps() -> None:
     assert [command.text for command in executed_only] == ["sleep 4."]
 
 
-def test_compile_result_renders_timeout_context_only_for_timeouts(
+def test_check_result_renders_timeout_context_only_for_timeouts(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -232,7 +232,7 @@ def test_compile_result_renders_timeout_context_only_for_timeouts(
         next_unchecked={"location": "3:1", "line": "Check nat."},
     )
 
-    timeout_result = CompileResult.from_diagnostics(
+    timeout_result = CheckResult.from_diagnostics(
         status="timeout",
         file=str(source),
         uri=source.as_uri(),
@@ -243,7 +243,7 @@ def test_compile_result_renders_timeout_context_only_for_timeouts(
         timed_out=True,
         timeout_context=timeout_context,
     )
-    complete_result = CompileResult.from_diagnostics(
+    complete_result = CheckResult.from_diagnostics(
         status="complete",
         file=str(source),
         uri=source.as_uri(),
@@ -313,7 +313,7 @@ def test_timeout_context_builds_from_manager_state() -> None:
     }
 
 
-def test_compile_result_limits_diagnostics_per_level_by_default(
+def test_check_result_limits_diagnostics_per_level_by_default(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -339,7 +339,7 @@ def test_compile_result_limits_diagnostics_per_level_by_default(
         ],
     ]
 
-    result = CompileResult.from_diagnostics(
+    result = CheckResult.from_diagnostics(
         status="complete",
         file=str(source),
         uri=source.as_uri(),
@@ -363,11 +363,11 @@ def test_compile_result_limits_diagnostics_per_level_by_default(
     assert len(result.errors) == 12
 
 
-def test_compile_result_hard_caps_requested_message_limit(tmp_path: Path) -> None:
+def test_check_result_hard_caps_requested_message_limit(tmp_path: Path) -> None:
     source = tmp_path / "Demo.v"
     source.write_text("Check nat.\n", encoding="utf-8")
 
-    result = CompileResult.from_diagnostics(
+    result = CheckResult.from_diagnostics(
         status="complete",
         file=str(source),
         uri=source.as_uri(),
@@ -389,10 +389,10 @@ def test_compile_result_hard_caps_requested_message_limit(tmp_path: Path) -> Non
     assert dumped["message_limit"] == 50
 
 
-def test_compile_result_filters_diagnostics_by_severity(tmp_path: Path) -> None:
+def test_check_result_filters_diagnostics_by_severity(tmp_path: Path) -> None:
     source = tmp_path / "Demo.v"
     source.write_text("Check nat.\n", encoding="utf-8")
-    result = CompileResult.from_diagnostics(
+    result = CheckResult.from_diagnostics(
         status="complete",
         file=str(source),
         uri=source.as_uri(),
@@ -420,10 +420,10 @@ def test_compile_result_filters_diagnostics_by_severity(tmp_path: Path) -> None:
     assert [item["message"] for item in error_dumped["diagnostics"]] == ["bad"]
 
 
-def test_compile_result_render_deduplicates_proof_errors(tmp_path: Path) -> None:
+def test_check_result_render_deduplicates_proof_errors(tmp_path: Path) -> None:
     source = tmp_path / "Demo.v"
     source.write_text("Check nat.\n", encoding="utf-8")
-    result = CompileResult.from_diagnostics(
+    result = CheckResult.from_diagnostics(
         status="complete",
         file=str(source),
         uri=source.as_uri(),
@@ -459,12 +459,12 @@ def test_compile_result_render_deduplicates_proof_errors(tmp_path: Path) -> None
     assert result.error_count == 2
 
 
-def test_compile_result_render_suppresses_later_global_errors(
+def test_check_result_render_suppresses_later_global_errors(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
     source.write_text("Check nat.\n", encoding="utf-8")
-    result = CompileResult.from_diagnostics(
+    result = CheckResult.from_diagnostics(
         status="complete",
         file=str(source),
         uri=source.as_uri(),
@@ -506,12 +506,12 @@ def test_compile_result_render_suppresses_later_global_errors(
     assert result.error_count == 3
 
 
-def test_compile_result_global_error_suppression_is_file_wide_for_now(
+def test_check_result_global_error_suppression_is_file_wide_for_now(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
     source.write_text("Check nat.\n", encoding="utf-8")
-    result = CompileResult.from_diagnostics(
+    result = CheckResult.from_diagnostics(
         status="complete",
         file=str(source),
         uri=source.as_uri(),
@@ -534,14 +534,14 @@ def test_compile_result_global_error_suppression_is_file_wide_for_now(
     assert result.error_count == 2
 
 
-def test_command_result_renders_agent_facing_fields(tmp_path: Path) -> None:
+def test_run_at_result_renders_agent_facing_fields(tmp_path: Path) -> None:
     source = tmp_path / "src" / "Demo.v"
     source.parent.mkdir()
     source.write_text("Check nat.\n", encoding="utf-8")
-    result = CommandResult.from_feedback(
+    result = RunAtResult.from_feedback(
         status="complete",
         file=str(source),
-        command="Search (_ + 0 = _).",
+        commands="Search (_ + 0 = _).",
         location="1:1",
         uri=source.as_uri(),
         workspace=str(tmp_path),
@@ -553,7 +553,7 @@ def test_command_result_renders_agent_facing_fields(tmp_path: Path) -> None:
         "status": "complete",
         "file": "src/Demo.v",
         "location": "1:1",
-        "command": "Search (_ + 0 = _).",
+        "commands": "Search (_ + 0 = _).",
         "output": [
             {
                 "level": "info",

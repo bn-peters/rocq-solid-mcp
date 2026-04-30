@@ -1,12 +1,12 @@
 [
   {
-    "step": "compile unfinished instance",
-    "action": "compile",
+    "step": "check unfinished instance",
+    "action": "check",
     "file": "src/unfinished_instance.v",
     "result": {
       "status": "complete",
       "file": "src/unfinished_instance.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1
       },

@@ -6,8 +6,8 @@
   },
   "steps": [
     {
-      "label": "compile slow command with sentence timeout",
-      "action": "compile",
+      "label": "check slow command with sentence timeout",
+      "action": "check",
       "file": "src/timeout.v",
       "max_seconds": 4,
       "long_running_seconds": 0
@@ -20,8 +20,8 @@
       "new": "sleep 0"
     },
     {
-      "label": "recompile after command timeout",
-      "action": "compile",
+      "label": "recheck after command timeout",
+      "action": "check",
       "file": "src/timeout.v",
       "max_seconds": 4,
       "long_running_seconds": 0

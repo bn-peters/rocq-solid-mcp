@@ -401,7 +401,7 @@ class RocqLspClient:
         uri: str,
         version: int,
         position: dict[str, int],
-        command: str,
+        commands: str,
         timeout: float,
         hard_timeout_grace: float,
     ) -> tuple[dict[str, Any], bool]:
@@ -416,7 +416,7 @@ class RocqLspClient:
                 "params": {
                     "textDocument": {"uri": uri, "version": version},
                     "position": position,
-                    "command": command,
+                    "command": commands,
                 },
             }
         )

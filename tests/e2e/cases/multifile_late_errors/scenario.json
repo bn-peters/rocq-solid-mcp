@@ -1,14 +1,14 @@
 {
   "steps": [
     {
-      "label": "compile base file",
-      "action": "compile",
+      "label": "check base file",
+      "action": "check",
       "file": "src/base.v",
       "long_running_seconds": 0
     },
     {
-      "label": "compile modes file",
-      "action": "compile",
+      "label": "check modes file",
+      "action": "check",
       "file": "src/lang/modes.v",
       "long_running_seconds": 0
     },
@@ -19,8 +19,8 @@
       "text": "\nLemma shared_rank_wrong : Modes.mode_rank Modes.Shared = 1.\nProof. reflexivity. Qed.\n\nLemma capsule_can_promote_wrong : Modes.can_promote Modes.Capsule = true.\nProof. reflexivity. Qed.\n"
     },
     {
-      "label": "recompile modes with tactic failures",
-      "action": "compile",
+      "label": "recheck modes with tactic failures",
+      "action": "check",
       "file": "src/lang/modes.v",
       "long_running_seconds": 0
     }

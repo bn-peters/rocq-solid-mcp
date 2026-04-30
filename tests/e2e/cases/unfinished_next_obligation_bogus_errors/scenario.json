@@ -1,8 +1,8 @@
 {
   "steps": [
     {
-      "label": "compile unfinished next obligation",
-      "action": "compile",
+      "label": "check unfinished next obligation",
+      "action": "check",
       "file": "src/unfinished_next_obligation.v",
       "long_running_seconds": 0
     }

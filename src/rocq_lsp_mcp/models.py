@@ -96,12 +96,12 @@ class Diagnostic(BaseModel):
         )
 
 
-class CommandOutput(BaseModel):
+class RunAtOutput(BaseModel):
     severity: int | None = None
     text: str
 
     @classmethod
-    def from_feedback(cls, feedback: Any) -> "CommandOutput | None":
+    def from_feedback(cls, feedback: Any) -> "RunAtOutput | None":
         raw = lsp_to_jsonable(feedback)
         if isinstance(raw, (list, tuple)) and len(raw) >= 2:
             severity = raw[0] if isinstance(raw[0], int) else None
@@ -146,12 +146,12 @@ class LongRunningCommand(BaseModel):
         )
 
 
-class CommandResult(BaseModel):
+class RunAtResult(BaseModel):
     status: Literal["complete", "timeout", "failed"]
     file: str
-    command: str
+    commands: str
     location: str | None = None
-    output: list[CommandOutput] = Field(default_factory=list)
+    output: list[RunAtOutput] = Field(default_factory=list)
     uri: str | None = None
     workspace: str | None = None
     version: int | None = None
@@ -165,7 +165,7 @@ class CommandResult(BaseModel):
         *,
         status: Literal["complete", "timeout", "failed"],
         file: str,
-        command: str,
+        commands: str,
         location: str | None,
         uri: str | None,
         workspace: str | None,
@@ -174,16 +174,16 @@ class CommandResult(BaseModel):
         timed_out: bool = False,
         restarted: bool = False,
         message: str | None = None,
-    ) -> "CommandResult":
+    ) -> "RunAtResult":
         output = [
             item
             for entry in _feedback_entries(feedback)
-            if (item := CommandOutput.from_feedback(entry)) is not None
+            if (item := RunAtOutput.from_feedback(entry)) is not None
         ]
         return cls(
             status=status,
             file=file,
-            command=command,
+            commands=commands,
             location=location,
             output=output,
             uri=uri,
@@ -201,7 +201,7 @@ class CommandResult(BaseModel):
                 "status": self.status,
                 "file": display_file(self.file, self.workspace),
                 "location": self.location,
-                "command": self.command,
+                "commands": self.commands,
                 "output": [item.render(options) for item in self.output],
                 "timed_out": True if self.timed_out else None,
                 "restarted": True if self.restarted else None,
@@ -288,7 +288,7 @@ class TimeoutContext(BaseModel):
         )
 
 
-class CompileResult(BaseModel):
+class CheckResult(BaseModel):
     status: Literal["complete", "timeout", "failed"]
     file: str
     uri: str | None = None
@@ -299,7 +299,7 @@ class CompileResult(BaseModel):
     timed_out: bool = False
     restarted: bool = False
     timeout_context: TimeoutContext | None = None
-    compilation_time_seconds: float | None = None
+    checking_time_seconds: float | None = None
     long_running_commands: list[LongRunningCommand] = Field(default_factory=list)
     message: str | None = None
 
@@ -333,10 +333,10 @@ class CompileResult(BaseModel):
         timed_out: bool = False,
         restarted: bool = False,
         timeout_context: TimeoutContext | None = None,
-        compilation_time_seconds: float | None = None,
+        checking_time_seconds: float | None = None,
         long_running_commands: list[LongRunningCommand] | None = None,
         message: str | None = None,
-    ) -> "CompileResult":
+    ) -> "CheckResult":
         return cls(
             status=status,
             file=file,
@@ -348,7 +348,7 @@ class CompileResult(BaseModel):
             timed_out=timed_out,
             restarted=restarted,
             timeout_context=timeout_context,
-            compilation_time_seconds=compilation_time_seconds,
+            checking_time_seconds=checking_time_seconds,
             long_running_commands=long_running_commands or [],
             message=message,
         )
@@ -381,8 +381,8 @@ class CompileResult(BaseModel):
             {
                 "status": self.status,
                 "file": display_file(self.file, self.workspace),
-                "compilation_time_seconds": rounded_seconds(
-                    self.compilation_time_seconds
+                "checking_time_seconds": rounded_seconds(
+                    self.checking_time_seconds
                 ),
                 "counts": diagnostic_counts(
                     errors=len(buckets["errors"]),
@@ -489,7 +489,7 @@ def diagnostic_level(severity: int | None) -> str | None:
     return None
 
 
-def command_location(line: int, character: int) -> str:
+def run_at_location(line: int, character: int) -> str:
     return f"{line}:{character}"
 
 

@@ -5,8 +5,8 @@
   },
   "steps": [
     {
-      "label": "compile through hard timeout",
-      "action": "compile",
+      "label": "check through hard timeout",
+      "action": "check",
       "file": "src/hard_timeout.v",
       "min_seconds": 3,
       "long_running_seconds": 0
@@ -26,8 +26,8 @@
       "new": "easy."
     },
     {
-      "label": "recompile after hard timeout",
-      "action": "compile",
+      "label": "recheck after hard timeout",
+      "action": "check",
       "file": "src/hard_timeout.v",
       "min_seconds": 1,
       "long_running_seconds": 0

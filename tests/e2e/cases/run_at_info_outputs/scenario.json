@@ -2,25 +2,25 @@
   "steps": [
     {
       "label": "search output is info",
-      "action": "command",
+      "action": "run_at",
       "file": "src/Commands.v",
-      "command": "Search (_ + 0 = _).",
+      "commands": "Search (_ + 0 = _).",
       "line": 1,
       "character": 43
     },
     {
       "label": "check output is info",
-      "action": "command",
+      "action": "run_at",
       "file": "src/Commands.v",
-      "command": "Check Nat.add.",
+      "commands": "Check Nat.add.",
       "line": 1,
       "character": 43
     },
     {
       "label": "compute output is info",
-      "action": "command",
+      "action": "run_at",
       "file": "src/Commands.v",
-      "command": "Compute 2 + 2.",
+      "commands": "Compute 2 + 2.",
       "line": 1,
       "character": 43
     }

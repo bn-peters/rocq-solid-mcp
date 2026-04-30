@@ -12,7 +12,7 @@ import pytest
 
 from rocq_lsp_mcp.config import RocqLspConfig, TimeoutPolicy
 from rocq_lsp_mcp.manager import RocqLspManager
-from rocq_lsp_mcp.models import CommandResult, CompileResult, RenderOptions
+from rocq_lsp_mcp.models import RunAtResult, CheckResult, RenderOptions
 
 CASES_DIR = Path(__file__).parent / "cases"
 
@@ -117,9 +117,9 @@ async def _run_steps(
             transcript.append(_step_record(step))
             continue
 
-        if action == "compile":
+        if action == "check":
             start = time.monotonic()
-            result = await manager.compile_file(
+            result = await manager.check_file(
                 str(path),
                 command_timeout_seconds=step.get("command_timeout_seconds"),
                 overall_timeout_seconds=step.get("overall_timeout_seconds"),
@@ -135,11 +135,11 @@ async def _run_steps(
             )
             continue
 
-        if action == "command":
+        if action == "run_at":
             start = time.monotonic()
-            result = await manager.run_command(
+            result = await manager.run_at(
                 str(path),
-                step["command"],
+                step["commands"],
                 step["line"],
                 step.get("character", 1),
                 overall_timeout_seconds=step.get("overall_timeout_seconds"),
@@ -149,7 +149,7 @@ async def _run_steps(
             transcript.append(
                 {
                     **_step_record(step),
-                    "command": step["command"],
+                    "commands": step["commands"],
                     "result": _result_record(result, project_root, step),
                 }
             )
@@ -189,9 +189,9 @@ def _step_record(step: dict[str, Any]) -> dict[str, Any]:
 
 
 def _result_record(
-    result: CompileResult | CommandResult, project_root: Path, step: dict[str, Any]
+    result: CheckResult | RunAtResult, project_root: Path, step: dict[str, Any]
 ) -> dict[str, Any]:
-    if isinstance(result, CompileResult):
+    if isinstance(result, CheckResult):
         options = RenderOptions(
             message_limit=step.get("message_limit", 10),
             severity=step.get("severity", "info"),
@@ -212,7 +212,7 @@ def _scrub_value(value: Any, project_root: Path) -> Any:
         return {
             key: (
                 "$SECONDS"
-                if key == "compilation_time_seconds"
+                if key == "checking_time_seconds"
                 else _scrub_value(item, project_root)
             )
             for key, item in value.items()

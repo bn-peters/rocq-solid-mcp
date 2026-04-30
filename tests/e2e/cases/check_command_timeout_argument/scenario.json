@@ -5,8 +5,8 @@
   },
   "steps": [
     {
-      "label": "compile slow command with per-call sentence timeout",
-      "action": "compile",
+      "label": "check slow command with per-call sentence timeout",
+      "action": "check",
       "file": "src/timeout.v",
       "command_timeout_seconds": 1,
       "max_seconds": 4,
@@ -20,8 +20,8 @@
       "new": "sleep 0"
     },
     {
-      "label": "recompile without per-call timeout",
-      "action": "compile",
+      "label": "recheck without per-call timeout",
+      "action": "check",
       "file": "src/timeout.v",
       "max_seconds": 4,
       "long_running_seconds": 0

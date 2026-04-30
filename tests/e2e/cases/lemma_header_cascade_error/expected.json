@@ -1,12 +1,12 @@
 [
   {
-    "step": "compile lemma header cascade error",
-    "action": "compile",
+    "step": "check lemma header cascade error",
+    "action": "check",
     "file": "src/lemma_header_cascade.v",
     "result": {
       "status": "complete",
       "file": "src/lemma_header_cascade.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1
       },

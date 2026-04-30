@@ -1,12 +1,12 @@
 [
   {
-    "step": "compile through hard timeout",
-    "action": "compile",
+    "step": "check through hard timeout",
+    "action": "check",
     "file": "src/hard_timeout.v",
     "result": {
       "status": "timeout",
       "file": "src/hard_timeout.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "timed_out": true,
       "restarted": true,
       "timeout_context": {
@@ -35,13 +35,13 @@
     "file": "src/hard_timeout.v"
   },
   {
-    "step": "recompile after hard timeout",
-    "action": "compile",
+    "step": "recheck after hard timeout",
+    "action": "check",
     "file": "src/hard_timeout.v",
     "result": {
       "status": "complete",
       "file": "src/hard_timeout.v",
-      "compilation_time_seconds": "$SECONDS"
+      "checking_time_seconds": "$SECONDS"
     }
   }
 ]

@@ -1,12 +1,12 @@
 [
   {
-    "step": "compile reports error then request timeout",
-    "action": "compile",
+    "step": "check reports error then request timeout",
+    "action": "check",
     "file": "src/resume_then_success.v",
     "result": {
       "status": "timeout",
       "file": "src/resume_then_success.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1
       },
@@ -33,13 +33,13 @@
     }
   },
   {
-    "step": "compile resumes and succeeds with cached error",
-    "action": "compile",
+    "step": "check resumes and succeeds with cached error",
+    "action": "check",
     "file": "src/resume_then_success.v",
     "result": {
       "status": "complete",
       "file": "src/resume_then_success.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1
       },

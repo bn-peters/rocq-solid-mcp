@@ -5,16 +5,16 @@
   },
   "steps": [
     {
-      "label": "compile reports error then request timeout",
-      "action": "compile",
+      "label": "check reports error then request timeout",
+      "action": "check",
       "file": "src/resume_then_success.v",
       "min_seconds": 4,
       "max_seconds": 9,
       "long_running_seconds": 0
     },
     {
-      "label": "compile resumes and succeeds with cached error",
-      "action": "compile",
+      "label": "check resumes and succeeds with cached error",
+      "action": "check",
       "file": "src/resume_then_success.v",
       "max_seconds": 6,
       "long_running_seconds": 0

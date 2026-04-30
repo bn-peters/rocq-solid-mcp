@@ -1,7 +1,7 @@
 [project]
 name = "rocq-lsp-mcp-prototype"
 version = "0.1.0"
-description = "Prototype MCP server for cached Rocq compilation via rocq-lsp"
+description = "Prototype MCP server for cached Rocq checking via rocq-lsp"
 license = "Apache-2.0"
 requires-python = ">=3.12"
 dependencies = [

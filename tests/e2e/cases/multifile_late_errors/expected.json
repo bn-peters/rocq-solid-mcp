@@ -1,22 +1,22 @@
 [
   {
-    "step": "compile base file",
-    "action": "compile",
+    "step": "check base file",
+    "action": "check",
     "file": "src/base.v",
     "result": {
       "status": "complete",
       "file": "src/base.v",
-      "compilation_time_seconds": "$SECONDS"
+      "checking_time_seconds": "$SECONDS"
     }
   },
   {
-    "step": "compile modes file",
-    "action": "compile",
+    "step": "check modes file",
+    "action": "check",
     "file": "src/lang/modes.v",
     "result": {
       "status": "complete",
       "file": "src/lang/modes.v",
-      "compilation_time_seconds": "$SECONDS"
+      "checking_time_seconds": "$SECONDS"
     }
   },
   {
@@ -25,13 +25,13 @@
     "file": "src/lang/modes.v"
   },
   {
-    "step": "recompile modes with tactic failures",
-    "action": "compile",
+    "step": "recheck modes with tactic failures",
+    "action": "check",
     "file": "src/lang/modes.v",
     "result": {
       "status": "complete",
       "file": "src/lang/modes.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 2
       },

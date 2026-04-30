@@ -2,9 +2,9 @@
   "steps": [
     {
       "label": "search add zero",
-      "action": "command",
+      "action": "run_at",
       "file": "src/Search.v",
-      "command": "Search (_ + 0 = _).",
+      "commands": "Search (_ + 0 = _).",
       "line": 1,
       "character": 43
     }

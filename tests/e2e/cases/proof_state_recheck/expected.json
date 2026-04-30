@@ -1,22 +1,22 @@
 [
   {
-    "step": "compile support file",
-    "action": "compile",
+    "step": "check support file",
+    "action": "check",
     "file": "src/support.v",
     "result": {
       "status": "complete",
       "file": "src/support.v",
-      "compilation_time_seconds": "$SECONDS"
+      "checking_time_seconds": "$SECONDS"
     }
   },
   {
-    "step": "compile failing proof",
-    "action": "compile",
+    "step": "check failing proof",
+    "action": "check",
     "file": "src/proof.v",
     "result": {
       "status": "complete",
       "file": "src/proof.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1
       },
@@ -43,13 +43,13 @@
     "file": "src/proof.v"
   },
   {
-    "step": "recompile fixed proof",
-    "action": "compile",
+    "step": "recheck fixed proof",
+    "action": "check",
     "file": "src/proof.v",
     "result": {
       "status": "complete",
       "file": "src/proof.v",
-      "compilation_time_seconds": "$SECONDS"
+      "checking_time_seconds": "$SECONDS"
     }
   }
 ]

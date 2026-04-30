@@ -17,7 +17,7 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.mark.asyncio
-async def test_valid_file_compiles_with_zero_errors(tmp_path: Path) -> None:
+async def test_valid_file_checks_with_zero_errors(tmp_path: Path) -> None:
     source = tmp_path / "Ok.v"
     source.write_text("Check nat.\n", encoding="utf-8")
     manager = RocqLspManager(
@@ -32,7 +32,7 @@ async def test_valid_file_compiles_with_zero_errors(tmp_path: Path) -> None:
         )
     )
     try:
-        result = await manager.compile_file(str(source))
+        result = await manager.check_file(str(source))
     finally:
         await manager.close()
 
@@ -59,7 +59,7 @@ async def test_missing_variable_names_report_multiple_errors(tmp_path: Path) -> 
         )
     )
     try:
-        result = await manager.compile_file(str(source))
+        result = await manager.check_file(str(source))
     finally:
         await manager.close()
 
@@ -85,13 +85,13 @@ async def test_file_change_rechecks_and_reports_failure_proof_state(
         )
     )
     try:
-        failing = await manager.compile_file(str(source))
+        failing = await manager.check_file(str(source))
 
         source.write_text(
             "Goal 0 = 0. Proof. reflexivity. Qed.\n",
             encoding="utf-8",
         )
-        fixed = await manager.compile_file(str(source))
+        fixed = await manager.check_file(str(source))
     finally:
         await manager.close()
 
@@ -130,7 +130,7 @@ async def test_file_change_rechecks_and_reports_failure_proof_state(
 
 
 @pytest.mark.asyncio
-async def test_run_command_search_returns_feedback(tmp_path: Path) -> None:
+async def test_run_at_search_returns_feedback(tmp_path: Path) -> None:
     import_line = "From Stdlib Require Import Arith.PeanoNat."
     source = tmp_path / "Search.v"
     source.write_text(f"{import_line}\n", encoding="utf-8")
@@ -146,7 +146,7 @@ async def test_run_command_search_returns_feedback(tmp_path: Path) -> None:
         )
     )
     try:
-        result = await manager.run_command(
+        result = await manager.run_at(
             str(source),
             "Search (_ + 0 = _).",
             line=1,
@@ -163,7 +163,37 @@ async def test_run_command_search_returns_feedback(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_command_reports_command_failure(tmp_path: Path) -> None:
+async def test_run_at_can_run_require_before_check(tmp_path: Path) -> None:
+    source = tmp_path / "RequireAtPoint.v"
+    sentence = "Check nat."
+    source.write_text(f"{sentence}\n", encoding="utf-8")
+    manager = RocqLspManager(
+        RocqLspConfig(
+            binary="coq-lsp",
+            timeout_policy=TimeoutPolicy(
+                request_seconds=30,
+                cancel_grace_seconds=5,
+            ),
+            max_errors=1000000,
+            workspace=tmp_path,
+        )
+    )
+    try:
+        result = await manager.run_at(
+            str(source),
+            "From Stdlib Require Import Arith.PeanoNat. Check Nat.add_0_r.",
+            line=1,
+            character=len(sentence) + 1,
+        )
+    finally:
+        await manager.close()
+
+    assert result.status == "complete"
+    assert any("Nat.add_0_r" in item.text for item in result.output)
+
+
+@pytest.mark.asyncio
+async def test_run_at_reports_command_failure(tmp_path: Path) -> None:
     source = tmp_path / "BadCommand.v"
     sentence = "Check nat."
     source.write_text(f"{sentence}\n", encoding="utf-8")
@@ -179,7 +209,7 @@ async def test_run_command_reports_command_failure(tmp_path: Path) -> None:
         )
     )
     try:
-        result = await manager.run_command(
+        result = await manager.run_at(
             str(source),
             "Check does_not_exist.",
             line=1,

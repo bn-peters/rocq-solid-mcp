@@ -1,12 +1,12 @@
 [
   {
-    "step": "compile first subgoal unfinished",
-    "action": "compile",
+    "step": "check first subgoal unfinished",
+    "action": "check",
     "file": "src/first_subgoal_unfinished.v",
     "result": {
       "status": "complete",
       "file": "src/first_subgoal_unfinished.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1
       },
@@ -32,13 +32,13 @@
     }
   },
   {
-    "step": "compile second subgoal unfinished",
-    "action": "compile",
+    "step": "check second subgoal unfinished",
+    "action": "check",
     "file": "src/second_subgoal_unfinished.v",
     "result": {
       "status": "complete",
       "file": "src/second_subgoal_unfinished.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1
       },
@@ -64,13 +64,13 @@
     }
   },
   {
-    "step": "compile empty second subgoal",
-    "action": "compile",
+    "step": "check empty second subgoal",
+    "action": "check",
     "file": "src/empty_second_subgoal.v",
     "result": {
       "status": "complete",
       "file": "src/empty_second_subgoal.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1
       },

@@ -1,20 +1,20 @@
 {
   "steps": [
     {
-      "label": "compile first subgoal unfinished",
-      "action": "compile",
+      "label": "check first subgoal unfinished",
+      "action": "check",
       "file": "src/first_subgoal_unfinished.v",
       "long_running_seconds": 0
     },
     {
-      "label": "compile second subgoal unfinished",
-      "action": "compile",
+      "label": "check second subgoal unfinished",
+      "action": "check",
       "file": "src/second_subgoal_unfinished.v",
       "long_running_seconds": 0
     },
     {
-      "label": "compile empty second subgoal",
-      "action": "compile",
+      "label": "check empty second subgoal",
+      "action": "check",
       "file": "src/empty_second_subgoal.v",
       "long_running_seconds": 0
     }

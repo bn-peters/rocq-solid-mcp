@@ -1,14 +1,14 @@
 [
   {
     "step": "search add zero",
-    "action": "command",
+    "action": "run_at",
     "file": "src/Search.v",
-    "command": "Search (_ + 0 = _).",
+    "commands": "Search (_ + 0 = _).",
     "result": {
       "status": "complete",
       "file": "src/Search.v",
       "location": "1:43",
-      "command": "Search (_ + 0 = _).",
+      "commands": "Search (_ + 0 = _).",
       "output": [
         {
           "level": "info",

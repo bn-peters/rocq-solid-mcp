@@ -13,12 +13,12 @@ pytestmark = pytest.mark.skipif(
     shutil.which("opam") is None
     or shutil.which("coq-lsp") is None
     or shutil.which("rocq") is None,
-    reason="install opam, coq-lsp, and rocq to run compile restart e2e tests",
+    reason="install opam, coq-lsp, and rocq to run check restart e2e tests",
 )
 
 
 @pytest.mark.asyncio
-async def test_compile_restart_refreshes_recompiled_dependencies(
+async def test_check_restart_refreshes_recompiled_dependencies(
     tmp_path: Path,
 ) -> None:
     project = tmp_path / "project"
@@ -50,14 +50,14 @@ async def test_compile_restart_refreshes_recompiled_dependencies(
         )
     )
     try:
-        first = await manager.compile_file(str(client), long_running_seconds=0)
+        first = await manager.check_file(str(client), long_running_seconds=0)
 
         base.write_text(base_source(40), encoding="utf-8")
         client.write_text(client_source(40), encoding="utf-8")
         compile_dependency(project)
 
-        stale = await manager.compile_file(str(client), long_running_seconds=0)
-        refreshed = await manager.compile_file(
+        stale = await manager.check_file(str(client), long_running_seconds=0)
+        refreshed = await manager.check_file(
             str(client),
             long_running_seconds=0,
             restart=True,

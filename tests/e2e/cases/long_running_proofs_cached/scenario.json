@@ -1,8 +1,8 @@
 {
   "steps": [
     {
-      "label": "compile file with slow preceding proof",
-      "action": "compile",
+      "label": "check file with slow preceding proof",
+      "action": "check",
       "file": "src/cache.v",
       "min_seconds": 3,
       "long_running_seconds": 3
@@ -15,8 +15,8 @@
       "new": "easy."
     },
     {
-      "label": "recompile fixed proof from cache",
-      "action": "compile",
+      "label": "recheck fixed proof from cache",
+      "action": "check",
       "file": "src/cache.v",
       "max_seconds": 4,
       "long_running_seconds": 3

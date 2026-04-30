@@ -1,22 +1,22 @@
 [
   {
-    "step": "compile imported library",
-    "action": "compile",
+    "step": "check imported library",
+    "action": "check",
     "file": "theories/Core.v",
     "result": {
       "status": "complete",
       "file": "theories/Core.v",
-      "compilation_time_seconds": "$SECONDS"
+      "checking_time_seconds": "$SECONDS"
     }
   },
   {
-    "step": "compile client with import",
-    "action": "compile",
+    "step": "check client with import",
+    "action": "check",
     "file": "clients/UseCore.v",
     "result": {
       "status": "complete",
       "file": "clients/UseCore.v",
-      "compilation_time_seconds": "$SECONDS"
+      "checking_time_seconds": "$SECONDS"
     }
   },
   {
@@ -25,13 +25,13 @@
     "file": "clients/UseCore.v"
   },
   {
-    "step": "recompile edited client",
-    "action": "compile",
+    "step": "recheck edited client",
+    "action": "check",
     "file": "clients/UseCore.v",
     "result": {
       "status": "complete",
       "file": "clients/UseCore.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1
       },

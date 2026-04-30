@@ -1,7 +1,7 @@
 {
   "setup": [
     {
-      "label": "compile dependency before lsp",
+      "label": "check dependency before lsp",
       "action": "rocq c",
       "file": "theories/Base.v",
       "args": [
@@ -13,8 +13,8 @@
   ],
   "steps": [
     {
-      "label": "compile dependent client",
-      "action": "compile",
+      "label": "check dependent client",
+      "action": "check",
       "file": "clients/UseBase.v",
       "long_running_seconds": 0
     },
@@ -25,8 +25,8 @@
       "text": "\nLemma imported_value_wrong : imported_value = 40.\nProof. reflexivity. Qed.\n"
     },
     {
-      "label": "recompile dependent tactic failure",
-      "action": "compile",
+      "label": "recheck dependent tactic failure",
+      "action": "check",
       "file": "clients/UseBase.v",
       "long_running_seconds": 0
     }

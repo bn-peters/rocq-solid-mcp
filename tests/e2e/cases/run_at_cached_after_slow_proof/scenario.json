@@ -1,17 +1,17 @@
 {
   "steps": [
     {
-      "label": "compile file with slow proof",
-      "action": "compile",
+      "label": "check file with slow proof",
+      "action": "check",
       "file": "src/CacheCommand.v",
       "min_seconds": 3,
       "long_running_seconds": 0
     },
     {
       "label": "search after cached slow proof",
-      "action": "command",
+      "action": "run_at",
       "file": "src/CacheCommand.v",
-      "command": "Search (_ + 0 = _).",
+      "commands": "Search (_ + 0 = _).",
       "line": 10,
       "character": 5,
       "max_seconds": 4

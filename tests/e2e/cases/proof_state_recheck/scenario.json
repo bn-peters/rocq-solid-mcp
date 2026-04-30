@@ -1,14 +1,14 @@
 {
   "steps": [
     {
-      "label": "compile support file",
-      "action": "compile",
+      "label": "check support file",
+      "action": "check",
       "file": "src/support.v",
       "long_running_seconds": 0
     },
     {
-      "label": "compile failing proof",
-      "action": "compile",
+      "label": "check failing proof",
+      "action": "check",
       "file": "src/proof.v",
       "long_running_seconds": 0
     },
@@ -20,8 +20,8 @@
       "new": "reflexivity."
     },
     {
-      "label": "recompile fixed proof",
-      "action": "compile",
+      "label": "recheck fixed proof",
+      "action": "check",
       "file": "src/proof.v",
       "long_running_seconds": 0
     }

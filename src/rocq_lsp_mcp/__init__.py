@@ -1,6 +1,6 @@
 """Prototype MCP server for Rocq interaction via rocq-lsp."""
 
 from .manager import RocqLspManager
-from .models import CompileResult
+from .models import CheckResult
 
-__all__ = ["CompileResult", "RocqLspManager"]
+__all__ = ["CheckResult", "RocqLspManager"]

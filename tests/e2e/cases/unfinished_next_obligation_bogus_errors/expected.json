@@ -1,12 +1,12 @@
 [
   {
-    "step": "compile unfinished next obligation",
-    "action": "compile",
+    "step": "check unfinished next obligation",
+    "action": "check",
     "file": "src/unfinished_next_obligation.v",
     "result": {
       "status": "complete",
       "file": "src/unfinished_next_obligation.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1
       },

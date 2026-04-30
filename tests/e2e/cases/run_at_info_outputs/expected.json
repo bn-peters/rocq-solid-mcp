@@ -1,14 +1,14 @@
 [
   {
     "step": "search output is info",
-    "action": "command",
+    "action": "run_at",
     "file": "src/Commands.v",
-    "command": "Search (_ + 0 = _).",
+    "commands": "Search (_ + 0 = _).",
     "result": {
       "status": "complete",
       "file": "src/Commands.v",
       "location": "1:43",
-      "command": "Search (_ + 0 = _).",
+      "commands": "Search (_ + 0 = _).",
       "output": [
         {
           "level": "info",
@@ -19,14 +19,14 @@
   },
   {
     "step": "check output is info",
-    "action": "command",
+    "action": "run_at",
     "file": "src/Commands.v",
-    "command": "Check Nat.add.",
+    "commands": "Check Nat.add.",
     "result": {
       "status": "complete",
       "file": "src/Commands.v",
       "location": "1:43",
-      "command": "Check Nat.add.",
+      "commands": "Check Nat.add.",
       "output": [
         {
           "level": "info",
@@ -37,14 +37,14 @@
   },
   {
     "step": "compute output is info",
-    "action": "command",
+    "action": "run_at",
     "file": "src/Commands.v",
-    "command": "Compute 2 + 2.",
+    "commands": "Compute 2 + 2.",
     "result": {
       "status": "complete",
       "file": "src/Commands.v",
       "location": "1:43",
-      "command": "Compute 2 + 2.",
+      "commands": "Compute 2 + 2.",
       "output": [
         {
           "level": "info",

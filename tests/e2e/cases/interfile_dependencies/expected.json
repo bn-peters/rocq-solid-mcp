@@ -1,17 +1,17 @@
 [
   {
-    "step": "compile dependency before lsp",
+    "step": "check dependency before lsp",
     "action": "rocq c",
     "file": "theories/Base.v"
   },
   {
-    "step": "compile dependent client",
-    "action": "compile",
+    "step": "check dependent client",
+    "action": "check",
     "file": "clients/UseBase.v",
     "result": {
       "status": "complete",
       "file": "clients/UseBase.v",
-      "compilation_time_seconds": "$SECONDS"
+      "checking_time_seconds": "$SECONDS"
     }
   },
   {
@@ -20,13 +20,13 @@
     "file": "clients/UseBase.v"
   },
   {
-    "step": "recompile dependent tactic failure",
-    "action": "compile",
+    "step": "recheck dependent tactic failure",
+    "action": "check",
     "file": "clients/UseBase.v",
     "result": {
       "status": "complete",
       "file": "clients/UseBase.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1
       },

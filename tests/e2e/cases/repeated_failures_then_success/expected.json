@@ -1,12 +1,12 @@
 [
   {
-    "step": "compile repeated failing tactics",
-    "action": "compile",
+    "step": "check repeated failing tactics",
+    "action": "check",
     "file": "src/repeated_failures.v",
     "result": {
       "status": "complete",
       "file": "src/repeated_failures.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1
       },

@@ -1,12 +1,12 @@
 [
   {
-    "step": "compile file with slow preceding proof",
-    "action": "compile",
+    "step": "check file with slow preceding proof",
+    "action": "check",
     "file": "src/cache.v",
     "result": {
       "status": "complete",
       "file": "src/cache.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1
       },
@@ -39,13 +39,13 @@
     "file": "src/cache.v"
   },
   {
-    "step": "recompile fixed proof from cache",
-    "action": "compile",
+    "step": "recheck fixed proof from cache",
+    "action": "check",
     "file": "src/cache.v",
     "result": {
       "status": "complete",
       "file": "src/cache.v",
-      "compilation_time_seconds": "$SECONDS"
+      "checking_time_seconds": "$SECONDS"
     }
   }
 ]

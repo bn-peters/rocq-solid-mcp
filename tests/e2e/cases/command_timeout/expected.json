@@ -1,12 +1,12 @@
 [
   {
-    "step": "compile slow command with sentence timeout",
-    "action": "compile",
+    "step": "check slow command with sentence timeout",
+    "action": "check",
     "file": "src/timeout.v",
     "result": {
       "status": "timeout",
       "file": "src/timeout.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "timed_out": true,
       "timeout_context": {
         "operation": "coq/getDocument",
@@ -34,13 +34,13 @@
     "file": "src/timeout.v"
   },
   {
-    "step": "recompile after command timeout",
-    "action": "compile",
+    "step": "recheck after command timeout",
+    "action": "check",
     "file": "src/timeout.v",
     "result": {
       "status": "complete",
       "file": "src/timeout.v",
-      "compilation_time_seconds": "$SECONDS"
+      "checking_time_seconds": "$SECONDS"
     }
   }
 ]

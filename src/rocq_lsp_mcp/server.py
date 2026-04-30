@@ -30,7 +30,7 @@ mcp = FastMCP("rocq-lsp-mcp", lifespan=app_lifespan)
 
 
 @mcp.tool()
-async def rocq_lsp_compile_file(
+async def rocq_lsp_check_file(
     ctx: Context,
     file: Annotated[
         str,
@@ -71,7 +71,7 @@ async def rocq_lsp_compile_file(
         float | None,
         Field(
             description=(
-                "Optional per Rocq sentence watchdog for compile requests. Default "
+                "Optional per Rocq sentence watchdog for check requests. Default "
                 "5s, 0 disables; a slow sentence returns timeout context."
             ),
         ),
@@ -86,36 +86,44 @@ async def rocq_lsp_compile_file(
         ),
     ] = False,
 ) -> dict[str, Any]:
-    """Compile a Rocq file and report diagnostics.
+    """Check a Rocq file and report diagnostics.
 
-    Use this to check to check files for errors. The diagnostics are much more detailed than those of regular compilation. They include the current proof state at the error position and precise ranges.
+    Use this to check files for errors. The diagnostics include the current
+    proof state at the error position and precise ranges.
 
-    This file reports at least the first error in the file, and usually more. It also reports tactics and commands taking a long time.
+    This file reports at least the first error in the file, and usually more.
+    It also reports tactics and commands taking a long time.
 
-    This command is very efficient due to caching. It creates no compilation artifacts. Use `restart = true` to clear the cache when upstream dependencies have been recompiled.
+    This check is efficient due to caching. It creates no build artifacts. Use
+    `restart = true` to clear the cache when upstream dependencies have been
+    recompiled.
 
-    overall_timeout_seconds is a soft deadline for returning partial diagnostics before the MCP host cancels the tool call. It should be lower than the host's tool call timeout. Repeated compilation after timeouts respects the cache.
+    overall_timeout_seconds is a soft deadline for returning partial diagnostics
+    before the MCP host cancels the tool call. It should be lower than the
+    host's tool call timeout. Repeated checks after timeouts respect the cache.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
-    result = await manager.compile_file(
+    result = await manager.check_file(
         file,
         overall_timeout_seconds=overall_timeout_seconds,
         command_timeout_seconds=command_timeout_seconds,
         long_running_seconds=_long_running_alert_threshold(overall_timeout_seconds),
         restart=restart,
     )
-    return result.render(RenderOptions(message_limit=message_limit, severity=severity))
+    return result.render(
+        RenderOptions(message_limit=message_limit, severity=severity)
+    )
 
 
 @mcp.tool()
-async def rocq_lsp_run_command(
+async def rocq_lsp_run_at(
     file: Annotated[str, Field(description="Absolute path to a .v file.")],
     commands: Annotated[
-        list[str],
+        str,
         Field(
             description=(
-                "One or more complete Rocq commands to evaluate at the same file "
-                "position, e.g. ['Check Nat.add.', 'Search (_ + _ = _).']."
+                "One string containing one or more complete Rocq commands to run at "
+                "the same file position, e.g. 'Require Import List. Check list.'"
             ),
         ),
     ],
@@ -123,7 +131,8 @@ async def rocq_lsp_run_command(
         int,
         Field(
             description=(
-                "1-based line number in the file before which the command is injected."
+                "1-based line number in the file before which the commands "
+                "string is injected."
             ),
         ),
     ],
@@ -138,7 +147,7 @@ async def rocq_lsp_run_command(
             gt=0,
             le=MAX_OVERALL_TIMEOUT_SECONDS,
             description=(
-                "Soft coq-lsp request deadline for partial command output before "
+                "Soft coq-lsp request deadline for partial run_at output before "
                 "the MCP host cancels, in seconds. Default 60s, maximum 3600s."
             ),
         ),
@@ -146,59 +155,28 @@ async def rocq_lsp_run_command(
 ) -> dict[str, Any]:
     """Run Rocq commands at a file position and return their output.
 
-    Use this to query information about the proof environment, for instance using Search, Check, or Locate.
+    Use this for one-off Rocq tasks such as Check, Search, Locate, Require, or
+    testing notations in a local context.
 
     Prefer calling this right after imports. If local definitions, scopes, or
     modules are needed, call it between lemmas/definitions.
 
-    overall_timeout_seconds is a soft deadline for reporting partial results. It should be lower than the host's tool call timeout. 
+    overall_timeout_seconds is a soft deadline for reporting partial results.
+    It should be lower than the host's tool call timeout.
     """
-    if not commands:
-        return {
-            "status": "failed",
-            "file": file,
-            "message": "commands must contain at least one Rocq command ending in '.'",
-        }
-
     manager: RocqLspManager = ctx.request_context.lifespan_context
-    results = [
-        await manager.run_command(
-            file,
-            command,
-            line,
-            character,
-            overall_timeout_seconds=overall_timeout_seconds,
-        )
-        for command in commands
-    ]
-    rendered_results = [result.render() for result in results]
-    timed_out = any(result.timed_out for result in results)
-    restarted = any(result.restarted for result in results)
-    response: dict[str, Any] = {
-        "status": _batch_status(rendered_results),
-        "file": rendered_results[0].get("file", file),
-        "results": rendered_results,
-    }
-    if timed_out:
-        response["timed_out"] = True
-    if restarted:
-        response["restarted"] = True
-    if location := rendered_results[0].get("location"):
-        response["location"] = location
-    return response
+    result = await manager.run_at(
+        file,
+        commands,
+        line,
+        character,
+        overall_timeout_seconds=overall_timeout_seconds,
+    )
+    return result.render()
 
 
 def _long_running_alert_threshold(overall_timeout_seconds: float) -> float:
     return min(float(overall_timeout_seconds), MAX_OVERALL_TIMEOUT_SECONDS) * 0.8
-
-
-def _batch_status(results: list[dict[str, Any]]) -> str:
-    statuses = {result.get("status") for result in results}
-    if "timeout" in statuses:
-        return "timeout"
-    if "failed" in statuses:
-        return "failed"
-    return "complete"
 
 
 def main() -> None:

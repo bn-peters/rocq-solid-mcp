@@ -1,12 +1,12 @@
 [
   {
-    "step": "compile failing file after slow proof",
-    "action": "compile",
+    "step": "check failing file after slow proof",
+    "action": "check",
     "file": "src/error_cached.v",
     "result": {
       "status": "complete",
       "file": "src/error_cached.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1
       },
@@ -20,13 +20,13 @@
     }
   },
   {
-    "step": "recompile failing file from cache",
-    "action": "compile",
+    "step": "recheck failing file from cache",
+    "action": "check",
     "file": "src/error_cached.v",
     "result": {
       "status": "complete",
       "file": "src/error_cached.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1
       },

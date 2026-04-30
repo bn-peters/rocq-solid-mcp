@@ -2,29 +2,29 @@
 
 It is the duty of the agent to keep AGENTS.md and README.md up to date.
 
-This package is a Python MCP prototype for compiling Rocq files and running
-Rocq commands through persistent project-scoped `coq-lsp` sessions.
-Compilation returns compact structured diagnostics and, when available,
-proof-state context for the sentence that produced an error. Command execution
-returns compact feedback output for each requested command.
+This package is a Python MCP prototype for checking Rocq files and running
+one-off Rocq commands through persistent project-scoped `coq-lsp` sessions.
+Checking returns compact structured diagnostics and, when available,
+proof-state context for the sentence that produced an error. `run_at` execution
+returns compact feedback output for the requested commands string.
 
 ## Package Layout
 
 - `src/rocq_lsp_mcp/server.py` defines the FastMCP server, the lifespan-managed
   `RocqLspManager`, and the MCP tools
-  `rocq_lsp_compile_file(file: str, message_limit: int = 10,
+  `rocq_lsp_check_file(file: str, message_limit: int = 10,
   severity: str = "info",
   overall_timeout_seconds: float = 60,
   command_timeout_seconds: float | None = None,
   restart: bool = False)` and
-  `rocq_lsp_run_command(file: str, commands: list[str], line: int,
+  `rocq_lsp_run_at(file: str, commands: str, line: int,
   character: int = 1, overall_timeout_seconds: float = 60)`.
   Tool handlers render internal result models before returning MCP output.
 - `src/rocq_lsp_mcp/manager.py` is the orchestration layer. It resolves files,
   infers workspaces from `_RocqProject` or `_CoqProject`, keeps cached
-  sessions per workspace, evicts idle sessions, reads files, routes compile and
-  command requests, and converts outcomes into `CompileResult` or
-  `CommandResult`.
+  sessions per workspace, evicts idle sessions, reads files, routes check and
+  `run_at` requests, and converts outcomes into `CheckResult` or
+  `RunAtResult`.
 - `src/rocq_lsp_mcp/session.py` owns the lifecycle for one workspace-backed
   `coq-lsp` session. It starts and stops the client, keeps the session lock,
   tracks document versions, and owns the session `NotificationStore`.
@@ -52,13 +52,13 @@ returns compact feedback output for each requested command.
   hypotheses are rendered as strings like `H : True` or `n := 0 : nat`.
 - `src/rocq_lsp_mcp/models.py` contains the internal Pydantic result models,
   `TimeoutContext`, and `RenderOptions`. Internal models keep normalized raw
-  ranges, document metadata, diagnostics, proof states, compile timing,
+  ranges, document metadata, diagnostics, proof states, check timing,
   long-running command data, and timeout state.
   Their `render(options)` methods are the only place that decides the compact
   MCP output shape: file display, severity labels, location format, proof-state
   inclusion, duplicate proof-error filtering, minimum severity filtering,
   global cascade-error suppression, per-severity message limits, timeout
-  formatting, compilation-time formatting, long-running command
+  formatting, check-time formatting, long-running command
   formatting, and empty-field pruning. Default rendering keeps only the first
   error for each `proof_name` and, after the first error without a
   `proof_name`, suppresses later errors that also lack a `proof_name`; warnings
@@ -71,7 +71,7 @@ returns compact feedback output for each requested command.
   `TimeoutPolicy`, builds the `opam exec -- coq-lsp` command, and builds the
   `coq-lsp` initialization settings. `send_execinfo` is enabled so per-call
   command timeouts can be used without restarting sessions, and
-  `send_perf_data` is enabled so compile calls can report long-running
+  `send_perf_data` is enabled so check calls can report long-running
   commands.
 
 The prototype intentionally talks to `coq-lsp` directly. Do not reintroduce an
@@ -81,15 +81,15 @@ https://github.com/rocq-community/rocq-lsp/blob/main/etc/doc/PROTOCOL.md
 
 ## Runtime Behavior
 
-The compile MCP tool receives a Rocq file path, optional `message_limit`,
+The check MCP tool receives a Rocq file path, optional `message_limit`,
 optional `severity`, optional `overall_timeout_seconds`, optional
 `command_timeout_seconds`, and optional `restart`; `message_limit` and
-`severity` are render-only and do not truncate the internal `CompileResult`.
+`severity` are render-only and do not truncate the internal `CheckResult`.
 `severity` may be `info`, `warning`, or `error`; only diagnostics at or above
 that level are returned. `overall_timeout_seconds` controls a soft `coq-lsp`
 partial-result deadline. If it fires before the MCP host cancels the tool call,
 the server cancels the underlying `coq-lsp` request and returns partial
-diagnostics, progress context, or partial command output when available. It
+diagnostics, progress context, or partial `run_at` output when available. It
 defaults to 60 seconds and is capped at 3600 seconds.
 Host-level MCP timeouts should be greater than
 `overall_timeout_seconds + ROCQ_LSP_HARD_TIMEOUT_GRACE` when callers want
@@ -97,16 +97,17 @@ partial timeout results back.
 For `command_timeout_seconds`, `None` uses `ROCQ_LSP_COMMAND_TIMEOUT`, which
 defaults to 5 seconds, `0` disables the command watchdog for that call, and
 positive values enable it. The server reports `long_running_commands` for
-commands that actually ran during compile and took at least 80% of
+commands that actually ran during check and took at least 80% of
 `overall_timeout_seconds`. `restart=True` sends `coq/workspace_update` with
 empty object params before the file's `didOpen` or `didChange`, asking the
 existing `coq-lsp` process to invalidate cached `Require` state after external
 `.vo` files have changed. It does not restart the server process and does not
 rebuild dependencies; callers must recompile edited dependencies first. The
-command MCP tool receives a Rocq file path, one or more complete commands
-ending in `.`, a 1-based line/character position, and optional
-`overall_timeout_seconds`; this is the same command tool used for `Search`
-calls. On each call, the manager resolves the file, infers a workspace by
+`run_at` MCP tool receives a Rocq file path, one string containing one or more
+complete commands ending in `.`, a 1-based line/character position, and optional
+`overall_timeout_seconds`; it is useful for one-off tasks such as `Check`,
+`Search`, `Require`, `Locate`, and notation experiments. On each call, the
+manager resolves the file, infers a workspace by
 walking upward to the nearest `_RocqProject` or
 `_CoqProject`, then delegates to the cached `RocqLspSession` for that
 workspace. If no project file is found, the file's parent directory is used.
@@ -120,12 +121,12 @@ process starts with `cwd` set to that workspace and, by default, with
 `coq-lsp` processes concurrently. Calls inside the same workspace share one
 session and serialize on that session's lock.
 
-Compilation is driven by `coq/getDocument` with `goals="Str"`. This asks
+Checking is driven by `coq/getDocument` with `goals="Str"`. This asks
 `coq-lsp` for the checked document and proof-state data around spans. The
 `NotificationStore` collects diagnostics from
 `textDocument/publishDiagnostics`. `pipeline.py` normalizes those diagnostics
 and attaches proof states without applying agent-facing filtering. The
-`CompileResult.render(RenderOptions(...))` step converts raw LSP ranges to
+`CheckResult.render(RenderOptions(...))` step converts raw LSP ranges to
 1-based locations, severity numbers to `error`, `warning`, or `info`, removes
 empty fields, filters duplicate proof errors by default, and applies
 minimum severity filtering, suppresses later global errors after the first
@@ -135,7 +136,7 @@ when no diagnostics remain after filtering. When diagnostics are omitted because
 `message_limit`, the response includes `omitted_counts` and the effective
 `message_limit`.
 
-Compile results also include `compilation_time_seconds`, rounded to
+Check results also include `checking_time_seconds`, rounded to
 milliseconds. When enabled, long-running command reporting observes
 `$/coq/filePerfData`, filters out entries below the alert threshold, filters out
 entries with `info.cache_hit: true`, intersects perf entries with
@@ -162,8 +163,8 @@ exceeds the deadline, the client sends `$/cancelRequest` and the manager returns
 `status: "timeout"` with `timeout_kind: "command"`, `command_timeout_seconds`,
 the timed-out sentence range, and a source preview. This is per Rocq sentence,
 not per internal Ltac substep. The `overall_timeout_seconds` soft deadline
-remains the outer server-side partial-result deadline for compile and
-command/Search calls. MCP host cancellation is a harder outer abort: the server
+remains the outer server-side partial-result deadline for check and `run_at`
+calls. MCP host cancellation is a harder outer abort: the server
 sends `$/cancelRequest` to `coq-lsp` and may reset the workspace session, but
 the client may already have abandoned the result.
 
@@ -173,20 +174,20 @@ span. The manager issues a best-effort `proof/goals` request with `mode="Prev"`
 at the diagnostic position and `pipeline.py` merges the returned compact goals
 and bullet state into the existing proof-state payload.
 
-Command execution is driven by `petanque/run_at_point`, because
+`run_at` execution is driven by `petanque/run_at_point`, because
 `proof/goals` with the `command` parameter does not surface feedback from
-commands such as `Search` or `Print` in current `coq-lsp`. The command tool
-should be called with one or more complete commands right after imports when
-possible, or between lemmas/definitions when local declarations, scopes, or
-modules are required. The commands are ephemeral and do not edit the source
-file.
+commands such as `Search` or `Print` in current `coq-lsp`. The tool should be
+called with one string containing one or more complete commands right after
+imports when possible, or between lemmas/definitions when local declarations,
+scopes, or modules are required. The commands are ephemeral and do not edit the
+source file.
 
 Caching is delegated to the long-lived `coq-lsp` process. The Python side keeps
 the session, notification, and version state alive so repeated calls for changed
 files can use rocq-lsp's incremental checking behavior. Idle sessions are
 cleaned up by the MCP server's background reaper and opportunistically during
-compile calls after `ROCQ_LSP_IDLE_TTL_SECONDS`; sessions that are compiling or
-queued for a compile are not stopped.
+check calls after `ROCQ_LSP_IDLE_TTL_SECONDS`; sessions that are checking or
+queued for a check are not stopped.
 
 Timeout and cancellation handling has three layers:
 
@@ -267,7 +268,7 @@ Rocq version in the matrix.
 ## Test Suite
 
 - `tests/unit/test_manager.py` uses fakes to cover manager behavior, versioning,
-  workspace inference, per-workspace session separation, command execution,
+  workspace inference, per-workspace session separation, `run_at` execution,
   idle cleanup, language IDs, timeout context construction, and hard-timeout
   reset logic.
 - `tests/unit/test_config.py` covers command construction and environment
@@ -280,51 +281,50 @@ Rocq version in the matrix.
 - `tests/unit/test_pretty.py` covers readable rendering of rocq-lsp Pp structures
   and proof-state normalization.
 - `tests/integration/test_integration.py` talks to a real `coq-lsp`. It checks
-  clean files, multiple errors, command feedback and command failures, and
+  clean files, multiple errors, `run_at` feedback and failures, and
   file-change behavior where a failing proof `Goal 0 = 0. Proof. fail. Qed.`
-  reports proof state, then recompiles cleanly after changing `fail` to
+  reports proof state, then rechecks cleanly after changing `fail` to
   `reflexivity`.
 - `tests/e2e/test_scenarios.py` runs promoted scenario fixtures that copy whole
-  Rocq projects, compile files or run commands through one cached manager, edit
+  Rocq projects, check files or run `run_at` through one cached manager, edit
   files, and check concise agent-facing transcripts. Scenario files may define a
-  top-level `timeout_policy` for timeout-specific coverage. Scenario compile
-  and command steps may include `overall_timeout_seconds` to override the soft
+  top-level `timeout_policy` for timeout-specific coverage. Scenario check
+  and `run_at` steps may include `overall_timeout_seconds` to override the soft
   partial-result deadline, plus `min_seconds` or `max_seconds` timing
   assertions for cache-sensitive behavior; timings are asserted by the harness
   but omitted from promoted transcripts. Scenario
-  compile steps may also include `command_timeout_seconds` to cover per-call
-  compile timeout overrides, manager-level `long_running_seconds` to exercise
+  check steps may also include `command_timeout_seconds` to cover per-call
+  check timeout overrides, manager-level `long_running_seconds` to exercise
   long-running command reporting, or `severity` and `message_limit` to cover
   render-time diagnostic filtering.
   `diagnostic_message_limit` covers default
   per-severity diagnostic truncation. `diagnostic_severity_filter` covers
   real warning diagnostics, proof-script errors, dense counts, and `severity`
-  filtering. `command_info_outputs` covers promoted `Search`, `Check`, and
-  `Compute` command outputs rendered at info level. `run_command_search` covers
-  promoted command output for a narrow `Search` query.
-  `run_command_cached_after_slow_proof`
+  filtering. `run_at_info_outputs` covers promoted `Search`, `Check`, and
+  `Compute` outputs rendered at info level. `run_at_search` covers promoted
+  output for a narrow `Search` query. `run_at_cached_after_slow_proof`
   checks that `Search` after a cached slow proof is quick. `timeout_recovery`
   uses the local `sleep` tactic to cover a soft `coq/getDocument` timeout
-  followed by a successful recompile in the same manager.
+  followed by a successful recheck in the same manager.
   `hard_timeout_resets_cache` sets the cancel grace to zero and checks that a
-  hard timeout drops the old `coq-lsp` process by requiring a later recompile to
-  rerun an unchanged slow proof. `compile_command_timeout_argument` covers the
-  compile tool call's per-call `command_timeout_seconds` override.
+  hard timeout drops the old `coq-lsp` process by requiring a later recheck to
+  rerun an unchanged slow proof. `check_command_timeout_argument` covers the
+  check tool call's per-call `command_timeout_seconds` override.
   `command_timeout` uses the same local `sleep` tactic with a long global
   timeout and short command timeout to cover per-sentence cancellation.
   `request_timeout_resume_and_error_cache` covers repeated soft partial-result
   timeouts resuming from cached progress while preserving an earlier error
-  diagnostic, including the final cached successful compile.
+  diagnostic, including the final cached successful check.
   `request_timeout_resume_then_success` covers the two-call case where a soft
-  partial-result timeout reports an earlier error, then the next cached compile
+  partial-result timeout reports an earlier error, then the next cached check
   succeeds and reports the same error.
-  `repeated_compile_error_cached` calls compile twice on the same file with a
+  `repeated_check_error_cached` calls check twice on the same file with a
   slow cached prefix and verifies both calls report the same error while the
   second call is quick.
   `long_running_proofs_cached` opts in to long-running command reporting and
   verifies that the first slow `sleep 5.` tactic is reported while the later
-  cached recompile is not.
-- `tests/e2e/test_compile_restart.py` covers the compile tool's `restart`
+  cached recheck is not.
+- `tests/e2e/test_check_restart.py` covers the check tool's `restart`
   argument by recompiling a dependency externally, showing a stale import
   without `restart`, then refreshing it through `coq/workspace_update`.
   `lemma_header_cascade_error` covers malformed lemma headers that should report

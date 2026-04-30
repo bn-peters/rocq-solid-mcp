@@ -1,14 +1,14 @@
 {
   "steps": [
     {
-      "label": "compile imported library",
-      "action": "compile",
+      "label": "check imported library",
+      "action": "check",
       "file": "theories/Core.v",
       "long_running_seconds": 0
     },
     {
-      "label": "compile client with import",
-      "action": "compile",
+      "label": "check client with import",
+      "action": "check",
       "file": "clients/UseCore.v",
       "long_running_seconds": 0
     },
@@ -19,8 +19,8 @@
       "text": "\nCheck missing_project_import_name.\n"
     },
     {
-      "label": "recompile edited client",
-      "action": "compile",
+      "label": "recheck edited client",
+      "action": "check",
       "file": "clients/UseCore.v",
       "long_running_seconds": 0
     }

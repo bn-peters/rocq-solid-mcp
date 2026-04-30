@@ -1,8 +1,8 @@
 {
   "steps": [
     {
-      "label": "compile repeated failing tactics",
-      "action": "compile",
+      "label": "check repeated failing tactics",
+      "action": "check",
       "file": "src/repeated_failures.v",
       "long_running_seconds": 0
     }

@@ -1,24 +1,24 @@
 [
   {
-    "step": "compile file with slow proof",
-    "action": "compile",
+    "step": "check file with slow proof",
+    "action": "check",
     "file": "src/CacheCommand.v",
     "result": {
       "status": "complete",
       "file": "src/CacheCommand.v",
-      "compilation_time_seconds": "$SECONDS"
+      "checking_time_seconds": "$SECONDS"
     }
   },
   {
     "step": "search after cached slow proof",
-    "action": "command",
+    "action": "run_at",
     "file": "src/CacheCommand.v",
-    "command": "Search (_ + 0 = _).",
+    "commands": "Search (_ + 0 = _).",
     "result": {
       "status": "complete",
       "file": "src/CacheCommand.v",
       "location": "10:5",
-      "command": "Search (_ + 0 = _).",
+      "commands": "Search (_ + 0 = _).",
       "output": [
         {
           "level": "info",

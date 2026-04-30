@@ -9,12 +9,12 @@ from typing import Any
 
 from .config import RocqLspConfig, bounded_overall_timeout_seconds, load_config
 from .models import (
-    CommandResult,
-    CompileResult,
+    CheckResult,
     DEFAULT_LONG_RUNNING_SECONDS,
+    RunAtResult,
     TimeoutContext,
-    command_location,
     long_running_commands_from_perf_data,
+    run_at_location,
 )
 from .pipeline import build_diagnostics
 from .rocq_client import (
@@ -52,14 +52,14 @@ class RocqLspManager:
         for session in sessions:
             await session.stop()
 
-    async def compile_file(
+    async def check_file(
         self,
         file: str,
         command_timeout_seconds: float | None = None,
         overall_timeout_seconds: float | None = None,
         long_running_seconds: float | None = DEFAULT_LONG_RUNNING_SECONDS,
         restart: bool = False,
-    ) -> CompileResult:
+    ) -> CheckResult:
         started_at = time.monotonic()
         command_timeout = self._effective_command_timeout(command_timeout_seconds)
         overall_timeout = self._effective_overall_timeout(overall_timeout_seconds)
@@ -68,7 +68,7 @@ class RocqLspManager:
         )
         path = self._resolve_file(file)
         if not path.is_file():
-            return CompileResult.from_diagnostics(
+            return CheckResult.from_diagnostics(
                 status="failed",
                 file=str(path),
                 uri=None,
@@ -76,14 +76,14 @@ class RocqLspManager:
                 version=None,
                 completed=None,
                 diagnostics=[],
-                compilation_time_seconds=self._elapsed_seconds(started_at),
+                checking_time_seconds=self._elapsed_seconds(started_at),
                 message=f"File does not exist: {path}",
             )
 
         workspace = self._infer_workspace(path)
         session = await self._checkout_session(workspace)
         try:
-            result = await self._compile_with_session(
+            result = await self._check_with_session(
                 session,
                 path,
                 command_timeout,
@@ -92,26 +92,26 @@ class RocqLspManager:
                 restart,
             )
             return result.model_copy(
-                update={"compilation_time_seconds": self._elapsed_seconds(started_at)}
+                update={"checking_time_seconds": self._elapsed_seconds(started_at)}
             )
         finally:
             session.lock.release()
             await self._release_session(session)
             await self._cleanup_idle_sessions()
 
-    async def run_command(
+    async def run_at(
         self,
         file: str,
-        command: str,
+        commands: str,
         line: int,
         character: int = 1,
         overall_timeout_seconds: float | None = None,
-    ) -> CommandResult:
+    ) -> RunAtResult:
         overall_timeout = self._effective_overall_timeout(overall_timeout_seconds)
         path = self._resolve_file(file)
-        stripped_command = command.strip()
+        stripped_commands = commands.strip()
         location = (
-            command_location(line, character)
+            run_at_location(line, character)
             if isinstance(line, int)
             and isinstance(character, int)
             and line > 0
@@ -119,10 +119,10 @@ class RocqLspManager:
             else None
         )
         if not path.is_file():
-            return CommandResult.from_feedback(
+            return RunAtResult.from_feedback(
                 status="failed",
                 file=str(path),
-                command=stripped_command,
+                commands=stripped_commands,
                 location=location,
                 uri=None,
                 workspace=None,
@@ -132,14 +132,14 @@ class RocqLspManager:
             )
 
         workspace = self._infer_workspace(path)
-        validation_error = self._command_validation_error(
-            stripped_command, line, character
+        validation_error = self._run_at_validation_error(
+            stripped_commands, line, character
         )
         if validation_error is not None:
-            return CommandResult.from_feedback(
+            return RunAtResult.from_feedback(
                 status="failed",
                 file=str(path),
-                command=stripped_command,
+                commands=stripped_commands,
                 location=location,
                 uri=None,
                 workspace=str(workspace),
@@ -150,10 +150,10 @@ class RocqLspManager:
 
         session = await self._checkout_session(workspace)
         try:
-            return await self._run_command_with_session(
+            return await self._run_at_with_session(
                 session,
                 path,
-                stripped_command,
+                stripped_commands,
                 line,
                 character,
                 overall_timeout,
@@ -163,7 +163,7 @@ class RocqLspManager:
             await self._release_session(session)
             await self._cleanup_idle_sessions()
 
-    async def _compile_with_session(
+    async def _check_with_session(
         self,
         session: RocqLspSession,
         path: Path,
@@ -171,7 +171,7 @@ class RocqLspManager:
         overall_timeout: float,
         long_running_threshold: float | None,
         restart: bool,
-    ) -> CompileResult:
+    ) -> CheckResult:
         client = session.client
         uri = path.as_uri()
         workspace = str(session.workspace)
@@ -179,7 +179,7 @@ class RocqLspManager:
         try:
             content = path.read_text(encoding="utf-8")
         except Exception as exc:
-            return CompileResult.from_diagnostics(
+            return CheckResult.from_diagnostics(
                 status="failed",
                 file=str(path),
                 uri=uri,
@@ -210,7 +210,7 @@ class RocqLspManager:
             )
             completed_doc = get_document_result.document
             request_timed_out = get_document_result.timed_out
-            raw_diagnostics, perf_data = await self._compile_notifications(
+            raw_diagnostics, perf_data = await self._check_notifications(
                 session, uri, version, long_running_threshold, request_timed_out
             )
             supplemental_proof_states = await self._incomplete_proof_goal_states(
@@ -251,7 +251,7 @@ class RocqLspManager:
                     ),
                     timed_out_range=get_document_result.timed_out_range,
                 )
-            return CompileResult.from_diagnostics(
+            return CheckResult.from_diagnostics(
                 status="timeout" if request_timed_out else "complete",
                 file=str(path),
                 uri=uri,
@@ -285,7 +285,7 @@ class RocqLspManager:
                 timed_out_range=exc.timed_out_range,
             )
             await self._reset_session(session.workspace)
-            return CompileResult.from_diagnostics(
+            return CheckResult.from_diagnostics(
                 status="timeout",
                 file=str(path),
                 uri=uri,
@@ -303,7 +303,7 @@ class RocqLspManager:
                 uri, version
             )
             diagnostics = build_diagnostics(raw_diagnostics, None)
-            return CompileResult.from_diagnostics(
+            return CheckResult.from_diagnostics(
                 status="failed",
                 file=str(path),
                 uri=uri,
@@ -318,7 +318,7 @@ class RocqLspManager:
                 uri, version
             )
             diagnostics = build_diagnostics(raw_diagnostics, None)
-            return CompileResult.from_diagnostics(
+            return CheckResult.from_diagnostics(
                 status="failed",
                 file=str(path),
                 uri=uri,
@@ -329,27 +329,27 @@ class RocqLspManager:
                 message=str(exc),
             )
 
-    async def _run_command_with_session(
+    async def _run_at_with_session(
         self,
         session: RocqLspSession,
         path: Path,
-        command: str,
+        commands: str,
         line: int,
         character: int,
         overall_timeout: float,
-    ) -> CommandResult:
+    ) -> RunAtResult:
         client = session.client
         uri = path.as_uri()
         workspace = str(session.workspace)
         version = session.versions.get(uri, 0) + 1
-        location = command_location(line, character)
+        location = run_at_location(line, character)
         try:
             content = path.read_text(encoding="utf-8")
         except Exception as exc:
-            return CommandResult.from_feedback(
+            return RunAtResult.from_feedback(
                 status="failed",
                 file=str(path),
-                command=command,
+                commands=commands,
                 location=location,
                 uri=uri,
                 workspace=workspace,
@@ -370,14 +370,14 @@ class RocqLspManager:
                 uri=uri,
                 version=version,
                 position={"line": line - 1, "character": character - 1},
-                command=command,
+                commands=commands,
                 timeout=overall_timeout,
                 hard_timeout_grace=self.config.timeout_policy.cancel_grace_seconds,
             )
-            return CommandResult.from_feedback(
+            return RunAtResult.from_feedback(
                 status="timeout" if request_timed_out else "complete",
                 file=str(path),
-                command=command,
+                commands=commands,
                 location=location,
                 uri=uri,
                 workspace=workspace,
@@ -391,10 +391,10 @@ class RocqLspManager:
             raise
         except RocqLspHardTimeout as exc:
             await self._reset_session(session.workspace)
-            return CommandResult.from_feedback(
+            return RunAtResult.from_feedback(
                 status="timeout",
                 file=str(path),
-                command=command,
+                commands=commands,
                 location=location,
                 uri=uri,
                 workspace=workspace,
@@ -405,10 +405,10 @@ class RocqLspManager:
                 message=str(exc),
             )
         except RocqLspResponseError as exc:
-            return CommandResult.from_feedback(
+            return RunAtResult.from_feedback(
                 status="failed",
                 file=str(path),
-                command=command,
+                commands=commands,
                 location=location,
                 uri=uri,
                 workspace=workspace,
@@ -417,10 +417,10 @@ class RocqLspManager:
                 message=self._response_error_message(exc.error),
             )
         except Exception as exc:
-            return CommandResult.from_feedback(
+            return RunAtResult.from_feedback(
                 status="failed",
                 file=str(path),
-                command=command,
+                commands=commands,
                 location=location,
                 uri=uri,
                 workspace=workspace,
@@ -469,7 +469,7 @@ class RocqLspManager:
     def _elapsed_seconds(started_at: float) -> float:
         return max(0.0, time.monotonic() - started_at)
 
-    async def _compile_notifications(
+    async def _check_notifications(
         self,
         session: RocqLspSession,
         uri: str,
@@ -666,17 +666,17 @@ class RocqLspManager:
         return json.dumps(range_, sort_keys=True, separators=(",", ":"))
 
     @staticmethod
-    def _command_validation_error(
-        command: str, line: int, character: int
+    def _run_at_validation_error(
+        commands: str, line: int, character: int
     ) -> str | None:
         if not isinstance(line, int) or not isinstance(character, int):
             return "line and character must be positive 1-based integers"
         if line <= 0 or character <= 0:
             return "line and character must be positive 1-based integers"
-        if not command:
-            return "command must be a non-empty Rocq command ending in '.'"
-        if not command.endswith("."):
-            return "command must be a non-empty Rocq command ending in '.'"
+        if not commands:
+            return "commands must be a non-empty Rocq command string ending in '.'"
+        if not commands.endswith("."):
+            return "commands must be a non-empty Rocq command string ending in '.'"
         return None
 
     @staticmethod

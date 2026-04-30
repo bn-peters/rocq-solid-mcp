@@ -1,12 +1,12 @@
 [
   {
-    "step": "compile all severities",
-    "action": "compile",
+    "step": "check all severities",
+    "action": "check",
     "file": "src/severities.v",
     "result": {
       "status": "complete",
       "file": "src/severities.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 2,
         "warnings": 1
@@ -47,14 +47,14 @@
     }
   },
   {
-    "step": "compile warnings and errors",
-    "action": "compile",
+    "step": "check warnings and errors",
+    "action": "check",
     "file": "src/severities.v",
     "severity": "warning",
     "result": {
       "status": "complete",
       "file": "src/severities.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 2,
         "warnings": 1
@@ -95,14 +95,14 @@
     }
   },
   {
-    "step": "compile errors only",
-    "action": "compile",
+    "step": "check errors only",
+    "action": "check",
     "file": "src/severities.v",
     "severity": "error",
     "result": {
       "status": "complete",
       "file": "src/severities.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 2
       },

@@ -5,8 +5,8 @@
   },
   "steps": [
     {
-      "label": "compile slow proof with short timeout",
-      "action": "compile",
+      "label": "check slow proof with short timeout",
+      "action": "check",
       "file": "src/timeout.v",
       "max_seconds": 4,
       "long_running_seconds": 0
@@ -19,8 +19,8 @@
       "new": "sleep 0"
     },
     {
-      "label": "recompile after timeout",
-      "action": "compile",
+      "label": "recheck after timeout",
+      "action": "check",
       "file": "src/timeout.v",
       "max_seconds": 4,
       "long_running_seconds": 0

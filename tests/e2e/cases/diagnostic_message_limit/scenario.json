@@ -1,8 +1,8 @@
 {
   "steps": [
     {
-      "label": "compile many failing proofs",
-      "action": "compile",
+      "label": "check many failing proofs",
+      "action": "check",
       "file": "src/many_failures.v",
       "long_running_seconds": 0
     }

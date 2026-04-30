@@ -1,15 +1,15 @@
 {
   "steps": [
     {
-      "label": "compile failing file after slow proof",
-      "action": "compile",
+      "label": "check failing file after slow proof",
+      "action": "check",
       "file": "src/error_cached.v",
       "min_seconds": 2,
       "long_running_seconds": 0
     },
     {
-      "label": "recompile failing file from cache",
-      "action": "compile",
+      "label": "recheck failing file from cache",
+      "action": "check",
       "file": "src/error_cached.v",
       "max_seconds": 3,
       "long_running_seconds": 0

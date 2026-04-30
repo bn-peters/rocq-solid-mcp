@@ -34,7 +34,7 @@ class FakeClient:
         file_progress: dict[str, Any] | None = None,
         file_perf_data: dict[str, Any] | None = None,
         request_timed_out: bool = False,
-        command_response: dict[str, Any] | Exception | None = None,
+        run_at_response: dict[str, Any] | Exception | None = None,
         timeout_kind: str = "request",
         timed_out_range: dict[str, Any] | None = None,
     ) -> None:
@@ -45,7 +45,7 @@ class FakeClient:
         self.file_progress = file_progress
         self.file_perf_data = file_perf_data
         self.request_timed_out = request_timed_out
-        self.command_response = command_response
+        self.run_at_response = run_at_response
         self.timeout_kind = timeout_kind
         self.timed_out_range = timed_out_range
         self.opened: list[tuple[Path, int]] = []
@@ -53,7 +53,7 @@ class FakeClient:
         self.workspace_updates = 0
         self.goal_requests: list[dict[str, Any]] = []
         self.get_document_requests: list[dict[str, Any]] = []
-        self.command_requests: list[dict[str, Any]] = []
+        self.run_at_requests: list[dict[str, Any]] = []
         self.events: list[str] = []
         self.killed = False
         self.closed = False
@@ -158,25 +158,25 @@ class FakeClient:
         uri: str,
         version: int,
         position: dict[str, int],
-        command: str,
+        commands: str,
         timeout: float,
         hard_timeout_grace: float,
     ) -> tuple[dict[str, Any], bool]:
-        self.command_requests.append(
+        self.run_at_requests.append(
             {
                 "uri": uri,
                 "version": version,
                 "position": position,
-                "command": command,
+                "commands": commands,
                 "timeout": timeout,
                 "hard_timeout_grace": hard_timeout_grace,
             }
         )
         if self.hard_timeout:
             raise RocqLspHardTimeout("stuck")
-        if isinstance(self.command_response, Exception):
-            raise self.command_response
-        return self.command_response or {"feedback": []}, False
+        if isinstance(self.run_at_response, Exception):
+            raise self.run_at_response
+        return self.run_at_response or {"feedback": []}, False
 
     def clear_pending_requests(self) -> None:
         self.pending_cleared = True
@@ -323,15 +323,15 @@ def file_perf_data(
 
 
 @pytest.mark.asyncio
-async def test_compile_file_opens_then_changes(tmp_path: Path) -> None:
+async def test_check_file_opens_then_changes(tmp_path: Path) -> None:
     source = tmp_path / "Demo.v"
     source.write_text("Check nat.\n", encoding="utf-8")
     notifications = SpyNotificationStore()
     client = FakeClient(notifications, [diagnostic("bad", 1), diagnostic("warn", 2)])
     manager = FakeManager(client, notifications, tmp_path)
 
-    first = await manager.compile_file(str(source))
-    second = await manager.compile_file(str(source))
+    first = await manager.check_file(str(source))
+    second = await manager.check_file(str(source))
 
     assert first.status == "complete"
     assert first.error_count == 1
@@ -344,7 +344,7 @@ async def test_compile_file_opens_then_changes(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_compile_file_restart_notifies_workspace_before_change(
+async def test_check_file_restart_notifies_workspace_before_change(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -353,8 +353,8 @@ async def test_compile_file_restart_notifies_workspace_before_change(
     client = FakeClient(notifications)
     manager = FakeManager(client, notifications, tmp_path)
 
-    first = await manager.compile_file(str(source))
-    second = await manager.compile_file(str(source), restart=True)
+    first = await manager.check_file(str(source))
+    second = await manager.check_file(str(source), restart=True)
 
     assert first.status == "complete"
     assert second.status == "complete"
@@ -372,7 +372,7 @@ async def test_compile_file_restart_notifies_workspace_before_change(
 
 
 @pytest.mark.asyncio
-async def test_compile_file_keeps_only_first_error_per_proof_name_and_global_errors(
+async def test_check_file_keeps_only_first_error_per_proof_name_and_global_errors(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -391,7 +391,7 @@ async def test_compile_file_keeps_only_first_error_per_proof_name_and_global_err
     )
     manager = FakeManager(client, notifications, tmp_path)
 
-    result = await manager.compile_file(str(source))
+    result = await manager.check_file(str(source))
 
     assert result.error_count == 5
     assert result.warning_count == 1
@@ -419,7 +419,7 @@ async def test_compile_file_keeps_only_first_error_per_proof_name_and_global_err
 
 
 @pytest.mark.asyncio
-async def test_compile_file_accepts_requested_message_limit(tmp_path: Path) -> None:
+async def test_check_file_accepts_requested_message_limit(tmp_path: Path) -> None:
     source = tmp_path / "Demo.v"
     source.write_text("Check nat.\n", encoding="utf-8")
     notifications = SpyNotificationStore()
@@ -441,7 +441,7 @@ async def test_compile_file_accepts_requested_message_limit(tmp_path: Path) -> N
     )
     manager = FakeManager(client, notifications, tmp_path)
 
-    result = await manager.compile_file(str(source))
+    result = await manager.check_file(str(source))
 
     assert [diagnostic.message for diagnostic in result.diagnostics] == [
         "bad 0",
@@ -465,7 +465,7 @@ async def test_compile_file_accepts_requested_message_limit(tmp_path: Path) -> N
 
 
 @pytest.mark.asyncio
-async def test_compile_file_forwards_overall_timeout_override(
+async def test_check_file_forwards_overall_timeout_override(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -474,8 +474,8 @@ async def test_compile_file_forwards_overall_timeout_override(
     client = FakeClient(notifications)
     manager = FakeManager(client, notifications, tmp_path)
 
-    await manager.compile_file(str(source), overall_timeout_seconds=2.5)
-    await manager.compile_file(str(source), overall_timeout_seconds=9999)
+    await manager.check_file(str(source), overall_timeout_seconds=2.5)
+    await manager.check_file(str(source), overall_timeout_seconds=9999)
 
     assert client.get_document_requests[0]["timeout"] == 2.5
     assert (
@@ -485,7 +485,7 @@ async def test_compile_file_forwards_overall_timeout_override(
 
 
 @pytest.mark.asyncio
-async def test_compile_file_reports_elapsed_time_and_long_running_commands(
+async def test_check_file_reports_elapsed_time_and_long_running_commands(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -504,10 +504,10 @@ async def test_compile_file_reports_elapsed_time_and_long_running_commands(
     )
     manager = FakeManager(client, notifications, tmp_path)
 
-    result = await manager.compile_file(str(source), long_running_seconds=3)
+    result = await manager.check_file(str(source), long_running_seconds=3)
 
     rendered = result.render()
-    assert rendered["compilation_time_seconds"] >= 0
+    assert rendered["checking_time_seconds"] >= 0
     assert rendered["long_running_commands"] == [
         {
             "location": "3:3 to 3:11",
@@ -517,7 +517,7 @@ async def test_compile_file_reports_elapsed_time_and_long_running_commands(
 
 
 @pytest.mark.asyncio
-async def test_compile_file_disables_long_running_commands(
+async def test_check_file_disables_long_running_commands(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -536,13 +536,13 @@ async def test_compile_file_disables_long_running_commands(
     )
     manager = FakeManager(client, notifications, tmp_path)
 
-    result = await manager.compile_file(str(source), long_running_seconds=0)
+    result = await manager.check_file(str(source), long_running_seconds=0)
 
     assert "long_running_commands" not in result.render()
 
 
 @pytest.mark.asyncio
-async def test_compile_file_ignores_cached_long_running_commands(
+async def test_check_file_ignores_cached_long_running_commands(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -562,13 +562,13 @@ async def test_compile_file_ignores_cached_long_running_commands(
     )
     manager = FakeManager(client, notifications, tmp_path)
 
-    result = await manager.compile_file(str(source), long_running_seconds=3)
+    result = await manager.check_file(str(source), long_running_seconds=3)
 
     assert "long_running_commands" not in result.render()
 
 
 @pytest.mark.asyncio
-async def test_compile_file_enriches_incomplete_proof_save_error(
+async def test_check_file_enriches_incomplete_proof_save_error(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -628,7 +628,7 @@ async def test_compile_file_enriches_incomplete_proof_save_error(
     )
     manager = FakeManager(client, notifications, tmp_path)
 
-    result = await manager.compile_file(str(source), overall_timeout_seconds=2.5)
+    result = await manager.check_file(str(source), overall_timeout_seconds=2.5)
 
     assert result.error_count == 1
     assert client.goal_requests == [
@@ -647,7 +647,7 @@ async def test_compile_file_enriches_incomplete_proof_save_error(
 
 
 @pytest.mark.asyncio
-async def test_compile_file_skips_goal_request_for_regular_proof_error(
+async def test_check_file_skips_goal_request_for_regular_proof_error(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -659,14 +659,14 @@ async def test_compile_file_skips_goal_request_for_regular_proof_error(
     )
     manager = FakeManager(client, notifications, tmp_path)
 
-    result = await manager.compile_file(str(source))
+    result = await manager.check_file(str(source))
 
     assert result.error_count == 1
     assert client.goal_requests == []
 
 
 @pytest.mark.asyncio
-async def test_compile_file_adds_timeout_context_from_file_progress(
+async def test_check_file_adds_timeout_context_from_file_progress(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Slow.v"
@@ -690,7 +690,7 @@ async def test_compile_file_adds_timeout_context_from_file_progress(
     )
     manager = FakeManager(client, notifications, tmp_path)
 
-    result = await manager.compile_file(str(source), overall_timeout_seconds=2.5)
+    result = await manager.check_file(str(source), overall_timeout_seconds=2.5)
 
     assert result.status == "timeout"
     assert result.timed_out is True
@@ -707,7 +707,7 @@ async def test_compile_file_adds_timeout_context_from_file_progress(
 
 
 @pytest.mark.asyncio
-async def test_compile_file_prefers_completed_position_for_timeout_context(
+async def test_check_file_prefers_completed_position_for_timeout_context(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Slow.v"
@@ -736,7 +736,7 @@ async def test_compile_file_prefers_completed_position_for_timeout_context(
     )
     manager = FakeManager(client, notifications, tmp_path)
 
-    result = await manager.compile_file(str(source))
+    result = await manager.check_file(str(source))
 
     assert result.render()["timeout_context"] == {
         "operation": "coq/getDocument",
@@ -750,7 +750,7 @@ async def test_compile_file_prefers_completed_position_for_timeout_context(
 
 
 @pytest.mark.asyncio
-async def test_run_command_forwards_position_and_returns_feedback(
+async def test_run_at_forwards_position_and_returns_feedback(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -758,13 +758,13 @@ async def test_run_command_forwards_position_and_returns_feedback(
     notifications = SpyNotificationStore()
     client = FakeClient(
         notifications,
-        command_response={
+        run_at_response={
             "feedback": [[3, "Nat.add_0_r: forall n : nat, n + 0 = n"]],
         },
     )
     manager = FakeManager(client, notifications, tmp_path)
 
-    result = await manager.run_command(str(source), "Search (_ + 0 = _).", 1, 2)
+    result = await manager.run_at(str(source), "Search (_ + 0 = _).", 1, 2)
 
     assert result.status == "complete"
     assert result.version == 1
@@ -774,12 +774,12 @@ async def test_run_command_forwards_position_and_returns_feedback(
         "text": "Nat.add_0_r: forall n : nat, n + 0 = n",
     }
     assert client.opened == [(source.resolve(), 1)]
-    assert client.command_requests == [
+    assert client.run_at_requests == [
         {
             "uri": source.as_uri(),
             "version": 1,
             "position": {"line": 0, "character": 1},
-            "command": "Search (_ + 0 = _).",
+            "commands": "Search (_ + 0 = _).",
             "timeout": 1,
             "hard_timeout_grace": 0.01,
         }
@@ -787,7 +787,7 @@ async def test_run_command_forwards_position_and_returns_feedback(
 
 
 @pytest.mark.asyncio
-async def test_run_command_forwards_overall_timeout_override(
+async def test_run_at_forwards_overall_timeout_override(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -796,14 +796,14 @@ async def test_run_command_forwards_overall_timeout_override(
     client = FakeClient(notifications)
     manager = FakeManager(client, notifications, tmp_path)
 
-    await manager.run_command(
+    await manager.run_at(
         str(source),
         "Search nat.",
         1,
         1,
         overall_timeout_seconds=2.5,
     )
-    await manager.run_command(
+    await manager.run_at(
         str(source),
         "Search nat.",
         1,
@@ -811,23 +811,28 @@ async def test_run_command_forwards_overall_timeout_override(
         overall_timeout_seconds=9999,
     )
 
-    assert client.command_requests[0]["timeout"] == 2.5
-    assert client.command_requests[1]["timeout"] == MAX_OVERALL_TIMEOUT_SECONDS
+    assert client.run_at_requests[0]["timeout"] == 2.5
+    assert client.run_at_requests[1]["timeout"] == MAX_OVERALL_TIMEOUT_SECONDS
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("command", "line", "character", "message"),
+    ("commands", "line", "character", "message"),
     [
-        ("", 1, 1, "command must be a non-empty Rocq command ending in '.'"),
-        ("Check nat", 1, 1, "command must be a non-empty Rocq command ending in '.'"),
+        ("", 1, 1, "commands must be a non-empty Rocq command string ending in '.'"),
+        (
+            "Check nat",
+            1,
+            1,
+            "commands must be a non-empty Rocq command string ending in '.'",
+        ),
         ("Check nat.", 0, 1, "line and character must be positive 1-based integers"),
         ("Check nat.", 1, 0, "line and character must be positive 1-based integers"),
     ],
 )
-async def test_run_command_validates_before_lsp_request(
+async def test_run_at_validates_before_lsp_request(
     tmp_path: Path,
-    command: str,
+    commands: str,
     line: int,
     character: int,
     message: str,
@@ -838,23 +843,23 @@ async def test_run_command_validates_before_lsp_request(
     client = FakeClient(notifications)
     manager = FakeManager(client, notifications, tmp_path)
 
-    result = await manager.run_command(str(source), command, line, character)
+    result = await manager.run_at(str(source), commands, line, character)
 
     assert result.status == "failed"
     assert result.message == message
     assert client.opened == []
     assert client.changed == []
-    assert client.command_requests == []
+    assert client.run_at_requests == []
 
 
 @pytest.mark.asyncio
-async def test_run_command_response_error_includes_feedback(tmp_path: Path) -> None:
+async def test_run_at_response_error_includes_feedback(tmp_path: Path) -> None:
     source = tmp_path / "Demo.v"
     source.write_text("Check nat.\n", encoding="utf-8")
     notifications = SpyNotificationStore()
     client = FakeClient(
         notifications,
-        command_response=RocqLspResponseError(
+        run_at_response=RocqLspResponseError(
             {
                 "message": "Coq: command failed",
                 "data": {"feedback": [[3, "partial output"]]},
@@ -863,7 +868,7 @@ async def test_run_command_response_error_includes_feedback(tmp_path: Path) -> N
     )
     manager = FakeManager(client, notifications, tmp_path)
 
-    result = await manager.run_command(str(source), "Check missing.", 1, 1)
+    result = await manager.run_at(str(source), "Check missing.", 1, 1)
 
     assert result.status == "failed"
     assert result.message == "Coq: command failed"
@@ -871,7 +876,7 @@ async def test_run_command_response_error_includes_feedback(tmp_path: Path) -> N
 
 
 @pytest.mark.asyncio
-async def test_run_command_hard_timeout_resets_session(tmp_path: Path) -> None:
+async def test_run_at_hard_timeout_resets_session(tmp_path: Path) -> None:
     source = tmp_path / "Slow.v"
     source.write_text("Check nat.\n", encoding="utf-8")
     notifications = SpyNotificationStore()
@@ -879,7 +884,7 @@ async def test_run_command_hard_timeout_resets_session(tmp_path: Path) -> None:
     client.hard_timeout = True
     manager = FakeManager(client, notifications, tmp_path)
 
-    result = await manager.run_command(str(source), "Search nat.", 1, 1)
+    result = await manager.run_at(str(source), "Search nat.", 1, 1)
 
     assert result.status == "timeout"
     assert result.timed_out is True
@@ -890,7 +895,7 @@ async def test_run_command_hard_timeout_resets_session(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_compile_file_adds_command_timeout_context(tmp_path: Path) -> None:
+async def test_check_file_adds_command_timeout_context(tmp_path: Path) -> None:
     source = tmp_path / "Slow.v"
     source.write_text(
         "Goal True.\nProof.\n  sleep 5.\n  easy.\nQed.\n",
@@ -918,7 +923,7 @@ async def test_compile_file_adds_command_timeout_context(tmp_path: Path) -> None
     )
     manager = FakeManager(client, notifications, tmp_path)
 
-    result = await manager.compile_file(str(source), command_timeout_seconds=2)
+    result = await manager.check_file(str(source), command_timeout_seconds=2)
 
     assert result.status == "timeout"
     assert result.render()["timeout_context"] == {
@@ -956,7 +961,7 @@ async def test_hard_timeout_resets_session(tmp_path: Path) -> None:
     client.hard_timeout = True
     manager = FakeManager(client, notifications, tmp_path)
 
-    result = await manager.compile_file(str(source))
+    result = await manager.check_file(str(source))
 
     assert result.status == "timeout"
     assert result.timed_out is True
@@ -978,7 +983,7 @@ async def test_hard_timeout_resets_session(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_compile_file_external_cancellation_resets_stuck_session(
+async def test_check_file_external_cancellation_resets_stuck_session(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Slow.v"
@@ -994,7 +999,7 @@ async def test_compile_file_external_cancellation_resets_stuck_session(
     client.request_get_document = cancelled_get_document  # type: ignore[method-assign]
 
     with pytest.raises(asyncio.CancelledError):
-        await manager.compile_file(str(source))
+        await manager.check_file(str(source))
 
     assert client.pending_cleared is True
     assert client.killed is True
@@ -1002,7 +1007,7 @@ async def test_compile_file_external_cancellation_resets_stuck_session(
 
 
 @pytest.mark.asyncio
-async def test_run_command_external_cancellation_resets_stuck_session(
+async def test_run_at_external_cancellation_resets_stuck_session(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Slow.v"
@@ -1018,7 +1023,7 @@ async def test_run_command_external_cancellation_resets_stuck_session(
     client.request_run_at_point = cancelled_run_at_point  # type: ignore[method-assign]
 
     with pytest.raises(asyncio.CancelledError):
-        await manager.run_command(str(source), "Search nat.", 1, 1)
+        await manager.run_at(str(source), "Search nat.", 1, 1)
 
     assert client.pending_cleared is True
     assert client.killed is True
@@ -1026,7 +1031,7 @@ async def test_run_command_external_cancellation_resets_stuck_session(
 
 
 @pytest.mark.asyncio
-async def test_compile_file_uses_separate_sessions_for_project_roots(
+async def test_check_file_uses_separate_sessions_for_project_roots(
     tmp_path: Path,
 ) -> None:
     project_a = tmp_path / "a"
@@ -1043,8 +1048,8 @@ async def test_compile_file_uses_separate_sessions_for_project_roots(
     client = FakeClient(notifications)
     manager = FakeManager(client, notifications, None)
 
-    await manager.compile_file(str(source_a))
-    await manager.compile_file(str(source_b))
+    await manager.check_file(str(source_a))
+    await manager.check_file(str(source_b))
 
     assert set(manager._sessions) == {project_a.resolve(), project_b.resolve()}
     assert client.opened == [(source_a.resolve(), 1), (source_b.resolve(), 1)]

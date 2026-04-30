@@ -1,12 +1,12 @@
 [
   {
-    "step": "compile many failing proofs",
-    "action": "compile",
+    "step": "check many failing proofs",
+    "action": "check",
     "file": "src/many_failures.v",
     "result": {
       "status": "complete",
       "file": "src/many_failures.v",
-      "compilation_time_seconds": "$SECONDS",
+      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 20
       },

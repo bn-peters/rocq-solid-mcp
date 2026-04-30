@@ -1,19 +1,19 @@
 {
   "steps": [
     {
-      "label": "compile all severities",
-      "action": "compile",
+      "label": "check all severities",
+      "action": "check",
       "file": "src/severities.v"
     },
     {
-      "label": "compile warnings and errors",
-      "action": "compile",
+      "label": "check warnings and errors",
+      "action": "check",
       "file": "src/severities.v",
       "severity": "warning"
     },
     {
-      "label": "compile errors only",
-      "action": "compile",
+      "label": "check errors only",
+      "action": "check",
       "file": "src/severities.v",
       "severity": "error"
     }

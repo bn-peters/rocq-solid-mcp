@@ -1,8 +1,8 @@
 {
   "steps": [
     {
-      "label": "compile unfinished instance",
-      "action": "compile",
+      "label": "check unfinished instance",
+      "action": "check",
       "file": "src/unfinished_instance.v",
       "long_running_seconds": 0
     }
