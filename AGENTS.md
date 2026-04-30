@@ -263,7 +263,9 @@ opam repositories, installs native apt prerequisites including
 run through `opam exec -- .venv/bin/python`. The pipeline caches pip downloads
 under `.cache/pip/` per branch and caches a project-local opam root under
 `.cache/opam/rocq-${ROCQ_CORE_VERSION}/` with a separate cache key for each
-Rocq version in the matrix.
+Rocq version in the matrix. The cached opam root is initialized as a bare root
+and uses a `default` switch pinned to `ocaml-base-compiler.5.2.0`; cache reuse
+still depends on the GitLab runner having the local cache available.
 
 ## Test Suite
 

@@ -35,8 +35,14 @@ test:
     - python3 --version
     - opam --version
     - export OPAMROOT="$CI_PROJECT_DIR/.cache/opam/rocq-${ROCQ_CORE_VERSION}"
-    - opam init --reinit --disable-sandboxing --no-setup --yes
-    - opam switch create default ocaml-base-compiler.5.2.0 --yes || opam switch set default
+    - if [ -d "$OPAMROOT/default/.opam-switch" ]; then echo "Using restored opam cache at $OPAMROOT"; else echo "No restored opam cache at $OPAMROOT"; fi
+    - opam init --reinit --bare --disable-sandboxing --no-setup --yes
+    - |
+      if opam switch list --short | grep -qx default; then
+        opam switch set default
+      else
+        opam switch create default ocaml-base-compiler.5.2.0 --yes
+      fi
     - opam switch show
     - opam repository add coq-released https://coq.inria.fr/opam/released --yes || opam repository set-url coq-released https://coq.inria.fr/opam/released
     - opam repository add bpeters https://gitlab.mpi-sws.org/bpeters/opam.git --yes || opam repository set-url bpeters https://gitlab.mpi-sws.org/bpeters/opam.git

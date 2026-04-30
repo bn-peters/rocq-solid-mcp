@@ -319,4 +319,6 @@ creates the repository-local `.venv/`, and installs the Python package with
 development test dependencies before running the Makefile target. GitLab caches
 pip downloads under `.cache/pip/` per branch and stores opam roots under
 `.cache/opam/rocq-${ROCQ_CORE_VERSION}/`, with separate cache keys for each
-Rocq version in the matrix.
+Rocq version in the matrix. The cached opam root is initialized as a bare root
+and uses a `default` switch pinned to `ocaml-base-compiler.5.2.0`; cache reuse
+still depends on the GitLab runner having the local cache available.
