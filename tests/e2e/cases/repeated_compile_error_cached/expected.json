@@ -1,0 +1,34 @@
+[
+  {
+    "step": "compile failing file after slow proof",
+    "action": "compile",
+    "file": "src/error_cached.v",
+    "result": {
+      "status": "complete",
+      "file": "src/error_cached.v",
+      "diagnostics": [
+        {
+          "level": "error",
+          "message": "The term \"I\" has type \"True\" while it is expected to have type \"False\".",
+          "location": "10:27 to 10:28"
+        }
+      ]
+    }
+  },
+  {
+    "step": "recompile failing file from cache",
+    "action": "compile",
+    "file": "src/error_cached.v",
+    "result": {
+      "status": "complete",
+      "file": "src/error_cached.v",
+      "diagnostics": [
+        {
+          "level": "error",
+          "message": "The term \"I\" has type \"True\" while it is expected to have type \"False\".",
+          "location": "10:27 to 10:28"
+        }
+      ]
+    }
+  }
+]

@@ -157,7 +157,9 @@ outer request timeout for that step. Scenario compile steps may set
 `command_timeout_seconds` to exercise per-call compile timeout overrides. The
 e2e suite covers command output, command caching after slow proofs, soft timeout
 recovery, hard-timeout session reset, per-call compile command timeout
-overrides, and per-sentence command timeout behavior.
+overrides, per-sentence command timeout behavior, request timeouts resuming
+from cached progress while preserving diagnostics, and cached repeated compile
+errors.
 Use `make promote` to refresh promoted e2e transcripts after intentional output
 changes; promotion runs serially because it rewrites golden files.
 

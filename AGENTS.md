@@ -243,6 +243,15 @@ The local virtual environment is expected at `.venv/`. Use
   compile tool call's per-call `command_timeout_seconds` override.
   `command_timeout` uses the same local `sleep` tactic with a long global
   timeout and short command timeout to cover per-sentence cancellation.
+  `request_timeout_resume_and_error_cache` covers repeated soft request
+  timeouts resuming from cached progress while preserving an earlier error
+  diagnostic, including the final cached successful compile.
+  `request_timeout_resume_then_success` covers the two-call case where a soft
+  request timeout reports an earlier error, then the next cached compile
+  succeeds and reports the same error.
+  `repeated_compile_error_cached` calls compile twice on the same file with a
+  slow cached prefix and verifies both calls report the same error while the
+  second call is quick.
 
 When changing output shape, update exact-output tests rather than weakening
 assertions. The MCP output should be useful to agents and humans; raw Rocq

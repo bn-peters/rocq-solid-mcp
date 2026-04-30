@@ -1,0 +1,47 @@
+[
+  {
+    "step": "compile reports error then request timeout",
+    "action": "compile",
+    "file": "src/resume_then_success.v",
+    "result": {
+      "status": "timeout",
+      "file": "src/resume_then_success.v",
+      "diagnostics": [
+        {
+          "level": "error",
+          "message": "The term \"I\" has type \"True\" while it is expected to have type \"False\".",
+          "location": "10:27 to 10:28"
+        }
+      ],
+      "timed_out": true,
+      "timeout_context": {
+        "operation": "coq/getDocument",
+        "timeout_kind": "request",
+        "request_timeout_seconds": 5.0,
+        "cancel_grace_seconds": 2,
+        "checked_until": "13:7",
+        "latest_processing_range": "13:7 to 17:1",
+        "next_unchecked": {
+          "location": "14:3",
+          "line": "sleep 3."
+        }
+      }
+    }
+  },
+  {
+    "step": "compile resumes and succeeds with cached error",
+    "action": "compile",
+    "file": "src/resume_then_success.v",
+    "result": {
+      "status": "complete",
+      "file": "src/resume_then_success.v",
+      "diagnostics": [
+        {
+          "level": "error",
+          "message": "The term \"I\" has type \"True\" while it is expected to have type \"False\".",
+          "location": "10:27 to 10:28"
+        }
+      ]
+    }
+  }
+]
