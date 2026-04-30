@@ -32,6 +32,7 @@ class FakeClient:
         document: dict[str, Any] | None = None,
         goals_response: dict[str, Any] | Exception | None = None,
         file_progress: dict[str, Any] | None = None,
+        file_perf_data: dict[str, Any] | None = None,
         request_timed_out: bool = False,
         command_response: dict[str, Any] | Exception | None = None,
         timeout_kind: str = "request",
@@ -42,6 +43,7 @@ class FakeClient:
         self.document = document
         self.goals_response = goals_response
         self.file_progress = file_progress
+        self.file_perf_data = file_perf_data
         self.request_timed_out = request_timed_out
         self.command_response = command_response
         self.timeout_kind = timeout_kind
@@ -97,6 +99,8 @@ class FakeClient:
         )
         if self.file_progress is not None:
             self.notifications.handle("$/coq/fileProgress", self.file_progress)
+        if self.file_perf_data is not None:
+            self.notifications.handle("$/coq/filePerfData", self.file_perf_data)
         self.notifications.handle(
             "textDocument/publishDiagnostics",
             {"uri": uri, "version": version, "diagnostics": self.diagnostics},
@@ -288,6 +292,36 @@ def file_progress(
     }
 
 
+def file_perf_data(
+    uri: str,
+    version: int,
+    *,
+    line: int,
+    start_character: int,
+    end_character: int,
+    seconds: float,
+    cache_hit: bool = False,
+) -> dict[str, Any]:
+    return {
+        "textDocument": {"uri": uri, "version": version},
+        "summary": "",
+        "timings": [
+            {
+                "range": {
+                    "start": {"line": line, "character": start_character},
+                    "end": {"line": line, "character": end_character},
+                },
+                "info": {
+                    "time": seconds,
+                    "memory": 0,
+                    "cache_hit": cache_hit,
+                    "time_hash": 0.0,
+                },
+            }
+        ],
+    }
+
+
 @pytest.mark.asyncio
 async def test_compile_file_opens_then_changes(tmp_path: Path) -> None:
     source = tmp_path / "Demo.v"
@@ -448,6 +482,89 @@ async def test_compile_file_forwards_overall_timeout_override(
         client.get_document_requests[1]["timeout"]
         == MAX_OVERALL_TIMEOUT_SECONDS
     )
+
+
+@pytest.mark.asyncio
+async def test_compile_file_reports_elapsed_time_and_long_running_commands(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Goal True.\nProof.\n  sleep 5.\nQed.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(
+        notifications,
+        file_perf_data=file_perf_data(
+            source.as_uri(),
+            1,
+            line=2,
+            start_character=2,
+            end_character=10,
+            seconds=5,
+        ),
+    )
+    manager = FakeManager(client, notifications, tmp_path)
+
+    result = await manager.compile_file(str(source), long_running_seconds=3)
+
+    rendered = result.render()
+    assert rendered["compilation_time_seconds"] >= 0
+    assert rendered["long_running_commands"] == [
+        {
+            "location": "3:3 to 3:11",
+            "text": "sleep 5.",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_compile_file_disables_long_running_commands(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Goal True.\nProof.\n  sleep 5.\nQed.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(
+        notifications,
+        file_perf_data=file_perf_data(
+            source.as_uri(),
+            1,
+            line=2,
+            start_character=2,
+            end_character=10,
+            seconds=5,
+        ),
+    )
+    manager = FakeManager(client, notifications, tmp_path)
+
+    result = await manager.compile_file(str(source), long_running_seconds=0)
+
+    assert "long_running_commands" not in result.render()
+
+
+@pytest.mark.asyncio
+async def test_compile_file_ignores_cached_long_running_commands(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Goal True.\nProof.\n  sleep 5.\nQed.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(
+        notifications,
+        file_perf_data=file_perf_data(
+            source.as_uri(),
+            1,
+            line=2,
+            start_character=2,
+            end_character=10,
+            seconds=5,
+            cache_hit=True,
+        ),
+    )
+    manager = FakeManager(client, notifications, tmp_path)
+
+    result = await manager.compile_file(str(source), long_running_seconds=3)
+
+    assert "long_running_commands" not in result.render()
 
 
 @pytest.mark.asyncio

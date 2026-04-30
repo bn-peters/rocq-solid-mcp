@@ -25,6 +25,30 @@ def file_progress(version: int | None = 3) -> dict[str, object]:
     }
 
 
+def file_perf_data(version: int | None = 3) -> dict[str, object]:
+    text_document: dict[str, object] = {"uri": "file:///Demo.v"}
+    if version is not None:
+        text_document["version"] = version
+    return {
+        "textDocument": text_document,
+        "summary": "",
+        "timings": [
+            {
+                "range": {
+                    "start": {"line": 1, "character": 2},
+                    "end": {"line": 1, "character": 10},
+                },
+                "info": {
+                    "time": 4.5,
+                    "memory": 0,
+                    "cache_hit": False,
+                    "time_hash": 0.0,
+                },
+            }
+        ],
+    }
+
+
 def execution_info(version: int | None = 3) -> dict[str, object]:
     text_document: dict[str, object] = {"uri": "file:///Demo.v"}
     if version is not None:
@@ -114,6 +138,44 @@ def test_notification_store_clears_versioned_file_progress() -> None:
 
 
 @pytest.mark.asyncio
+async def test_notification_store_returns_versioned_file_perf_data() -> None:
+    store = NotificationStore()
+    perf_data = file_perf_data(version=3)
+
+    store.handle("$/coq/filePerfData", perf_data)
+
+    assert store.latest_file_perf_data("file:///Demo.v", 3) == perf_data
+    assert store.latest_file_perf_data("file:///Demo.v", 4) is None
+    assert (
+        await store.wait_for_file_perf_data(
+            "file:///Demo.v",
+            3,
+            settle_seconds=0,
+        )
+        == perf_data
+    )
+
+
+def test_notification_store_falls_back_to_unversioned_file_perf_data() -> None:
+    store = NotificationStore()
+    perf_data = file_perf_data(version=None)
+
+    store.handle("$/coq/filePerfData", perf_data)
+
+    assert store.latest_file_perf_data("file:///Demo.v", 3) == perf_data
+
+
+def test_notification_store_clears_versioned_file_perf_data() -> None:
+    store = NotificationStore()
+    perf_data = file_perf_data(version=3)
+
+    store.handle("$/coq/filePerfData", perf_data)
+    store.clear("file:///Demo.v", 3)
+
+    assert store.latest_file_perf_data("file:///Demo.v", 3) is None
+
+
+@pytest.mark.asyncio
 async def test_notification_store_returns_versioned_execution_info() -> None:
     store = NotificationStore()
     info = execution_info(version=3)
@@ -123,6 +185,7 @@ async def test_notification_store_returns_versioned_execution_info() -> None:
     sequence = store.latest_execution_sequence("file:///Demo.v", 3)
     assert sequence == 1
     assert store.latest_execution_info("file:///Demo.v", 3) == info
+    assert store.execution_ranges("file:///Demo.v", 3) == [info["range"]]
     assert store.latest_execution_info("file:///Demo.v", 4) is None
     assert await store.wait_for_execution_info(
         "file:///Demo.v",
@@ -169,17 +232,19 @@ def test_notification_store_clears_versioned_execution_info() -> None:
 
     assert store.latest_execution_sequence("file:///Demo.v", 3) == 0
     assert store.latest_execution_info("file:///Demo.v", 3) is None
+    assert store.execution_ranges("file:///Demo.v", 3) == []
 
 
 @pytest.mark.asyncio
 async def test_notification_store_ignores_unrelated_notifications() -> None:
     store = NotificationStore()
 
-    store.handle("$/coq/filePerfData", {"uri": "file:///Demo.v"})
+    store.handle("$/coq/filePerfData", {"textDocument": {"uri": 3}, "timings": []})
     store.handle("textDocument/publishDiagnostics", {"uri": 3, "diagnostics": []})
     store.handle("$/coq/fileProgress", {"textDocument": {"uri": 3}})
     store.handle("$/coq/executionInformation", {"textDocument": {"uri": 3}})
 
     assert await store.wait_for_diagnostics("file:///Demo.v", 1, settle_seconds=0) == []
     assert store.latest_file_progress("file:///Demo.v", 1) is None
+    assert store.latest_file_perf_data("file:///Demo.v", 1) is None
     assert store.latest_execution_info("file:///Demo.v", 1) is None

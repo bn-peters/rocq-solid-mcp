@@ -4,7 +4,8 @@
       "label": "compile file with slow proof",
       "action": "compile",
       "file": "src/CacheCommand.v",
-      "min_seconds": 4
+      "min_seconds": 4,
+      "long_running_seconds": 0
     },
     {
       "label": "search after cached slow proof",

@@ -9,7 +9,8 @@
       "action": "compile",
       "file": "src/timeout.v",
       "min_seconds": 1,
-      "max_seconds": 3
+      "max_seconds": 3,
+      "long_running_seconds": 0
     },
     {
       "label": "remove slow tactic",
@@ -22,7 +23,8 @@
       "label": "recompile after timeout",
       "action": "compile",
       "file": "src/timeout.v",
-      "max_seconds": 3
+      "max_seconds": 3,
+      "long_running_seconds": 0
     }
   ]
 }

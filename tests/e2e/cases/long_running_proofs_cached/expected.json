@@ -6,6 +6,7 @@
     "result": {
       "status": "complete",
       "file": "src/cache.v",
+      "compilation_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1,
         "warnings": 0,
@@ -25,6 +26,12 @@
             ]
           }
         }
+      ],
+      "long_running_commands": [
+        {
+          "location": "6:3 to 6:11",
+          "text": "sleep 5."
+        }
       ]
     }
   },
@@ -40,6 +47,7 @@
     "result": {
       "status": "complete",
       "file": "src/cache.v",
+      "compilation_time_seconds": "$SECONDS",
       "counts": {
         "errors": 0,
         "warnings": 0,

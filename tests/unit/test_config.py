@@ -66,5 +66,6 @@ def test_load_config_disables_non_positive_command_timeout(monkeypatch) -> None:
     assert config.timeout_policy.command_seconds is None
 
 
-def test_rocq_lsp_settings_enable_execution_information() -> None:
+def test_rocq_lsp_settings_enable_execution_and_performance_information() -> None:
     assert rocq_lsp_settings(100)["send_execinfo"] is True
+    assert rocq_lsp_settings(100)["send_perf_data"] is True

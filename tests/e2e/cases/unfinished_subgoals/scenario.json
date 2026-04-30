@@ -3,17 +3,20 @@
     {
       "label": "compile first subgoal unfinished",
       "action": "compile",
-      "file": "src/first_subgoal_unfinished.v"
+      "file": "src/first_subgoal_unfinished.v",
+      "long_running_seconds": 0
     },
     {
       "label": "compile second subgoal unfinished",
       "action": "compile",
-      "file": "src/second_subgoal_unfinished.v"
+      "file": "src/second_subgoal_unfinished.v",
+      "long_running_seconds": 0
     },
     {
       "label": "compile empty second subgoal",
       "action": "compile",
-      "file": "src/empty_second_subgoal.v"
+      "file": "src/empty_second_subgoal.v",
+      "long_running_seconds": 0
     }
   ]
 }

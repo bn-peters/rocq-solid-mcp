@@ -3,12 +3,14 @@
     {
       "label": "compile base file",
       "action": "compile",
-      "file": "src/base.v"
+      "file": "src/base.v",
+      "long_running_seconds": 0
     },
     {
       "label": "compile modes file",
       "action": "compile",
-      "file": "src/lang/modes.v"
+      "file": "src/lang/modes.v",
+      "long_running_seconds": 0
     },
     {
       "label": "append late tactic failures",
@@ -19,7 +21,8 @@
     {
       "label": "recompile modes with tactic failures",
       "action": "compile",
-      "file": "src/lang/modes.v"
+      "file": "src/lang/modes.v",
+      "long_running_seconds": 0
     }
   ]
 }

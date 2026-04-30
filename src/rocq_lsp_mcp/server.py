@@ -10,6 +10,7 @@ from .config import DEFAULT_OVERALL_TIMEOUT_SECONDS, MAX_OVERALL_TIMEOUT_SECONDS
 from .manager import RocqLspManager
 from .models import (
     DEFAULT_DIAGNOSTIC_SEVERITY,
+    DEFAULT_LONG_RUNNING_SECONDS,
     DEFAULT_MESSAGE_LIMIT,
     DiagnosticSeverity,
     RenderOptions,
@@ -75,6 +76,16 @@ async def rocq_lsp_compile_file(
             ),
         ),
     ] = None,
+    long_running_seconds: Annotated[
+        float,
+        Field(
+            ge=0,
+            description=(
+                "Optional threshold, in seconds, for returned long-running "
+                "Rocq commands. Default 3s, 0 disables."
+            ),
+        ),
+    ] = DEFAULT_LONG_RUNNING_SECONDS,
     restart: Annotated[
         bool,
         Field(
@@ -93,13 +104,14 @@ async def rocq_lsp_compile_file(
 
     External dependencies are not automatically recompiled, and no compilation artifacts are saved. If you edit upstream files, recompile them first using external tools. Pass restart=True after rebuilding dependencies to refresh coq-lsp's import cache without restarting the server process.
 
-    Adjust the request timeout only when a file is known to take a long time to compile. Adjust the command timeout only when specific tactics in a file are known to be slow. The message limit and severity filter should only rarely be adjusted.
+    Adjust the request timeout only when a file is known to take a long time to compile. Adjust the command timeout only when specific tactics in a file are known to be slow. Set long_running_seconds=0 to disable long-running command reporting. The message limit and severity filter should only rarely be adjusted.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
     result = await manager.compile_file(
         file,
         overall_timeout_seconds=overall_timeout_seconds,
         command_timeout_seconds=command_timeout_seconds,
+        long_running_seconds=long_running_seconds,
         restart=restart,
     )
     return result.render(RenderOptions(message_limit=message_limit, severity=severity))

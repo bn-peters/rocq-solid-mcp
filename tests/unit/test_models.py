@@ -6,8 +6,10 @@ from rocq_lsp_mcp.models import (
     CommandResult,
     CompileResult,
     Diagnostic,
+    LongRunningCommand,
     RenderOptions,
     TimeoutContext,
+    long_running_commands_from_perf_data,
 )
 
 
@@ -106,6 +108,97 @@ def test_compile_result_counts_include_zero_fields(
     )
 
     assert result.render()["counts"] == {"errors": 0, "warnings": 1, "infos": 0}
+
+
+def test_compile_result_renders_compilation_time_and_long_running_commands(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Goal True.\nProof.\n  sleep 5.\nQed.\n", encoding="utf-8")
+    result = CompileResult.from_diagnostics(
+        status="complete",
+        file=str(source),
+        uri=source.as_uri(),
+        workspace=str(tmp_path),
+        version=1,
+        completed=None,
+        diagnostics=[],
+        compilation_time_seconds=1.23456,
+        long_running_commands=[
+            LongRunningCommand(
+                range={
+                    "start": {"line": 2, "character": 2},
+                    "end": {"line": 2, "character": 10},
+                },
+                text="sleep 5.",
+                time_seconds=5.0,
+            )
+        ],
+    )
+
+    assert result.render() == {
+        "status": "complete",
+        "file": "Demo.v",
+        "compilation_time_seconds": 1.235,
+        "long_running_commands": [
+            {
+                "location": "3:3 to 3:11",
+                "text": "sleep 5.",
+            }
+        ],
+    }
+
+
+def test_long_running_commands_from_perf_data_filters_cached_and_caps() -> None:
+    content = "\n".join(f"  sleep {index}." for index in range(12)) + "\n"
+    timings = []
+    for index in range(12):
+        timings.append(
+            {
+                "range": {
+                    "start": {"line": index, "character": 2},
+                    "end": {"line": index, "character": len(f"  sleep {index}.")},
+                },
+                "info": {
+                    "time": 4.0,
+                    "memory": 0,
+                    "cache_hit": index == 1,
+                    "time_hash": 0.0,
+                },
+            }
+        )
+    timings[0]["info"]["time"] = 2.0
+
+    commands = long_running_commands_from_perf_data(
+        content=content,
+        perf_data={
+            "textDocument": {"uri": "file:///Demo.v", "version": 1},
+            "summary": "",
+            "timings": timings,
+        },
+        threshold_seconds=3,
+    )
+
+    assert len(commands) == 10
+    assert [command.text for command in commands[:2]] == ["sleep 2.", "sleep 3."]
+    assert [command.text for command in commands[-2:]] == ["sleep 10.", "sleep 11."]
+
+    executed_only = long_running_commands_from_perf_data(
+        content=content,
+        perf_data={
+            "textDocument": {"uri": "file:///Demo.v", "version": 1},
+            "summary": "",
+            "timings": timings,
+        },
+        threshold_seconds=3,
+        executed_ranges=[
+            {
+                "start": {"line": 4, "character": 2},
+                "end": {"line": 4, "character": len("  sleep 4.")},
+            }
+        ],
+    )
+    assert [command.text for command in executed_only] == ["sleep 4."]
 
 
 def test_compile_result_renders_timeout_context_only_for_timeouts(

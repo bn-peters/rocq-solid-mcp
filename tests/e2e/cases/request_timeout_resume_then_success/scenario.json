@@ -9,13 +9,15 @@
       "action": "compile",
       "file": "src/resume_then_success.v",
       "min_seconds": 5,
-      "max_seconds": 8
+      "max_seconds": 8,
+      "long_running_seconds": 0
     },
     {
       "label": "compile resumes and succeeds with cached error",
       "action": "compile",
       "file": "src/resume_then_success.v",
-      "max_seconds": 5
+      "max_seconds": 5,
+      "long_running_seconds": 0
     }
   ]
 }

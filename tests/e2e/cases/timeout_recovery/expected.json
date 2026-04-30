@@ -6,6 +6,7 @@
     "result": {
       "status": "timeout",
       "file": "src/timeout.v",
+      "compilation_time_seconds": "$SECONDS",
       "counts": {
         "errors": 0,
         "warnings": 0,
@@ -38,6 +39,7 @@
     "result": {
       "status": "complete",
       "file": "src/timeout.v",
+      "compilation_time_seconds": "$SECONDS",
       "counts": {
         "errors": 0,
         "warnings": 0,

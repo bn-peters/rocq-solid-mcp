@@ -11,8 +11,10 @@ from .config import RocqLspConfig, bounded_overall_timeout_seconds, load_config
 from .models import (
     CommandResult,
     CompileResult,
+    DEFAULT_LONG_RUNNING_SECONDS,
     TimeoutContext,
     command_location,
+    long_running_commands_from_perf_data,
 )
 from .pipeline import build_diagnostics
 from .rocq_client import (
@@ -55,10 +57,15 @@ class RocqLspManager:
         file: str,
         command_timeout_seconds: float | None = None,
         overall_timeout_seconds: float | None = None,
+        long_running_seconds: float | None = DEFAULT_LONG_RUNNING_SECONDS,
         restart: bool = False,
     ) -> CompileResult:
+        started_at = time.monotonic()
         command_timeout = self._effective_command_timeout(command_timeout_seconds)
         overall_timeout = self._effective_overall_timeout(overall_timeout_seconds)
+        long_running_threshold = self._effective_long_running_threshold(
+            long_running_seconds
+        )
         path = self._resolve_file(file)
         if not path.is_file():
             return CompileResult.from_diagnostics(
@@ -69,18 +76,23 @@ class RocqLspManager:
                 version=None,
                 completed=None,
                 diagnostics=[],
+                compilation_time_seconds=self._elapsed_seconds(started_at),
                 message=f"File does not exist: {path}",
             )
 
         workspace = self._infer_workspace(path)
         session = await self._checkout_session(workspace)
         try:
-            return await self._compile_with_session(
+            result = await self._compile_with_session(
                 session,
                 path,
                 command_timeout,
                 overall_timeout,
+                long_running_threshold,
                 restart,
+            )
+            return result.model_copy(
+                update={"compilation_time_seconds": self._elapsed_seconds(started_at)}
             )
         finally:
             session.lock.release()
@@ -157,6 +169,7 @@ class RocqLspManager:
         path: Path,
         command_timeout: float | None,
         overall_timeout: float,
+        long_running_threshold: float | None,
         restart: bool,
     ) -> CompileResult:
         client = session.client
@@ -197,8 +210,8 @@ class RocqLspManager:
             )
             completed_doc = get_document_result.document
             request_timed_out = get_document_result.timed_out
-            raw_diagnostics = await session.notifications.wait_for_diagnostics(
-                uri, version
+            raw_diagnostics, perf_data = await self._compile_notifications(
+                session, uri, version, long_running_threshold, request_timed_out
             )
             supplemental_proof_states = await self._incomplete_proof_goal_states(
                 client, uri, version, raw_diagnostics, overall_timeout
@@ -207,6 +220,18 @@ class RocqLspManager:
                 raw_diagnostics,
                 completed_doc,
                 supplemental_proof_states=supplemental_proof_states,
+            )
+            long_running_commands = (
+                long_running_commands_from_perf_data(
+                    content=content,
+                    perf_data=perf_data,
+                    threshold_seconds=long_running_threshold,
+                    executed_ranges=session.notifications.execution_ranges(
+                        uri, version
+                    ),
+                )
+                if long_running_threshold is not None
+                else []
             )
             timeout_context = None
             if request_timed_out:
@@ -236,6 +261,7 @@ class RocqLspManager:
                 diagnostics=diagnostics,
                 timed_out=request_timed_out,
                 timeout_context=timeout_context,
+                long_running_commands=long_running_commands,
             )
         except RocqLspHardTimeout as exc:
             raw_diagnostics = await session.notifications.wait_for_diagnostics(
@@ -423,6 +449,48 @@ class RocqLspManager:
                 self.config.timeout_policy.request_seconds
             )
         return bounded_overall_timeout_seconds(override)
+
+    def _effective_long_running_threshold(self, override: float | None) -> float | None:
+        if override is None:
+            return DEFAULT_LONG_RUNNING_SECONDS
+        if override <= 0:
+            return None
+        return override
+
+    @staticmethod
+    def _elapsed_seconds(started_at: float) -> float:
+        return max(0.0, time.monotonic() - started_at)
+
+    async def _compile_notifications(
+        self,
+        session: RocqLspSession,
+        uri: str,
+        version: int,
+        long_running_threshold: float | None,
+        request_timed_out: bool,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+        diagnostics_task = asyncio.create_task(
+            session.notifications.wait_for_diagnostics(uri, version)
+        )
+        perf_task: asyncio.Task[dict[str, Any] | None] | None = None
+        if long_running_threshold is not None and not request_timed_out:
+            perf_task = asyncio.create_task(
+                session.notifications.wait_for_file_perf_data(uri, version)
+            )
+
+        try:
+            raw_diagnostics = await diagnostics_task
+            perf_data = await perf_task if perf_task is not None else None
+            return raw_diagnostics, perf_data
+        finally:
+            if perf_task is not None and not perf_task.done():
+                perf_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await perf_task
+            if not diagnostics_task.done():
+                diagnostics_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await diagnostics_task
 
     async def _reserve_session(self, workspace: Path) -> RocqLspSession:
         expired: list[RocqLspSession] = []

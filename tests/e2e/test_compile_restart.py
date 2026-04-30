@@ -50,14 +50,18 @@ async def test_compile_restart_refreshes_recompiled_dependencies(
         )
     )
     try:
-        first = await manager.compile_file(str(client))
+        first = await manager.compile_file(str(client), long_running_seconds=0)
 
         base.write_text(base_source(40), encoding="utf-8")
         client.write_text(client_source(40), encoding="utf-8")
         compile_dependency(project)
 
-        stale = await manager.compile_file(str(client))
-        refreshed = await manager.compile_file(str(client), restart=True)
+        stale = await manager.compile_file(str(client), long_running_seconds=0)
+        refreshed = await manager.compile_file(
+            str(client),
+            long_running_seconds=0,
+            restart=True,
+        )
     finally:
         await manager.close()
 

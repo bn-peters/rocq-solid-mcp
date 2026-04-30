@@ -6,6 +6,7 @@
     "result": {
       "status": "complete",
       "file": "src/support.v",
+      "compilation_time_seconds": "$SECONDS",
       "counts": {
         "errors": 0,
         "warnings": 0,
@@ -20,6 +21,7 @@
     "result": {
       "status": "complete",
       "file": "src/proof.v",
+      "compilation_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1,
         "warnings": 0,
@@ -54,6 +56,7 @@
     "result": {
       "status": "complete",
       "file": "src/proof.v",
+      "compilation_time_seconds": "$SECONDS",
       "counts": {
         "errors": 0,
         "warnings": 0,

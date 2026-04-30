@@ -4,10 +4,14 @@ Prototype MCP server that compiles Rocq files and runs single Rocq commands
 through persistent project-scoped `coq-lsp` sessions. Compile diagnostics expose
 a human-facing `level`, `location`, message, optional `proof_name`, and compact
 proof-state context when available. Command results expose compact feedback
-output. Results include the file relative to the workspace. Raw LSP plumbing
-such as document URIs, positions, duplicated ranges, versions, empty lists, and
-null fields is omitted from the MCP response. Agent-facing compile results keep
-only the first error for each `proof_name` and, after the first error without a
+output. Compile results include `compilation_time_seconds`, rounded to
+milliseconds, and may include `long_running_commands` entries with source text
+and location for commands that actually ran during that compile and exceeded the
+requested threshold. Results include the file relative to the workspace. Raw LSP
+plumbing such as document URIs, positions, duplicated ranges, versions, empty
+lists, and null fields is omitted from the MCP response. Agent-facing compile
+results keep only the first error for each `proof_name` and, after the first
+error without a
 `proof_name`, suppress later errors that also lack a `proof_name`. Warnings and
 infos are preserved. This broad cascade guard can hide later independent
 top-level errors that also lack `proof_name`. Returned diagnostics are limited
@@ -41,13 +45,15 @@ compiled dependencies may have changed before checking the requested file.
   such as `coq/workspace_update`, cancellation, `coq/getDocument`,
   `proof/goals`, `petanque/run_at_point`, and process cleanup.
 - `notifications.py` stores diagnostics, latest file-progress notifications,
-  and sentence execution notifications published by `coq-lsp`.
+  file performance data, and sentence execution notifications published by
+  `coq-lsp`.
 - `pipeline.py` converts raw diagnostics plus proof-state data into internal
   `Diagnostic` models without deciding what the MCP response should include.
 - `models.py` holds internal result models, `TimeoutContext`, and the
   `RenderOptions`-driven render step that applies agent-facing filtering,
   severity filtering, message limits, location formatting, timeout formatting,
-  and empty-field pruning.
+  long-running command formatting, compile-time formatting, and empty-field
+  pruning.
 
 For `Attempt to save an incomplete proof` diagnostics, the `Qed.` span may only
 contain the save error. The manager asks `proof/goals` with `mode: "Prev"` at
@@ -91,6 +97,14 @@ source preview. The `overall_timeout_seconds` request timeout remains the outer
 safety net for parsing stalls, missing execution notifications, or
 non-interruptible work.
 
+`coq-lsp` performance data is enabled with `send_perf_data`. After successful
+`coq/getDocument` calls, the manager waits briefly for `$/coq/filePerfData` and
+uses sentence execution notifications from the same document version to keep
+only commands that ran during the current compile step. Entries with
+`info.cache_hit: true` are ignored, entries below `long_running_seconds` are
+ignored, and the rendered result is capped at 10 long-running commands. Set
+`long_running_seconds=0` to disable this extra reporting for a call.
+
 ## Run
 
 ```bash
@@ -102,7 +116,9 @@ The server exposes two MCP tools:
 - `rocq_lsp_compile_file(file: str, message_limit: int = 10,
   severity: str = "info",
   overall_timeout_seconds: float = 60,
-  command_timeout_seconds: float | None = None, restart: bool = False)`
+  command_timeout_seconds: float | None = None,
+  long_running_seconds: float = 3,
+  restart: bool = False)`
 - `rocq_lsp_run_command(file: str, command: str, line: int, character: int = 1,
   overall_timeout_seconds: float = 60)`
 
@@ -121,6 +137,8 @@ seconds.
 `command_timeout_seconds` overrides `ROCQ_LSP_COMMAND_TIMEOUT` for one compile:
 `None` uses the server default of 5 seconds, `0` disables the sentence
 watchdog, and positive values enable it for that call.
+`long_running_seconds` controls `long_running_commands` reporting for one
+compile: the default is 3 seconds, and `0` disables the report.
 `restart=True` sends `coq/workspace_update` before compiling so `coq-lsp`
 refreshes imports from recompiled dependencies while keeping the same server
 process alive.
@@ -176,15 +194,17 @@ through the same cached manager. Scenarios may also define a top-level
 including `command_seconds` for per-sentence timeout scenarios. Individual
 compile and command steps may pass `overall_timeout_seconds` to override the
 outer request timeout for that step. Scenario compile steps may set
-`command_timeout_seconds` to exercise per-call compile timeout overrides, or
+`command_timeout_seconds` to exercise per-call compile timeout overrides,
+`long_running_seconds` to opt in or out of long-running command reporting, or
 `severity` and `message_limit` to exercise render-time diagnostic filtering.
 The e2e suite covers diagnostic severity filtering and dense counts, command
 output info levels for `Search`, `Check`, and `Compute`, command caching after
 slow proofs, soft timeout recovery, hard-timeout session reset, per-call compile
 command timeout overrides, per-sentence command timeout behavior, request
 timeouts resuming from cached progress while preserving diagnostics, cached
-repeated compile errors, and lemma-header errors that would otherwise cascade
-into proof-mode diagnostics.
+repeated compile errors, long-running command reporting with cached recompiles
+ignored, and lemma-header errors that would otherwise cascade into proof-mode
+diagnostics.
 `tests/e2e/test_compile_restart.py` covers refreshing a client file after a
 dependency `.vo` is rebuilt.
 Use `make promote` to refresh promoted e2e transcripts after intentional output

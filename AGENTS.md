@@ -15,7 +15,8 @@ returns compact feedback output for the requested command.
   `rocq_lsp_compile_file(file: str, message_limit: int = 10,
   severity: str = "info",
   overall_timeout_seconds: float = 60,
-  command_timeout_seconds: float | None = None, restart: bool = False)` and
+  command_timeout_seconds: float | None = None,
+  long_running_seconds: float = 3, restart: bool = False)` and
   `rocq_lsp_run_command(file: str, command: str, line: int, character: int = 1,
   overall_timeout_seconds: float = 60)`.
   Tool handlers render internal result models before returning MCP output.
@@ -30,8 +31,10 @@ returns compact feedback output for the requested command.
 - `src/rocq_lsp_mcp/notifications.py` stores LSP notification state. It handles
   `textDocument/publishDiagnostics`, tracks latest diagnostic versions by URI,
   stores latest `$/coq/fileProgress` payloads by URI/version for timeout
-  context, stores `$/coq/executionInformation` by URI/version for command
-  timeout watchdogs, and lets callers wait briefly for diagnostics or execution
+  context, stores `$/coq/filePerfData` payloads by URI/version for
+  long-running command reporting, stores `$/coq/executionInformation` by
+  URI/version for command timeout watchdogs and executed-range filtering, and
+  lets callers wait briefly for diagnostics, performance data, or execution
   changes for a requested document version.
 - `src/rocq_lsp_mcp/pipeline.py` normalizes raw diagnostics into compact
   internal `Diagnostic` models. It attaches proof states by matching
@@ -49,11 +52,13 @@ returns compact feedback output for the requested command.
   hypotheses are rendered as strings like `H : True` or `n := 0 : nat`.
 - `src/rocq_lsp_mcp/models.py` contains the internal Pydantic result models,
   `TimeoutContext`, and `RenderOptions`. Internal models keep normalized raw
-  ranges, document metadata, diagnostics, proof states, and timeout state.
+  ranges, document metadata, diagnostics, proof states, compile timing,
+  long-running command data, and timeout state.
   Their `render(options)` methods are the only place that decides the compact
   MCP output shape: file display, severity labels, location format, proof-state
   inclusion, duplicate proof-error filtering, minimum severity filtering,
   global cascade-error suppression, per-severity message limits, timeout
+  formatting, compilation-time formatting, long-running command
   formatting, and empty-field pruning. Default rendering keeps only the first
   error for each `proof_name` and, after the first error without a
   `proof_name`, suppresses later errors that also lack a `proof_name`; warnings
@@ -65,7 +70,9 @@ returns compact feedback output for the requested command.
 - `src/rocq_lsp_mcp/config.py` loads environment configuration, defines
   `TimeoutPolicy`, builds the `opam exec -- coq-lsp` command, and builds the
   `coq-lsp` initialization settings. `send_execinfo` is enabled so per-call
-  command timeouts can be used without restarting sessions.
+  command timeouts can be used without restarting sessions, and
+  `send_perf_data` is enabled so compile calls can report long-running
+  commands.
 
 The prototype intentionally talks to `coq-lsp` directly. Do not reintroduce an
 LSP client library unless the user explicitly asks for that direction.
@@ -75,23 +82,26 @@ https://github.com/rocq-community/rocq-lsp/blob/main/etc/doc/PROTOCOL.md
 ## Runtime Behavior
 
 The compile MCP tool receives a Rocq file path, optional `message_limit`,
-optional `severity`, optional `overall_timeout_seconds`, and optional
-`command_timeout_seconds`, and optional `restart`; `message_limit` and
-`severity` are render-only and do not truncate the internal `CompileResult`.
-`severity` may be `info`, `warning`, or `error`; only diagnostics at or above
-that level are returned. `overall_timeout_seconds` controls the outer
+optional `severity`, optional `overall_timeout_seconds`, optional
+`command_timeout_seconds`, optional `long_running_seconds`, and optional
+`restart`; `message_limit` and `severity` are render-only and do not truncate
+the internal `CompileResult`. `severity` may be `info`, `warning`, or `error`;
+only diagnostics at or above that level are returned. `overall_timeout_seconds`
+controls the outer
 `coq-lsp` request wait, defaults to 60 seconds, and is capped at 3600 seconds.
 For `command_timeout_seconds`, `None` uses `ROCQ_LSP_COMMAND_TIMEOUT`, which
 defaults to 5 seconds, `0` disables the command watchdog for that call, and
-positive values enable it. `restart=True` sends `coq/workspace_update` with
-empty object params before the file's `didOpen` or `didChange`, asking the
-existing `coq-lsp` process to invalidate cached `Require` state after external
-`.vo` files have changed. It does not restart the server process and does not
-rebuild dependencies; callers must recompile edited dependencies first. The
-command MCP tool receives a Rocq file path, one complete command ending in `.`,
-a 1-based line/character position, and optional `overall_timeout_seconds`; this
-is the same command tool used for `Search` calls. On each call, the manager
-resolves the file, infers a workspace by
+positive values enable it. `long_running_seconds` defaults to 3 seconds and
+controls the threshold for returned `long_running_commands`; `0` disables the
+extra report. `restart=True` sends `coq/workspace_update` with empty object
+params before the file's `didOpen` or `didChange`, asking the existing
+`coq-lsp` process to invalidate cached `Require` state after external `.vo`
+files have changed. It does not restart the server process and does not rebuild
+dependencies; callers must recompile edited dependencies first. The command MCP
+tool receives a Rocq file path, one complete command ending in `.`, a 1-based
+line/character position, and optional `overall_timeout_seconds`; this is the
+same command tool used for `Search` calls. On each call, the manager resolves
+the file, infers a workspace by
 walking upward to the nearest `_RocqProject` or
 `_CoqProject`, then delegates to the cached `RocqLspSession` for that
 workspace. If no project file is found, the file's parent directory is used.
@@ -119,6 +129,16 @@ are rendered on every compile result and include `errors`, `warnings`, and
 `infos`, including zero-valued buckets. When diagnostics are omitted because of
 `message_limit`, the response includes `omitted_counts` and the effective
 `message_limit`.
+
+Compile results also include `compilation_time_seconds`, rounded to
+milliseconds. When enabled, long-running command reporting observes
+`$/coq/filePerfData`, filters out entries below `long_running_seconds`, filters
+out entries with `info.cache_hit: true`, intersects perf entries with
+`$/coq/executionInformation` ranges from the same document version when those
+execution ranges are available, and renders at most 10
+`long_running_commands`. Each entry contains the source text and a 1-based
+location in the same format used by diagnostics, without precise per-command
+times so promoted e2e transcripts stay reproducible.
 
 When `coq/getDocument` times out, the manager returns status `timeout` with an
 internal `TimeoutContext`. `TimeoutContext.from_manager_state(...)` builds the
@@ -246,7 +266,8 @@ The local virtual environment is expected at `.venv/`. Use
   `max_seconds` timing assertions for cache-sensitive behavior; timings are
   asserted by the harness but omitted from promoted transcripts. Scenario
   compile steps may also include `command_timeout_seconds` to cover per-call
-  compile timeout overrides, or `severity` and `message_limit` to cover
+  compile timeout overrides, `long_running_seconds` to opt in or out of
+  long-running command reporting, or `severity` and `message_limit` to cover
   render-time diagnostic filtering.
   `diagnostic_message_limit` covers default
   per-severity diagnostic truncation. `diagnostic_severity_filter` covers
@@ -273,6 +294,9 @@ The local virtual environment is expected at `.venv/`. Use
   `repeated_compile_error_cached` calls compile twice on the same file with a
   slow cached prefix and verifies both calls report the same error while the
   second call is quick.
+  `long_running_proofs_cached` opts in to long-running command reporting and
+  verifies that the first slow `sleep 5.` tactic is reported while the later
+  cached recompile is not.
 - `tests/e2e/test_compile_restart.py` covers the compile tool's `restart`
   argument by recompiling a dependency externally, showing a stale import
   without `restart`, then refreshing it through `coq/workspace_update`.

@@ -10,7 +10,8 @@
       "file": "src/timeout.v",
       "command_timeout_seconds": 1,
       "min_seconds": 1,
-      "max_seconds": 3
+      "max_seconds": 3,
+      "long_running_seconds": 0
     },
     {
       "label": "remove slow command",
@@ -23,7 +24,8 @@
       "label": "recompile without per-call timeout",
       "action": "compile",
       "file": "src/timeout.v",
-      "max_seconds": 3
+      "max_seconds": 3,
+      "long_running_seconds": 0
     }
   ]
 }

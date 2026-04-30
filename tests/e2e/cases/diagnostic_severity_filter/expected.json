@@ -6,6 +6,7 @@
     "result": {
       "status": "complete",
       "file": "src/severities.v",
+      "compilation_time_seconds": "$SECONDS",
       "counts": {
         "errors": 2,
         "warnings": 2,
@@ -75,6 +76,7 @@
     "result": {
       "status": "complete",
       "file": "src/severities.v",
+      "compilation_time_seconds": "$SECONDS",
       "counts": {
         "errors": 2,
         "warnings": 2,
@@ -144,6 +146,7 @@
     "result": {
       "status": "complete",
       "file": "src/severities.v",
+      "compilation_time_seconds": "$SECONDS",
       "counts": {
         "errors": 2,
         "warnings": 0,

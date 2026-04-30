@@ -3,12 +3,14 @@
     {
       "label": "compile imported library",
       "action": "compile",
-      "file": "theories/Core.v"
+      "file": "theories/Core.v",
+      "long_running_seconds": 0
     },
     {
       "label": "compile client with import",
       "action": "compile",
-      "file": "clients/UseCore.v"
+      "file": "clients/UseCore.v",
+      "long_running_seconds": 0
     },
     {
       "label": "append missing-name check",
@@ -19,7 +21,8 @@
     {
       "label": "recompile edited client",
       "action": "compile",
-      "file": "clients/UseCore.v"
+      "file": "clients/UseCore.v",
+      "long_running_seconds": 0
     }
   ]
 }

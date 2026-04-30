@@ -88,7 +88,7 @@ def rocq_lsp_settings(max_errors: int) -> dict[str, object]:
         "eager_diagnostics": True,
         "max_errors": max_errors,
         "check_only_on_request": False,
-        "send_perf_data": False,
+        "send_perf_data": True,
         "send_execinfo": True,
         "send_diags": True,
         "send_diags_extra_data": True,

@@ -123,6 +123,7 @@ async def _run_steps(
                 str(path),
                 command_timeout_seconds=step.get("command_timeout_seconds"),
                 overall_timeout_seconds=step.get("overall_timeout_seconds"),
+                long_running_seconds=step.get("long_running_seconds", 3),
             )
             elapsed = time.monotonic() - start
             _check_timing(step, elapsed)
@@ -208,7 +209,14 @@ def _scrub_value(value: Any, project_root: Path) -> Any:
     if isinstance(value, list):
         return [_scrub_value(item, project_root) for item in value]
     if isinstance(value, dict):
-        return {key: _scrub_value(item, project_root) for key, item in value.items()}
+        return {
+            key: (
+                "$SECONDS"
+                if key == "compilation_time_seconds"
+                else _scrub_value(item, project_root)
+            )
+            for key, item in value.items()
+        }
     return value
 
 

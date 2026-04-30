@@ -3,7 +3,8 @@
     {
       "label": "compile unfinished next obligation",
       "action": "compile",
-      "file": "src/unfinished_next_obligation.v"
+      "file": "src/unfinished_next_obligation.v",
+      "long_running_seconds": 0
     }
   ]
 }

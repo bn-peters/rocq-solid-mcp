@@ -4,7 +4,8 @@
       "label": "compile file with slow preceding proof",
       "action": "compile",
       "file": "src/cache.v",
-      "min_seconds": 4
+      "min_seconds": 4,
+      "long_running_seconds": 3
     },
     {
       "label": "fix proof after slow proof",
@@ -17,7 +18,8 @@
       "label": "recompile fixed proof from cache",
       "action": "compile",
       "file": "src/cache.v",
-      "max_seconds": 3
+      "max_seconds": 3,
+      "long_running_seconds": 3
     }
   ]
 }

@@ -3,12 +3,14 @@
     {
       "label": "compile support file",
       "action": "compile",
-      "file": "src/support.v"
+      "file": "src/support.v",
+      "long_running_seconds": 0
     },
     {
       "label": "compile failing proof",
       "action": "compile",
-      "file": "src/proof.v"
+      "file": "src/proof.v",
+      "long_running_seconds": 0
     },
     {
       "label": "fix proof tactic",
@@ -20,7 +22,8 @@
     {
       "label": "recompile fixed proof",
       "action": "compile",
-      "file": "src/proof.v"
+      "file": "src/proof.v",
+      "long_running_seconds": 0
     }
   ]
 }

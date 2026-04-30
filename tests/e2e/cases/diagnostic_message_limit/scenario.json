@@ -3,7 +3,8 @@
     {
       "label": "compile many failing proofs",
       "action": "compile",
-      "file": "src/many_failures.v"
+      "file": "src/many_failures.v",
+      "long_running_seconds": 0
     }
   ]
 }

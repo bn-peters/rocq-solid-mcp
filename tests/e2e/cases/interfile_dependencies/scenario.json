@@ -4,14 +4,19 @@
       "label": "compile dependency before lsp",
       "action": "rocq c",
       "file": "theories/Base.v",
-      "args": ["-Q", "theories", "dependency_demo"]
+      "args": [
+        "-Q",
+        "theories",
+        "dependency_demo"
+      ]
     }
   ],
   "steps": [
     {
       "label": "compile dependent client",
       "action": "compile",
-      "file": "clients/UseBase.v"
+      "file": "clients/UseBase.v",
+      "long_running_seconds": 0
     },
     {
       "label": "append dependent tactic failure",
@@ -22,7 +27,8 @@
     {
       "label": "recompile dependent tactic failure",
       "action": "compile",
-      "file": "clients/UseBase.v"
+      "file": "clients/UseBase.v",
+      "long_running_seconds": 0
     }
   ]
 }

@@ -6,6 +6,7 @@
     "result": {
       "status": "timeout",
       "file": "src/resume_timeout.v",
+      "compilation_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1,
         "warnings": 0,
@@ -40,6 +41,7 @@
     "result": {
       "status": "timeout",
       "file": "src/resume_timeout.v",
+      "compilation_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1,
         "warnings": 0,
@@ -74,6 +76,7 @@
     "result": {
       "status": "complete",
       "file": "src/resume_timeout.v",
+      "compilation_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1,
         "warnings": 0,

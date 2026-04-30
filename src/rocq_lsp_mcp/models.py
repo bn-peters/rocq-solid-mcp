@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field
 
 DEFAULT_MESSAGE_LIMIT = 10
 MAX_MESSAGE_LIMIT = 50
+DEFAULT_LONG_RUNNING_SECONDS = 3.0
+MAX_LONG_RUNNING_COMMANDS = 10
 LocationFormat = Literal["range", "point"]
 DiagnosticSeverity = Literal["info", "warning", "error"]
 DEFAULT_DIAGNOSTIC_SEVERITY: DiagnosticSeverity = "info"
@@ -124,6 +126,21 @@ class CommandOutput(BaseModel):
         return pruned_dict(
             {
                 "level": diagnostic_level(self.severity),
+                "text": self.text,
+            }
+        )
+
+
+class LongRunningCommand(BaseModel):
+    range: dict[str, Any] = Field(default_factory=dict)
+    text: str
+    time_seconds: float
+
+    def render(self, options: RenderOptions | None = None) -> dict[str, Any]:
+        options = options or RenderOptions()
+        return pruned_dict(
+            {
+                "location": location_string(self.range, options.location_format),
                 "text": self.text,
             }
         )
@@ -282,6 +299,8 @@ class CompileResult(BaseModel):
     timed_out: bool = False
     restarted: bool = False
     timeout_context: TimeoutContext | None = None
+    compilation_time_seconds: float | None = None
+    long_running_commands: list[LongRunningCommand] = Field(default_factory=list)
     message: str | None = None
 
     @property
@@ -314,6 +333,8 @@ class CompileResult(BaseModel):
         timed_out: bool = False,
         restarted: bool = False,
         timeout_context: TimeoutContext | None = None,
+        compilation_time_seconds: float | None = None,
+        long_running_commands: list[LongRunningCommand] | None = None,
         message: str | None = None,
     ) -> "CompileResult":
         return cls(
@@ -327,6 +348,8 @@ class CompileResult(BaseModel):
             timed_out=timed_out,
             restarted=restarted,
             timeout_context=timeout_context,
+            compilation_time_seconds=compilation_time_seconds,
+            long_running_commands=long_running_commands or [],
             message=message,
         )
 
@@ -358,6 +381,9 @@ class CompileResult(BaseModel):
             {
                 "status": self.status,
                 "file": display_file(self.file, self.workspace),
+                "compilation_time_seconds": rounded_seconds(
+                    self.compilation_time_seconds
+                ),
                 "counts": diagnostic_counts(
                     errors=len(buckets["errors"]),
                     warnings=len(buckets["warnings"]),
@@ -372,6 +398,9 @@ class CompileResult(BaseModel):
                 "timed_out": True if self.timed_out else None,
                 "restarted": True if self.restarted else None,
                 "timeout_context": timeout_context,
+                "long_running_commands": [
+                    command.render(options) for command in self.long_running_commands
+                ],
                 "message": self.message,
             }
         )
@@ -488,6 +517,68 @@ def display_file(file: str, workspace: str | None) -> str:
     return file
 
 
+def long_running_commands_from_perf_data(
+    *,
+    content: str,
+    perf_data: Any,
+    threshold_seconds: float,
+    executed_ranges: list[dict[str, Any]] | None = None,
+    limit: int = MAX_LONG_RUNNING_COMMANDS,
+) -> list[LongRunningCommand]:
+    raw = lsp_to_jsonable(perf_data)
+    if not isinstance(raw, dict) or threshold_seconds <= 0 or limit <= 0:
+        return []
+
+    timings = raw.get("timings")
+    if not isinstance(timings, list):
+        return []
+
+    executed_range_keys = (
+        {_range_key(range_) for range_ in executed_ranges}
+        if executed_ranges
+        else None
+    )
+    commands: list[LongRunningCommand] = []
+    for timing in timings:
+        if not isinstance(timing, dict):
+            continue
+        info = timing.get("info")
+        range_ = timing.get("range")
+        if not isinstance(info, dict) or not isinstance(range_, dict):
+            continue
+        if (
+            executed_range_keys is not None
+            and _range_key(range_) not in executed_range_keys
+        ):
+            continue
+        if info.get("cache_hit") is True:
+            continue
+        time_seconds = info.get("time")
+        if not isinstance(time_seconds, (int, float)):
+            continue
+        if float(time_seconds) < threshold_seconds:
+            continue
+        text = _source_text_for_range(content, range_)
+        if not text:
+            continue
+        commands.append(
+            LongRunningCommand(
+                range=range_,
+                text=text,
+                time_seconds=float(time_seconds),
+            )
+        )
+        if len(commands) >= limit:
+            break
+    return commands
+
+
+def rounded_seconds(value: float | None) -> float | None:
+    if value is None:
+        return None
+    return round(max(0.0, float(value)), 3)
+
+
 def pruned_dict(value: dict[str, Any]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, item in value.items():
@@ -584,6 +675,30 @@ def _source_preview_for_range(
     return _next_unchecked_preview(content, range_start(range_))
 
 
+def _source_text_for_range(content: str, range_: dict[str, Any]) -> str | None:
+    start = range_start(range_)
+    end = range_end(range_)
+    if start is None or end is None:
+        return None
+
+    lines = content.splitlines(keepends=True)
+    start_line = start["line"]
+    end_line = end["line"]
+    if start_line < 0 or end_line < start_line or start_line >= len(lines):
+        return None
+    if end_line >= len(lines):
+        end_line = len(lines) - 1
+
+    if start_line == end_line:
+        text = lines[start_line][start["character"] : end["character"]]
+    else:
+        parts = [lines[start_line][start["character"] :]]
+        parts.extend(lines[start_line + 1 : end_line])
+        parts.append(lines[end_line][: end["character"]])
+        text = "".join(parts)
+    return _truncate_preview_line(" ".join(text.strip().split()), limit=240)
+
+
 def _next_unchecked_preview(
     content: str, position: dict[str, int] | None
 ) -> dict[str, Any] | None:
@@ -620,6 +735,12 @@ def _position_dict(value: Any) -> dict[str, int] | None:
     if isinstance(line, int) and isinstance(character, int):
         return {"line": line, "character": character}
     return None
+
+
+def _range_key(range_: dict[str, Any]) -> str:
+    start = range_start(range_)
+    end = range_end(range_)
+    return f"{start}:{end}"
 
 
 def _feedback_entries(feedback: Any) -> list[Any]:
