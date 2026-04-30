@@ -3,10 +3,10 @@
 It is the duty of the agent to keep AGENTS.md and README.md up to date.
 
 This package is a Python MCP prototype for compiling Rocq files and running
-single Rocq commands through persistent project-scoped `coq-lsp` sessions.
+Rocq commands through persistent project-scoped `coq-lsp` sessions.
 Compilation returns compact structured diagnostics and, when available,
 proof-state context for the sentence that produced an error. Command execution
-returns compact feedback output for the requested command.
+returns compact feedback output for each requested command.
 
 ## Package Layout
 
@@ -16,9 +16,9 @@ returns compact feedback output for the requested command.
   severity: str = "info",
   overall_timeout_seconds: float = 60,
   command_timeout_seconds: float | None = None,
-  long_running_seconds: float = 3, restart: bool = False)` and
-  `rocq_lsp_run_command(file: str, command: str, line: int, character: int = 1,
-  overall_timeout_seconds: float = 60)`.
+  restart: bool = False)` and
+  `rocq_lsp_run_command(file: str, commands: list[str], line: int,
+  character: int = 1, overall_timeout_seconds: float = 60)`.
   Tool handlers render internal result models before returning MCP output.
 - `src/rocq_lsp_mcp/manager.py` is the orchestration layer. It resolves files,
   infers workspaces from `_RocqProject` or `_CoqProject`, keeps cached
@@ -83,30 +83,30 @@ https://github.com/rocq-community/rocq-lsp/blob/main/etc/doc/PROTOCOL.md
 
 The compile MCP tool receives a Rocq file path, optional `message_limit`,
 optional `severity`, optional `overall_timeout_seconds`, optional
-`command_timeout_seconds`, optional `long_running_seconds`, and optional
-`restart`; `message_limit` and `severity` are render-only and do not truncate
-the internal `CompileResult`. `severity` may be `info`, `warning`, or `error`;
-only diagnostics at or above that level are returned. `overall_timeout_seconds`
-controls a soft `coq-lsp` partial-result deadline. If it fires before the MCP
-host cancels the tool call, the server cancels the underlying `coq-lsp`
-request and returns partial diagnostics, progress context, or partial command
-output when available. It defaults to 60 seconds and is capped at 3600 seconds.
+`command_timeout_seconds`, and optional `restart`; `message_limit` and
+`severity` are render-only and do not truncate the internal `CompileResult`.
+`severity` may be `info`, `warning`, or `error`; only diagnostics at or above
+that level are returned. `overall_timeout_seconds` controls a soft `coq-lsp`
+partial-result deadline. If it fires before the MCP host cancels the tool call,
+the server cancels the underlying `coq-lsp` request and returns partial
+diagnostics, progress context, or partial command output when available. It
+defaults to 60 seconds and is capped at 3600 seconds.
 Host-level MCP timeouts should be greater than
 `overall_timeout_seconds + ROCQ_LSP_HARD_TIMEOUT_GRACE` when callers want
 partial timeout results back.
 For `command_timeout_seconds`, `None` uses `ROCQ_LSP_COMMAND_TIMEOUT`, which
 defaults to 5 seconds, `0` disables the command watchdog for that call, and
-positive values enable it. `long_running_seconds` defaults to 3 seconds and
-controls the threshold for returned `long_running_commands`; `0` disables the
-extra report. `restart=True` sends `coq/workspace_update` with empty object
-params before the file's `didOpen` or `didChange`, asking the existing
-`coq-lsp` process to invalidate cached `Require` state after external `.vo`
-files have changed. It does not restart the server process and does not rebuild
-dependencies; callers must recompile edited dependencies first. The command MCP
-tool receives a Rocq file path, one complete command ending in `.`, a 1-based
-line/character position, and optional `overall_timeout_seconds`; this is the
-same command tool used for `Search` calls. On each call, the manager resolves
-the file, infers a workspace by
+positive values enable it. The server reports `long_running_commands` for
+commands that actually ran during compile and took at least 80% of
+`overall_timeout_seconds`. `restart=True` sends `coq/workspace_update` with
+empty object params before the file's `didOpen` or `didChange`, asking the
+existing `coq-lsp` process to invalidate cached `Require` state after external
+`.vo` files have changed. It does not restart the server process and does not
+rebuild dependencies; callers must recompile edited dependencies first. The
+command MCP tool receives a Rocq file path, one or more complete commands
+ending in `.`, a 1-based line/character position, and optional
+`overall_timeout_seconds`; this is the same command tool used for `Search`
+calls. On each call, the manager resolves the file, infers a workspace by
 walking upward to the nearest `_RocqProject` or
 `_CoqProject`, then delegates to the cached `RocqLspSession` for that
 workspace. If no project file is found, the file's parent directory is used.
@@ -137,8 +137,8 @@ when no diagnostics remain after filtering. When diagnostics are omitted because
 
 Compile results also include `compilation_time_seconds`, rounded to
 milliseconds. When enabled, long-running command reporting observes
-`$/coq/filePerfData`, filters out entries below `long_running_seconds`, filters
-out entries with `info.cache_hit: true`, intersects perf entries with
+`$/coq/filePerfData`, filters out entries below the alert threshold, filters out
+entries with `info.cache_hit: true`, intersects perf entries with
 `$/coq/executionInformation` ranges from the same document version when those
 execution ranges are available, and renders at most 10
 `long_running_commands`. Each entry contains the source text and a 1-based
@@ -176,9 +176,10 @@ and bullet state into the existing proof-state payload.
 Command execution is driven by `petanque/run_at_point`, because
 `proof/goals` with the `command` parameter does not surface feedback from
 commands such as `Search` or `Print` in current `coq-lsp`. The command tool
-should be called right after imports when possible, or between
-lemmas/definitions when local declarations, scopes, or modules are required.
-The command is ephemeral and does not edit the source file.
+should be called with one or more complete commands right after imports when
+possible, or between lemmas/definitions when local declarations, scopes, or
+modules are required. The commands are ephemeral and do not edit the source
+file.
 
 Caching is delegated to the long-lived `coq-lsp` process. The Python side keeps
 the session, notification, and version state alive so repeated calls for changed
@@ -289,7 +290,7 @@ run through `opam exec -- .venv/bin/python`.
   assertions for cache-sensitive behavior; timings are asserted by the harness
   but omitted from promoted transcripts. Scenario
   compile steps may also include `command_timeout_seconds` to cover per-call
-  compile timeout overrides, `long_running_seconds` to opt in or out of
+  compile timeout overrides, manager-level `long_running_seconds` to exercise
   long-running command reporting, or `severity` and `message_limit` to cover
   render-time diagnostic filtering.
   `diagnostic_message_limit` covers default

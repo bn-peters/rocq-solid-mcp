@@ -1,13 +1,15 @@
 # rocq-lsp-mcp-prototype
 
-Prototype MCP server that compiles Rocq files and runs single Rocq commands
+Prototype MCP server that compiles Rocq files and runs Rocq commands
 through persistent project-scoped `coq-lsp` sessions. Compile diagnostics expose
 a human-facing `level`, `location`, message, optional `proof_name`, and compact
-proof-state context when available. Command results expose compact feedback
-output. Compile results include `compilation_time_seconds`, rounded to
+proof-state context when available. Command batch results expose compact
+feedback output for each command. Compile results include
+`compilation_time_seconds`, rounded to
 milliseconds, and may include `long_running_commands` entries with source text
 and location for commands that actually ran during that compile and exceeded the
-requested threshold. Results include the file relative to the workspace. Raw LSP
+80% alert threshold derived from the overall timeout. Results include the file
+relative to the workspace. Raw LSP
 plumbing such as document URIs, positions, duplicated ranges, versions, empty
 lists, and null fields is omitted from the MCP response. Agent-facing compile
 results keep only the first error for each `proof_name` and, after the first
@@ -65,9 +67,10 @@ into the diagnostic proof state.
 
 Command execution uses `petanque/run_at_point`, because `proof/goals` with the
 `command` parameter does not return feedback from commands such as `Search` or
-`Print` in current `coq-lsp`. Call the command tool right after imports when
-possible, or between lemmas/definitions when local declarations, scopes, or
-modules are needed. The command is ephemeral and does not edit the source file.
+`Print` in current `coq-lsp`. Call the command tool with one or more complete
+commands right after imports when possible, or between lemmas/definitions when
+local declarations, scopes, or modules are needed. The commands are ephemeral
+and do not edit the source file.
 
 The manager infers a workspace by walking upward from the requested file and
 using the first directory with `_RocqProject` or `_CoqProject`. If no project
@@ -107,9 +110,9 @@ workspace session, but the client may already have abandoned the result.
 `coq/getDocument` calls, the manager waits briefly for `$/coq/filePerfData` and
 uses sentence execution notifications from the same document version to keep
 only commands that ran during the current compile step. Entries with
-`info.cache_hit: true` are ignored, entries below `long_running_seconds` are
-ignored, and the rendered result is capped at 10 long-running commands. Set
-`long_running_seconds=0` to disable this extra reporting for a call.
+`info.cache_hit: true` are ignored, entries below 80% of
+`overall_timeout_seconds` are ignored, and the rendered result is capped at 10
+long-running commands.
 
 ## Run
 
@@ -123,9 +126,8 @@ The server exposes two MCP tools:
   severity: str = "info",
   overall_timeout_seconds: float = 60,
   command_timeout_seconds: float | None = None,
-  long_running_seconds: float = 3,
   restart: bool = False)`
-- `rocq_lsp_run_command(file: str, command: str, line: int, character: int = 1,
+- `rocq_lsp_run_command(file: str, commands: list[str], line: int, character: int = 1,
   overall_timeout_seconds: float = 60)`
 
 `message_limit` caps returned diagnostics per severity bucket. Values above 50
@@ -148,15 +150,16 @@ receive these partial timeout results.
 `command_timeout_seconds` overrides `ROCQ_LSP_COMMAND_TIMEOUT` for one compile:
 `None` uses the server default of 5 seconds, `0` disables the sentence
 watchdog, and positive values enable it for that call.
-`long_running_seconds` controls `long_running_commands` reporting for one
-compile: the default is 3 seconds, and `0` disables the report.
+`long_running_commands` reports commands that actually ran during the compile
+and took at least 80% of `overall_timeout_seconds`.
 `restart=True` sends `coq/workspace_update` before compiling so `coq-lsp`
 refreshes imports from recompiled dependencies while keeping the same server
 process alive.
 
 `rocq_lsp_run_command` takes a 1-based line and character position in `file`.
-The command must be one complete Rocq command ending in `.`; punctuation is not
-added automatically.
+Each entry in `commands` must be one complete Rocq command ending in `.`;
+punctuation is not added automatically. The tool returns an aggregate status and
+one rendered command result per command.
 
 ## Environment
 
@@ -205,10 +208,11 @@ through the same cached manager. Scenarios may also define a top-level
 `timeout_policy` to override the harness defaults for timeout-specific coverage,
 including `command_seconds` for per-sentence timeout scenarios. Individual
 compile and command steps may pass `overall_timeout_seconds` to override the
-soft partial-result deadline for that step. Scenario compile steps may set
-`command_timeout_seconds` to exercise per-call compile timeout overrides,
-`long_running_seconds` to opt in or out of long-running command reporting, or
-`severity` and `message_limit` to exercise render-time diagnostic filtering.
+soft partial-result deadline for that step. Scenario compile steps may pass
+`command_timeout_seconds` or the manager-level `long_running_seconds` threshold
+to exercise per-call compile timeout overrides and long-running command
+reporting, or `severity` and `message_limit` to exercise render-time diagnostic
+filtering.
 The e2e suite covers diagnostic severity filtering and dense counts, command
 output info levels for `Search`, `Check`, and `Compute`, command caching after
 slow proofs, soft partial-result timeout recovery, hard-timeout session reset,

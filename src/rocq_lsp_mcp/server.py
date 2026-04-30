@@ -10,7 +10,6 @@ from .config import DEFAULT_OVERALL_TIMEOUT_SECONDS, MAX_OVERALL_TIMEOUT_SECONDS
 from .manager import RocqLspManager
 from .models import (
     DEFAULT_DIAGNOSTIC_SEVERITY,
-    DEFAULT_LONG_RUNNING_SECONDS,
     DEFAULT_MESSAGE_LIMIT,
     DiagnosticSeverity,
     RenderOptions,
@@ -63,8 +62,8 @@ async def rocq_lsp_compile_file(
             gt=0,
             le=MAX_OVERALL_TIMEOUT_SECONDS,
             description=(
-                "Soft coq-lsp request deadline, in seconds. Default 55s,"
-                "maximum 3600s."
+                "Soft coq-lsp request deadline for partial diagnostics before the "
+                "MCP host cancels, in seconds. Default 60s, maximum 3600s."
             ),
         ),
     ] = DEFAULT_OVERALL_TIMEOUT_SECONDS,
@@ -72,21 +71,11 @@ async def rocq_lsp_compile_file(
         float | None,
         Field(
             description=(
-                "Per Rocq sentence execution timeout. Default 5s, 0 disables."
+                "Optional per Rocq sentence watchdog for compile requests. Default "
+                "5s, 0 disables; a slow sentence returns timeout context."
             ),
         ),
     ] = None,
-    # TODO remove this feature instead, alert at 80% of the overall timeout
-    long_running_seconds: Annotated[
-        float,
-        Field(
-            ge=0,
-            description=(
-                "Optional threshold, in seconds, alerting on long-running commands."
-                "Default 3s, 0 disables."
-            ),
-        ),
-    ] = DEFAULT_LONG_RUNNING_SECONDS,
     restart: Annotated[
         bool,
         Field(
@@ -112,7 +101,7 @@ async def rocq_lsp_compile_file(
         file,
         overall_timeout_seconds=overall_timeout_seconds,
         command_timeout_seconds=command_timeout_seconds,
-        long_running_seconds=long_running_seconds,
+        long_running_seconds=_long_running_alert_threshold(overall_timeout_seconds),
         restart=restart,
     )
     return result.render(RenderOptions(message_limit=message_limit, severity=severity))
@@ -121,13 +110,12 @@ async def rocq_lsp_compile_file(
 @mcp.tool()
 async def rocq_lsp_run_command(
     file: Annotated[str, Field(description="Absolute path to a .v file.")],
-    # TODO generalize this tool: accept a list of commands, instead of a single one, all of which are executed at the given position.
-    command: Annotated[
-        str,
+    commands: Annotated[
+        list[str],
         Field(
             description=(
-                "A single Rocq command to evaluate, e.g. 'Check Nat.add.' or "
-                "'Search (_ + _ = _).'."
+                "One or more complete Rocq commands to evaluate at the same file "
+                "position, e.g. ['Check Nat.add.', 'Search (_ + _ = _).']."
             ),
         ),
     ],
@@ -150,13 +138,13 @@ async def rocq_lsp_run_command(
             gt=0,
             le=MAX_OVERALL_TIMEOUT_SECONDS,
             description=(
-                "Soft coq-lsp request deadline, in seconds. Default 60s, maximum "
-                "3600s."
+                "Soft coq-lsp request deadline for partial command output before "
+                "the MCP host cancels, in seconds. Default 60s, maximum 3600s."
             ),
         ),
     ] = DEFAULT_OVERALL_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
-    """Run one Rocq command at a file position and return its output.
+    """Run Rocq commands at a file position and return their output.
 
     Use this to query information about the proof environment, for instance using Search, Check, or Locate.
 
@@ -165,15 +153,52 @@ async def rocq_lsp_run_command(
 
     overall_timeout_seconds is a soft deadline for reporting partial results. It should be lower than the host's tool call timeout. 
     """
+    if not commands:
+        return {
+            "status": "failed",
+            "file": file,
+            "message": "commands must contain at least one Rocq command ending in '.'",
+        }
+
     manager: RocqLspManager = ctx.request_context.lifespan_context
-    result = await manager.run_command(
-        file,
-        command,
-        line,
-        character,
-        overall_timeout_seconds=overall_timeout_seconds,
-    )
-    return result.render()
+    results = [
+        await manager.run_command(
+            file,
+            command,
+            line,
+            character,
+            overall_timeout_seconds=overall_timeout_seconds,
+        )
+        for command in commands
+    ]
+    rendered_results = [result.render() for result in results]
+    timed_out = any(result.timed_out for result in results)
+    restarted = any(result.restarted for result in results)
+    response: dict[str, Any] = {
+        "status": _batch_status(rendered_results),
+        "file": rendered_results[0].get("file", file),
+        "results": rendered_results,
+    }
+    if timed_out:
+        response["timed_out"] = True
+    if restarted:
+        response["restarted"] = True
+    if location := rendered_results[0].get("location"):
+        response["location"] = location
+    return response
+
+
+def _long_running_alert_threshold(overall_timeout_seconds: float) -> float:
+    return min(float(overall_timeout_seconds), MAX_OVERALL_TIMEOUT_SECONDS) * 0.8
+
+
+def _batch_status(results: list[dict[str, Any]]) -> str:
+    statuses = {result.get("status") for result in results}
+    if "timeout" in statuses:
+        return "timeout"
+    if "failed" in statuses:
+        return "failed"
+    return "complete"
 
 
 def main() -> None:
