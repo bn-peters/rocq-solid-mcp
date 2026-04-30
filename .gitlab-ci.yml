@@ -34,8 +34,6 @@ test:
     - opam --version
     - opam init --reinit --disable-sandboxing --no-setup --yes
     - opam switch show
-    - git config --global url."https://gitlab.mpi-sws.org/".insteadOf "ssh://git-rts@gitlab.mpi-sws.org/"
-    - git config --global url."https://gitlab.mpi-sws.org/".insteadOf "git+ssh://git-rts@gitlab.mpi-sws.org/"
     - opam repository add coq-released https://coq.inria.fr/opam/released --yes || opam repository set-url coq-released https://coq.inria.fr/opam/released
     - opam repository add bpeters https://gitlab.mpi-sws.org/bpeters/opam.git --yes || opam repository set-url bpeters https://gitlab.mpi-sws.org/bpeters/opam.git
     - opam update

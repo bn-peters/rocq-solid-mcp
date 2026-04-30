@@ -233,6 +233,4 @@ the `ocaml/opam:ubuntu-24.04-ocaml-5.2` image, adds the `coq-released` and
 `bpeters` opam repositories, installs the pinned `rocq-core` version plus
 unconstrained `rocq-stdlib` and `bens-rocq-lsp`, creates the repository-local
 `.venv/`, and installs the Python package with development test dependencies
-before running the Makefile target. The CI config rewrites the `bens-rocq-lsp`
-package source URL from SSH to HTTPS for Git fetches, because GitLab runners
-usually do not have SSH credentials even when the repository is public.
+before running the Makefile target.

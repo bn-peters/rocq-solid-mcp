@@ -257,9 +257,7 @@ uses `ocaml/opam:ubuntu-24.04-ocaml-5.2`, adds the `coq-released` and `bpeters`
 opam repositories, installs the pinned `rocq-core` plus unconstrained
 `rocq-stdlib` and `bens-rocq-lsp`, creates `.venv/`, installs `.[dev]`, and then
 relies on the existing Makefile so tests run through
-`opam exec -- .venv/bin/python`. The CI config rewrites the `bens-rocq-lsp`
-package source URL from SSH to HTTPS for Git fetches, because GitLab runners
-usually do not have SSH credentials even when the repository is public.
+`opam exec -- .venv/bin/python`.
 
 ## Test Suite
 
