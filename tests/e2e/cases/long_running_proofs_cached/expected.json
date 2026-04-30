@@ -6,6 +6,11 @@
     "result": {
       "status": "complete",
       "file": "src/cache.v",
+      "counts": {
+        "errors": 1,
+        "warnings": 0,
+        "infos": 0
+      },
       "diagnostics": [
         {
           "level": "error",
@@ -34,7 +39,12 @@
     "file": "src/cache.v",
     "result": {
       "status": "complete",
-      "file": "src/cache.v"
+      "file": "src/cache.v",
+      "counts": {
+        "errors": 0,
+        "warnings": 0,
+        "infos": 0
+      }
     }
   }
 ]

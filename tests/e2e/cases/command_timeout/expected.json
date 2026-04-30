@@ -6,6 +6,11 @@
     "result": {
       "status": "timeout",
       "file": "src/timeout.v",
+      "counts": {
+        "errors": 0,
+        "warnings": 0,
+        "infos": 0
+      },
       "timed_out": true,
       "timeout_context": {
         "operation": "coq/getDocument",
@@ -38,7 +43,12 @@
     "file": "src/timeout.v",
     "result": {
       "status": "complete",
-      "file": "src/timeout.v"
+      "file": "src/timeout.v",
+      "counts": {
+        "errors": 0,
+        "warnings": 0,
+        "infos": 0
+      }
     }
   }
 ]

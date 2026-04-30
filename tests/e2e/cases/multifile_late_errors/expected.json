@@ -5,7 +5,12 @@
     "file": "src/base.v",
     "result": {
       "status": "complete",
-      "file": "src/base.v"
+      "file": "src/base.v",
+      "counts": {
+        "errors": 0,
+        "warnings": 0,
+        "infos": 0
+      }
     }
   },
   {
@@ -14,7 +19,12 @@
     "file": "src/lang/modes.v",
     "result": {
       "status": "complete",
-      "file": "src/lang/modes.v"
+      "file": "src/lang/modes.v",
+      "counts": {
+        "errors": 0,
+        "warnings": 0,
+        "infos": 0
+      }
     }
   },
   {
@@ -29,6 +39,11 @@
     "result": {
       "status": "complete",
       "file": "src/lang/modes.v",
+      "counts": {
+        "errors": 2,
+        "warnings": 0,
+        "infos": 0
+      },
       "diagnostics": [
         {
           "level": "error",

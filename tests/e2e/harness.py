@@ -12,7 +12,7 @@ import pytest
 
 from rocq_lsp_mcp.config import RocqLspConfig, TimeoutPolicy
 from rocq_lsp_mcp.manager import RocqLspManager
-from rocq_lsp_mcp.models import CommandResult, CompileResult
+from rocq_lsp_mcp.models import CommandResult, CompileResult, RenderOptions
 
 CASES_DIR = Path(__file__).parent / "cases"
 
@@ -129,7 +129,7 @@ async def _run_steps(
             transcript.append(
                 {
                     **_step_record(step),
-                    "result": _result_record(result, project_root),
+                    "result": _result_record(result, project_root, step),
                 }
             )
             continue
@@ -149,7 +149,7 @@ async def _run_steps(
                 {
                     **_step_record(step),
                     "command": step["command"],
-                    "result": _result_record(result, project_root),
+                    "result": _result_record(result, project_root, step),
                 }
             )
             continue
@@ -180,12 +180,22 @@ def _step_record(step: dict[str, Any]) -> dict[str, Any]:
         record["file"] = step["file"]
     if "command_timeout_seconds" in step:
         record["command_timeout_seconds"] = step["command_timeout_seconds"]
+    if "severity" in step:
+        record["severity"] = step["severity"]
+    if "message_limit" in step:
+        record["message_limit"] = step["message_limit"]
     return record
 
 
 def _result_record(
-    result: CompileResult | CommandResult, project_root: Path
+    result: CompileResult | CommandResult, project_root: Path, step: dict[str, Any]
 ) -> dict[str, Any]:
+    if isinstance(result, CompileResult):
+        options = RenderOptions(
+            message_limit=step.get("message_limit", 10),
+            severity=step.get("severity", "info"),
+        )
+        return _scrub_value(result.render(options), project_root)
     return _scrub_value(result.render(), project_root)
 
 

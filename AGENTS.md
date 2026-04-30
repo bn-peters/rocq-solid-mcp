@@ -13,6 +13,7 @@ returns compact feedback output for the requested command.
 - `src/rocq_lsp_mcp/server.py` defines the FastMCP server, the lifespan-managed
   `RocqLspManager`, and the MCP tools
   `rocq_lsp_compile_file(file: str, message_limit: int = 10,
+  severity: str = "info",
   overall_timeout_seconds: float = 60,
   command_timeout_seconds: float | None = None, restart: bool = False)` and
   `rocq_lsp_run_command(file: str, command: str, line: int, character: int = 1,
@@ -51,14 +52,16 @@ returns compact feedback output for the requested command.
   ranges, document metadata, diagnostics, proof states, and timeout state.
   Their `render(options)` methods are the only place that decides the compact
   MCP output shape: file display, severity labels, location format, proof-state
-  inclusion, duplicate proof-error filtering, per-severity message limits,
-  timeout formatting, and empty-field pruning. Default rendering keeps only the
-  first error for each `proof_name` and, after the first error without a
+  inclusion, duplicate proof-error filtering, minimum severity filtering,
+  global cascade-error suppression, per-severity message limits, timeout
+  formatting, and empty-field pruning. Default rendering keeps only the first
+  error for each `proof_name` and, after the first error without a
   `proof_name`, suppresses later errors that also lack a `proof_name`; warnings
   and infos are preserved. This broad cascade guard can hide later independent
-  top-level errors that also lack `proof_name`. Rendering caps returned
-  diagnostics at 10 per severity bucket with a hard cap of 50, and includes
-  compact `timeout_context` only for timeout results.
+  top-level errors that also lack `proof_name`. Rendering applies the requested
+  minimum severity, caps returned diagnostics at 10 per severity bucket with a
+  hard cap of 50, and includes compact `timeout_context` only for timeout
+  results.
 - `src/rocq_lsp_mcp/config.py` loads environment configuration, defines
   `TimeoutPolicy`, builds the `opam exec -- coq-lsp` command, and builds the
   `coq-lsp` initialization settings. `send_execinfo` is enabled so per-call
@@ -72,9 +75,11 @@ https://github.com/rocq-community/rocq-lsp/blob/main/etc/doc/PROTOCOL.md
 ## Runtime Behavior
 
 The compile MCP tool receives a Rocq file path, optional `message_limit`,
-optional `overall_timeout_seconds`, optional `command_timeout_seconds`, and
-optional `restart`; `message_limit` is render-only and does not truncate the
-internal `CompileResult`. `overall_timeout_seconds` controls the outer
+optional `severity`, optional `overall_timeout_seconds`, and optional
+`command_timeout_seconds`, and optional `restart`; `message_limit` and
+`severity` are render-only and do not truncate the internal `CompileResult`.
+`severity` may be `info`, `warning`, or `error`; only diagnostics at or above
+that level are returned. `overall_timeout_seconds` controls the outer
 `coq-lsp` request wait, defaults to 60 seconds, and is capped at 3600 seconds.
 For `command_timeout_seconds`, `None` uses `ROCQ_LSP_COMMAND_TIMEOUT`, which
 defaults to 5 seconds, `0` disables the command watchdog for that call, and
@@ -107,12 +112,13 @@ Compilation is driven by `coq/getDocument` with `goals="Str"`. This asks
 and attaches proof states without applying agent-facing filtering. The
 `CompileResult.render(RenderOptions(...))` step converts raw LSP ranges to
 1-based locations, severity numbers to `error`, `warning`, or `info`, removes
-empty fields, filters duplicate proof errors by default, suppresses later
-global errors after the first error without `proof_name`, and applies
-per-severity diagnostic limits. Counts are rendered only when warnings or
-omitted diagnostics are present, and zero-valued count fields are omitted. When
-diagnostics are omitted because of `message_limit`, the response includes
-`omitted_counts` and the effective `message_limit`.
+empty fields, filters duplicate proof errors by default, and applies
+minimum severity filtering, suppresses later global errors after the first
+error without `proof_name`, and applies per-severity diagnostic limits. Counts
+are rendered on every compile result and include `errors`, `warnings`, and
+`infos`, including zero-valued buckets. When diagnostics are omitted because of
+`message_limit`, the response includes `omitted_counts` and the effective
+`message_limit`.
 
 When `coq/getDocument` times out, the manager returns status `timeout` with an
 internal `TimeoutContext`. `TimeoutContext.from_manager_state(...)` builds the
@@ -240,10 +246,15 @@ The local virtual environment is expected at `.venv/`. Use
   `max_seconds` timing assertions for cache-sensitive behavior; timings are
   asserted by the harness but omitted from promoted transcripts. Scenario
   compile steps may also include `command_timeout_seconds` to cover per-call
-  compile timeout overrides.
+  compile timeout overrides, or `severity` and `message_limit` to cover
+  render-time diagnostic filtering.
   `diagnostic_message_limit` covers default
-  per-severity diagnostic truncation. `run_command_search` covers promoted
-  command output for a narrow `Search` query. `run_command_cached_after_slow_proof`
+  per-severity diagnostic truncation. `diagnostic_severity_filter` covers
+  real warning diagnostics, proof-script errors, dense counts, and `severity`
+  filtering. `command_info_outputs` covers promoted `Search`, `Check`, and
+  `Compute` command outputs rendered at info level. `run_command_search` covers
+  promoted command output for a narrow `Search` query.
+  `run_command_cached_after_slow_proof`
   checks that `Search` after a cached slow proof is quick. `timeout_recovery`
   uses the local `sleep` tactic to cover a soft `coq/getDocument` timeout
   followed by a successful recompile in the same manager.

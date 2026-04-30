@@ -7,7 +7,9 @@
       "status": "complete",
       "file": "src/many_failures.v",
       "counts": {
-        "errors": 20
+        "errors": 20,
+        "warnings": 0,
+        "infos": 0
       },
       "omitted_counts": {
         "errors": 10

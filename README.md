@@ -12,9 +12,12 @@ only the first error for each `proof_name` and, after the first error without a
 infos are preserved. This broad cascade guard can hide later independent
 top-level errors that also lack `proof_name`. Returned diagnostics are limited
 per severity bucket: the default is 10 errors, 10 warnings, and 10 info/hint
-messages, and callers may request up to the hard cap of 50 per bucket. Timeout
-results include a compact `timeout_context` that reports the request operation,
-timeout kind and settings, the latest checked position, the latest processing range,
+callers may request up to the hard cap of 50 per bucket. Callers may also set
+`severity` to `info`, `warning`, or `error` to return only diagnostics at or
+above that level. Compile results always include `counts` with `errors`,
+`warnings`, and `infos`, including zero-valued buckets. Timeout results include
+a compact `timeout_context` that reports the request operation, timeout
+kind and settings, the latest checked position, the latest processing range,
 and a small preview of the next unchecked source line when available. Optional
 overall request timeouts can be passed per compile or command/Search call; the
 MCP default is 60 seconds and the maximum is 3600 seconds. Optional
@@ -43,8 +46,8 @@ compiled dependencies may have changed before checking the requested file.
   `Diagnostic` models without deciding what the MCP response should include.
 - `models.py` holds internal result models, `TimeoutContext`, and the
   `RenderOptions`-driven render step that applies agent-facing filtering,
-  message limits, location formatting, timeout formatting, and empty-field
-  pruning.
+  severity filtering, message limits, location formatting, timeout formatting,
+  and empty-field pruning.
 
 For `Attempt to save an incomplete proof` diagnostics, the `Qed.` span may only
 contain the save error. The manager asks `proof/goals` with `mode: "Prev"` at
@@ -97,6 +100,7 @@ uv run rocq-lsp-mcp
 The server exposes two MCP tools:
 
 - `rocq_lsp_compile_file(file: str, message_limit: int = 10,
+  severity: str = "info",
   overall_timeout_seconds: float = 60,
   command_timeout_seconds: float | None = None, restart: bool = False)`
 - `rocq_lsp_run_command(file: str, command: str, line: int, character: int = 1,
@@ -106,7 +110,11 @@ The server exposes two MCP tools:
 are capped to 50. When diagnostics are omitted, the response includes
 `omitted_counts` and `message_limit` alongside total `counts`. The limit is
 applied only while rendering the MCP response; internal compile results retain
-all normalized diagnostics.
+all normalized diagnostics. `counts` is always rendered and includes `errors`,
+`warnings`, and `infos`, including zero-valued buckets.
+`severity` is a render-only minimum diagnostic level. Allowed values are
+`info`, `warning`, and `error`; `info` preserves the default behavior,
+`warning` returns warnings and errors, and `error` returns errors only.
 `overall_timeout_seconds` controls the outer `coq-lsp` request wait for compile
 and command/Search calls. It defaults to 60 seconds and may be at most 3600
 seconds.
@@ -168,13 +176,15 @@ through the same cached manager. Scenarios may also define a top-level
 including `command_seconds` for per-sentence timeout scenarios. Individual
 compile and command steps may pass `overall_timeout_seconds` to override the
 outer request timeout for that step. Scenario compile steps may set
-`command_timeout_seconds` to exercise per-call compile timeout overrides. The
-e2e suite covers command output, command caching after slow proofs, soft timeout
-recovery, hard-timeout session reset, per-call compile command timeout
-overrides, per-sentence command timeout behavior, request timeouts resuming
-from cached progress while preserving diagnostics, and cached repeated compile
-errors, and lemma-header errors that would otherwise cascade into proof-mode
-diagnostics.
+`command_timeout_seconds` to exercise per-call compile timeout overrides, or
+`severity` and `message_limit` to exercise render-time diagnostic filtering.
+The e2e suite covers diagnostic severity filtering and dense counts, command
+output info levels for `Search`, `Check`, and `Compute`, command caching after
+slow proofs, soft timeout recovery, hard-timeout session reset, per-call compile
+command timeout overrides, per-sentence command timeout behavior, request
+timeouts resuming from cached progress while preserving diagnostics, cached
+repeated compile errors, and lemma-header errors that would otherwise cascade
+into proof-mode diagnostics.
 `tests/e2e/test_compile_restart.py` covers refreshing a client file after a
 dependency `.vo` is rebuilt.
 Use `make promote` to refresh promoted e2e transcripts after intentional output

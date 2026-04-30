@@ -9,6 +9,13 @@ from pydantic import BaseModel, Field
 DEFAULT_MESSAGE_LIMIT = 10
 MAX_MESSAGE_LIMIT = 50
 LocationFormat = Literal["range", "point"]
+DiagnosticSeverity = Literal["info", "warning", "error"]
+DEFAULT_DIAGNOSTIC_SEVERITY: DiagnosticSeverity = "info"
+DIAGNOSTIC_LEVEL_PRIORITY = {
+    "info": 1,
+    "warning": 2,
+    "error": 3,
+}
 
 
 @dataclass(frozen=True)
@@ -16,6 +23,7 @@ class RenderOptions:
     include_proof_state: bool = True
     include_timeout_context: bool = True
     message_limit: int = DEFAULT_MESSAGE_LIMIT
+    severity: DiagnosticSeverity = DEFAULT_DIAGNOSTIC_SEVERITY
     location_format: LocationFormat = "range"
     deduplicate_proof_errors: bool = True
 
@@ -336,7 +344,6 @@ class CompileResult(BaseModel):
             errors=omitted_errors,
             warnings=omitted_warnings,
             infos=omitted_infos,
-            force=True,
         )
         has_omissions = bool(omitted_counts)
         timeout_context = (
@@ -355,7 +362,7 @@ class CompileResult(BaseModel):
                     errors=len(buckets["errors"]),
                     warnings=len(buckets["warnings"]),
                     infos=len(buckets["infos"]),
-                    force=has_omissions,
+                    include_zero=True,
                 ),
                 "omitted_counts": omitted_counts,
                 "message_limit": message_limit if has_omissions else None,
@@ -459,19 +466,16 @@ def command_location(line: int, character: int) -> str:
 
 
 def diagnostic_counts(
-    *, errors: int, warnings: int, infos: int, force: bool = False
+    *, errors: int, warnings: int, infos: int, include_zero: bool = False
 ) -> dict[str, int]:
-    if warnings == 0 and not force:
-        return {}
-    return {
-        key: count
-        for key, count in {
-            "errors": errors,
-            "warnings": warnings,
-            "infos": infos,
-        }.items()
-        if count > 0
+    counts = {
+        "errors": errors,
+        "warnings": warnings,
+        "infos": infos,
     }
+    if include_zero:
+        return counts
+    return {key: count for key, count in counts.items() if count > 0}
 
 
 def display_file(file: str, workspace: str | None) -> str:
@@ -513,6 +517,12 @@ def _render_diagnostics(
     diagnostics: list[Diagnostic],
     options: RenderOptions,
 ) -> list[Diagnostic]:
+    diagnostics = [
+        diagnostic
+        for diagnostic in diagnostics
+        if diagnostic_matches_severity(diagnostic, options.severity)
+    ]
+
     if not options.deduplicate_proof_errors:
         return diagnostics
 
@@ -533,6 +543,17 @@ def _render_diagnostics(
                 seen_error_proofs.add(diagnostic.proof_name)
         filtered.append(diagnostic)
     return filtered
+
+
+def diagnostic_matches_severity(
+    diagnostic: Diagnostic,
+    minimum_severity: DiagnosticSeverity,
+) -> bool:
+    level = diagnostic_level(diagnostic.severity) or "info"
+    return (
+        DIAGNOSTIC_LEVEL_PRIORITY[level]
+        >= DIAGNOSTIC_LEVEL_PRIORITY[minimum_severity]
+    )
 
 
 def _completed_only(document: dict[str, Any] | None) -> dict[str, Any] | None:

@@ -5,7 +5,12 @@
     "file": "theories/Core.v",
     "result": {
       "status": "complete",
-      "file": "theories/Core.v"
+      "file": "theories/Core.v",
+      "counts": {
+        "errors": 0,
+        "warnings": 0,
+        "infos": 0
+      }
     }
   },
   {
@@ -14,7 +19,12 @@
     "file": "clients/UseCore.v",
     "result": {
       "status": "complete",
-      "file": "clients/UseCore.v"
+      "file": "clients/UseCore.v",
+      "counts": {
+        "errors": 0,
+        "warnings": 0,
+        "infos": 0
+      }
     }
   },
   {
@@ -29,6 +39,11 @@
     "result": {
       "status": "complete",
       "file": "clients/UseCore.v",
+      "counts": {
+        "errors": 1,
+        "warnings": 0,
+        "infos": 0
+      },
       "diagnostics": [
         {
           "level": "error",

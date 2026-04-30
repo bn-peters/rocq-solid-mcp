@@ -5,7 +5,12 @@
     "file": "src/CacheCommand.v",
     "result": {
       "status": "complete",
-      "file": "src/CacheCommand.v"
+      "file": "src/CacheCommand.v",
+      "counts": {
+        "errors": 0,
+        "warnings": 0,
+        "infos": 0
+      }
     }
   },
   {

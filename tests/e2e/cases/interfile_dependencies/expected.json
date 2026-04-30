@@ -10,7 +10,12 @@
     "file": "clients/UseBase.v",
     "result": {
       "status": "complete",
-      "file": "clients/UseBase.v"
+      "file": "clients/UseBase.v",
+      "counts": {
+        "errors": 0,
+        "warnings": 0,
+        "infos": 0
+      }
     }
   },
   {
@@ -25,6 +30,11 @@
     "result": {
       "status": "complete",
       "file": "clients/UseBase.v",
+      "counts": {
+        "errors": 1,
+        "warnings": 0,
+        "infos": 0
+      },
       "diagnostics": [
         {
           "level": "error",

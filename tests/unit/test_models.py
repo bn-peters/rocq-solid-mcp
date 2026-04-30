@@ -60,7 +60,7 @@ def test_diagnostic_render_options_control_proof_state_and_location() -> None:
     }
 
 
-def test_compile_result_omits_counts_without_warnings(tmp_path: Path) -> None:
+def test_compile_result_always_renders_counts(tmp_path: Path) -> None:
     source = tmp_path / "src" / "Demo.v"
     source.parent.mkdir()
     source.write_text("Check nat.\n", encoding="utf-8")
@@ -81,11 +81,12 @@ def test_compile_result_omits_counts_without_warnings(tmp_path: Path) -> None:
     assert result.render() == {
         "status": "complete",
         "file": "src/Demo.v",
+        "counts": {"errors": 1, "warnings": 0, "infos": 0},
         "diagnostics": [{"level": "error", "message": "bad"}],
     }
 
 
-def test_compile_result_counts_keep_only_nonzero_fields_for_warnings(
+def test_compile_result_counts_include_zero_fields(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -104,7 +105,7 @@ def test_compile_result_counts_keep_only_nonzero_fields_for_warnings(
         ],
     )
 
-    assert result.render()["counts"] == {"warnings": 1}
+    assert result.render()["counts"] == {"errors": 0, "warnings": 1, "infos": 0}
 
 
 def test_compile_result_renders_timeout_context_only_for_timeouts(
@@ -271,9 +272,39 @@ def test_compile_result_hard_caps_requested_message_limit(tmp_path: Path) -> Non
 
     dumped = result.render(RenderOptions(message_limit=1000))
     assert len(dumped["diagnostics"]) == 50
-    assert dumped["counts"] == {"errors": 51}
+    assert dumped["counts"] == {"errors": 51, "warnings": 0, "infos": 0}
     assert dumped["omitted_counts"] == {"errors": 1}
     assert dumped["message_limit"] == 50
+
+
+def test_compile_result_filters_diagnostics_by_severity(tmp_path: Path) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    result = CompileResult.from_diagnostics(
+        status="complete",
+        file=str(source),
+        uri=source.as_uri(),
+        workspace=str(tmp_path),
+        version=1,
+        completed=None,
+        diagnostics=[
+            Diagnostic.from_lsp({"range": {}, "message": "bad", "severity": 1}),
+            Diagnostic.from_lsp({"range": {}, "message": "careful", "severity": 2}),
+            Diagnostic.from_lsp({"range": {}, "message": "note", "severity": 3}),
+            Diagnostic.from_lsp({"range": {}, "message": "hint", "severity": 4}),
+            Diagnostic.from_lsp({"range": {}, "message": "unknown"}),
+        ],
+    )
+
+    warning_dumped = result.render(RenderOptions(severity="warning"))
+    assert warning_dumped["counts"] == {"errors": 1, "warnings": 1, "infos": 0}
+    assert [item["message"] for item in warning_dumped["diagnostics"]] == [
+        "bad",
+        "careful",
+    ]
+
+    error_dumped = result.render(RenderOptions(severity="error"))
+    assert [item["message"] for item in error_dumped["diagnostics"]] == ["bad"]
 
 
 def test_compile_result_render_deduplicates_proof_errors(tmp_path: Path) -> None:

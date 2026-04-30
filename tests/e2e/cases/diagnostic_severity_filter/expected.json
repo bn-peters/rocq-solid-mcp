@@ -1,0 +1,182 @@
+[
+  {
+    "step": "compile all severities",
+    "action": "compile",
+    "file": "src/severities.v",
+    "result": {
+      "status": "complete",
+      "file": "src/severities.v",
+      "counts": {
+        "errors": 2,
+        "warnings": 2,
+        "infos": 0
+      },
+      "diagnostics": [
+        {
+          "level": "warning",
+          "message": "This notation will not be used for printing as it is bound to a single\nvariable. [notation-bound-to-variable,parsing,default]",
+          "location": "1:1 to 1:38",
+          "proof_state": {
+            "messages": [
+              {
+                "level": 2,
+                "text": "This\nnotation\nwill\nnot\nbe\nused\nfor\nprinting\nas\nit\nis\nbound\nto\na\nsingle\nvariable.\n[notation-bound-to-variable,parsing,default]"
+              }
+            ]
+          }
+        },
+        {
+          "level": "warning",
+          "message": "This notation will not be used for printing as it is bound to a single\nvariable. [notation-bound-to-variable,parsing,default]",
+          "location": "2:1 to 2:38",
+          "proof_state": {
+            "messages": [
+              {
+                "level": 2,
+                "text": "This\nnotation\nwill\nnot\nbe\nused\nfor\nprinting\nas\nit\nis\nbound\nto\na\nsingle\nvariable.\n[notation-bound-to-variable,parsing,default]"
+              }
+            ]
+          }
+        },
+        {
+          "level": "error",
+          "message": "The reference missing_tactic was not found in the current environment.",
+          "location": "6:3 to 6:17",
+          "proof_name": "bad_missing_tactic",
+          "proof_state": {
+            "goals": [
+              {
+                "conclusion": "True"
+              }
+            ]
+          }
+        },
+        {
+          "level": "error",
+          "message": "The reference invalid_tactic was not found in the current environment.",
+          "location": "11:3 to 11:17",
+          "proof_name": "bad_invalid_tactic",
+          "proof_state": {
+            "goals": [
+              {
+                "conclusion": "True"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "step": "compile warnings and errors",
+    "action": "compile",
+    "file": "src/severities.v",
+    "severity": "warning",
+    "result": {
+      "status": "complete",
+      "file": "src/severities.v",
+      "counts": {
+        "errors": 2,
+        "warnings": 2,
+        "infos": 0
+      },
+      "diagnostics": [
+        {
+          "level": "warning",
+          "message": "This notation will not be used for printing as it is bound to a single\nvariable. [notation-bound-to-variable,parsing,default]",
+          "location": "1:1 to 1:38",
+          "proof_state": {
+            "messages": [
+              {
+                "level": 2,
+                "text": "This\nnotation\nwill\nnot\nbe\nused\nfor\nprinting\nas\nit\nis\nbound\nto\na\nsingle\nvariable.\n[notation-bound-to-variable,parsing,default]"
+              }
+            ]
+          }
+        },
+        {
+          "level": "warning",
+          "message": "This notation will not be used for printing as it is bound to a single\nvariable. [notation-bound-to-variable,parsing,default]",
+          "location": "2:1 to 2:38",
+          "proof_state": {
+            "messages": [
+              {
+                "level": 2,
+                "text": "This\nnotation\nwill\nnot\nbe\nused\nfor\nprinting\nas\nit\nis\nbound\nto\na\nsingle\nvariable.\n[notation-bound-to-variable,parsing,default]"
+              }
+            ]
+          }
+        },
+        {
+          "level": "error",
+          "message": "The reference missing_tactic was not found in the current environment.",
+          "location": "6:3 to 6:17",
+          "proof_name": "bad_missing_tactic",
+          "proof_state": {
+            "goals": [
+              {
+                "conclusion": "True"
+              }
+            ]
+          }
+        },
+        {
+          "level": "error",
+          "message": "The reference invalid_tactic was not found in the current environment.",
+          "location": "11:3 to 11:17",
+          "proof_name": "bad_invalid_tactic",
+          "proof_state": {
+            "goals": [
+              {
+                "conclusion": "True"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "step": "compile errors only",
+    "action": "compile",
+    "file": "src/severities.v",
+    "severity": "error",
+    "result": {
+      "status": "complete",
+      "file": "src/severities.v",
+      "counts": {
+        "errors": 2,
+        "warnings": 0,
+        "infos": 0
+      },
+      "diagnostics": [
+        {
+          "level": "error",
+          "message": "The reference missing_tactic was not found in the current environment.",
+          "location": "6:3 to 6:17",
+          "proof_name": "bad_missing_tactic",
+          "proof_state": {
+            "goals": [
+              {
+                "conclusion": "True"
+              }
+            ]
+          }
+        },
+        {
+          "level": "error",
+          "message": "The reference invalid_tactic was not found in the current environment.",
+          "location": "11:3 to 11:17",
+          "proof_name": "bad_invalid_tactic",
+          "proof_state": {
+            "goals": [
+              {
+                "conclusion": "True"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]

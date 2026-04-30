@@ -6,6 +6,11 @@
     "result": {
       "status": "complete",
       "file": "src/repeated_failures.v",
+      "counts": {
+        "errors": 1,
+        "warnings": 0,
+        "infos": 0
+      },
       "diagnostics": [
         {
           "level": "error",

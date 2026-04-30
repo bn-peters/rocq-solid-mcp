@@ -1,0 +1,21 @@
+{
+  "steps": [
+    {
+      "label": "compile all severities",
+      "action": "compile",
+      "file": "src/severities.v"
+    },
+    {
+      "label": "compile warnings and errors",
+      "action": "compile",
+      "file": "src/severities.v",
+      "severity": "warning"
+    },
+    {
+      "label": "compile errors only",
+      "action": "compile",
+      "file": "src/severities.v",
+      "severity": "error"
+    }
+  ]
+}

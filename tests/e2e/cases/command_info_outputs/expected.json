@@ -1,0 +1,56 @@
+[
+  {
+    "step": "search output is info",
+    "action": "command",
+    "file": "src/Commands.v",
+    "command": "Search (_ + 0 = _).",
+    "result": {
+      "status": "complete",
+      "file": "src/Commands.v",
+      "location": "1:43",
+      "command": "Search (_ + 0 = _).",
+      "output": [
+        {
+          "level": "info",
+          "text": "Nat.add_0_r: forall n : nat, n + 0 = n"
+        }
+      ]
+    }
+  },
+  {
+    "step": "check output is info",
+    "action": "command",
+    "file": "src/Commands.v",
+    "command": "Check Nat.add.",
+    "result": {
+      "status": "complete",
+      "file": "src/Commands.v",
+      "location": "1:43",
+      "command": "Check Nat.add.",
+      "output": [
+        {
+          "level": "info",
+          "text": "Nat.add\n     : nat -> nat -> nat"
+        }
+      ]
+    }
+  },
+  {
+    "step": "compute output is info",
+    "action": "command",
+    "file": "src/Commands.v",
+    "command": "Compute 2 + 2.",
+    "result": {
+      "status": "complete",
+      "file": "src/Commands.v",
+      "location": "1:43",
+      "command": "Compute 2 + 2.",
+      "output": [
+        {
+          "level": "info",
+          "text": "     = 4\n     : nat"
+        }
+      ]
+    }
+  }
+]

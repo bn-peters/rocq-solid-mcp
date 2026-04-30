@@ -5,7 +5,12 @@
     "file": "src/support.v",
     "result": {
       "status": "complete",
-      "file": "src/support.v"
+      "file": "src/support.v",
+      "counts": {
+        "errors": 0,
+        "warnings": 0,
+        "infos": 0
+      }
     }
   },
   {
@@ -15,6 +20,11 @@
     "result": {
       "status": "complete",
       "file": "src/proof.v",
+      "counts": {
+        "errors": 1,
+        "warnings": 0,
+        "infos": 0
+      },
       "diagnostics": [
         {
           "level": "error",
@@ -43,7 +53,12 @@
     "file": "src/proof.v",
     "result": {
       "status": "complete",
-      "file": "src/proof.v"
+      "file": "src/proof.v",
+      "counts": {
+        "errors": 0,
+        "warnings": 0,
+        "infos": 0
+      }
     }
   }
 ]

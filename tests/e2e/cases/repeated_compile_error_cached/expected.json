@@ -6,6 +6,11 @@
     "result": {
       "status": "complete",
       "file": "src/error_cached.v",
+      "counts": {
+        "errors": 1,
+        "warnings": 0,
+        "infos": 0
+      },
       "diagnostics": [
         {
           "level": "error",
@@ -22,6 +27,11 @@
     "result": {
       "status": "complete",
       "file": "src/error_cached.v",
+      "counts": {
+        "errors": 1,
+        "warnings": 0,
+        "infos": 0
+      },
       "diagnostics": [
         {
           "level": "error",
