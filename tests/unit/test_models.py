@@ -140,6 +140,7 @@ def test_compile_result_renders_compilation_time_and_long_running_commands(
         "status": "complete",
         "file": "Demo.v",
         "compilation_time_seconds": 1.235,
+        "counts": {"errors": 0, "warnings": 0, "infos": 0},
         "long_running_commands": [
             {
                 "location": "3:3 to 3:11",

@@ -52,6 +52,7 @@ async def test_compile_tool_applies_severity_filter(tmp_path: Path) -> None:
         "file": str(source),
         "overall_timeout_seconds": 60.0,
         "command_timeout_seconds": None,
+        "long_running_seconds": 3.0,
         "restart": False,
     }
     assert [item["message"] for item in dumped["diagnostics"]] == [
