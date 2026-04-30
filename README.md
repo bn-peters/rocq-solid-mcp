@@ -238,4 +238,7 @@ the `ocaml/opam:ubuntu-24.04-ocaml-5.2` image, adds the `coq-released` and
 `build-essential`, `libgmp-dev`, `m4`, and `pkg-config`, installs the pinned
 `rocq-core` version plus unconstrained `rocq-stdlib` and `bens-rocq-lsp`,
 creates the repository-local `.venv/`, and installs the Python package with
-development test dependencies before running the Makefile target.
+development test dependencies before running the Makefile target. GitLab caches
+pip downloads under `.cache/pip/` per branch and stores opam roots under
+`.cache/opam/rocq-${ROCQ_CORE_VERSION}/`, with separate cache keys for each
+Rocq version in the matrix.

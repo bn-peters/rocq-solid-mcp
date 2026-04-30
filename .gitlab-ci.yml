@@ -9,11 +9,6 @@ variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   PYTEST_WORKERS: "auto"
 
-cache:
-  key: "pip-${CI_COMMIT_REF_SLUG}"
-  paths:
-    - .cache/pip/
-
 test:
   stage: test
   image: ocaml/opam:ubuntu-24.04-ocaml-5.2
@@ -26,13 +21,22 @@ test:
         ROCQ_CORE_VERSION: "9.1.0"
       - ROCQ_SERIES: "9.2"
         ROCQ_CORE_VERSION: "9.2.0"
+  cache:
+    - key: "pip-${CI_COMMIT_REF_SLUG}"
+      paths:
+        - .cache/pip/
+    - key: "opam-ubuntu-24.04-ocaml-5.2-rocq-${ROCQ_CORE_VERSION}"
+      paths:
+        - .cache/opam/rocq-${ROCQ_CORE_VERSION}/
   before_script:
     - sudo apt-get update
     - sudo apt-get install -y --no-install-recommends build-essential ca-certificates git libgmp-dev m4 make pkg-config python3-pip python3-venv
     - test -w "$CI_PROJECT_DIR" || sudo chown -R "$(id -u):$(id -g)" "$CI_PROJECT_DIR"
     - python3 --version
     - opam --version
+    - export OPAMROOT="$CI_PROJECT_DIR/.cache/opam/rocq-${ROCQ_CORE_VERSION}"
     - opam init --reinit --disable-sandboxing --no-setup --yes
+    - opam switch create default ocaml-base-compiler.5.2.0 --yes || opam switch set default
     - opam switch show
     - opam repository add coq-released https://coq.inria.fr/opam/released --yes || opam repository set-url coq-released https://coq.inria.fr/opam/released
     - opam repository add bpeters https://gitlab.mpi-sws.org/bpeters/opam.git --yes || opam repository set-url bpeters https://gitlab.mpi-sws.org/bpeters/opam.git

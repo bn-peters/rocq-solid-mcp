@@ -259,7 +259,10 @@ opam repositories, installs native apt prerequisites including
 `build-essential`, `libgmp-dev`, `m4`, and `pkg-config`, installs the pinned
 `rocq-core` plus unconstrained `rocq-stdlib` and `bens-rocq-lsp`, creates
 `.venv/`, installs `.[dev]`, and then relies on the existing Makefile so tests
-run through `opam exec -- .venv/bin/python`.
+run through `opam exec -- .venv/bin/python`. The pipeline caches pip downloads
+under `.cache/pip/` per branch and caches a project-local opam root under
+`.cache/opam/rocq-${ROCQ_CORE_VERSION}/` with a separate cache key for each
+Rocq version in the matrix.
 
 ## Test Suite
 
