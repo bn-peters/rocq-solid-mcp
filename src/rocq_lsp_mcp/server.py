@@ -43,7 +43,7 @@ async def rocq_lsp_compile_file(
         int,
         Field(
             description=(
-                "Optional maximum returned diagnostics per category "
+                "Maximum returned diagnostics per category "
                 "(error, warning, info). Default 10, maximum 50."
             ),
         ),
@@ -52,7 +52,7 @@ async def rocq_lsp_compile_file(
         DiagnosticSeverity,
         Field(
             description=(
-                "Optional minimum diagnostic severity to return: "
+                "Minimum diagnostic severity to return: "
                 "info, warning, or error. Default info."
             ),
         ),
@@ -63,9 +63,7 @@ async def rocq_lsp_compile_file(
             gt=0,
             le=MAX_OVERALL_TIMEOUT_SECONDS,
             description=(
-                "Optional soft coq-lsp request deadline, in seconds. If it "
-                "fires before the MCP host cancels the tool call, the result "
-                "returns partial diagnostics and timeout context. Default 60s, "
+                "Soft coq-lsp request deadline, in seconds. Default 55s,"
                 "maximum 3600s."
             ),
         ),
@@ -74,19 +72,18 @@ async def rocq_lsp_compile_file(
         float | None,
         Field(
             description=(
-                "Optional per Rocq sentence watchdog, in seconds. If it fires, "
-                "the result returns partial diagnostics and the slow sentence. "
-                "Default 5s, 0 disables."
+                "Per Rocq sentence execution timeout. Default 5s, 0 disables."
             ),
         ),
     ] = None,
+    # TODO remove this feature instead, alert at 80% of the overall timeout
     long_running_seconds: Annotated[
         float,
         Field(
             ge=0,
             description=(
-                "Optional threshold, in seconds, for returned long-running "
-                "Rocq commands. Default 3s, 0 disables."
+                "Optional threshold, in seconds, alerting on long-running commands."
+                "Default 3s, 0 disables."
             ),
         ),
     ] = DEFAULT_LONG_RUNNING_SECONDS,
@@ -104,11 +101,11 @@ async def rocq_lsp_compile_file(
 
     Use this to check to check files for errors. The diagnostics are much more detailed than those of regular compilation. They include the current proof state at the error position and precise ranges.
 
-    This command is entirely stateless, but is very efficient due to caching.
+    This file reports at least the first error in the file, and usually more. It also reports tactics and commands taking a long time.
 
-    External dependencies are not automatically recompiled, and no compilation artifacts are saved. If you edit upstream files, recompile them first using external tools. Pass restart=True after rebuilding dependencies to refresh coq-lsp's import cache without restarting the server process.
+    This command is very efficient due to caching. It creates no compilation artifacts. Use `restart = true` to clear the cache when upstream dependencies have been recompiled.
 
-    overall_timeout_seconds is a soft coq-lsp deadline for returning partial diagnostics before the MCP host's own tool-call timeout or cancellation fires. The host timeout should be greater than overall_timeout_seconds plus the hard timeout grace. Adjust the per-sentence command watchdog only when specific tactics in a file are known to be slow. Set long_running_seconds=0 to disable long-running command reporting. The message limit and severity filter should only rarely be adjusted.
+    overall_timeout_seconds is a soft deadline for returning partial diagnostics before the MCP host cancels the tool call. It should be lower than the host's tool call timeout. Repeated compilation after timeouts respects the cache.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
     result = await manager.compile_file(
@@ -124,6 +121,7 @@ async def rocq_lsp_compile_file(
 @mcp.tool()
 async def rocq_lsp_run_command(
     file: Annotated[str, Field(description="Absolute path to a .v file.")],
+    # TODO generalize this tool: accept a list of commands, instead of a single one, all of which are executed at the given position.
     command: Annotated[
         str,
         Field(
@@ -152,9 +150,7 @@ async def rocq_lsp_run_command(
             gt=0,
             le=MAX_OVERALL_TIMEOUT_SECONDS,
             description=(
-                "Optional soft coq-lsp request deadline, in seconds. If it "
-                "fires before the MCP host cancels the tool call, the result "
-                "returns partial output when available. Default 60s, maximum "
+                "Soft coq-lsp request deadline, in seconds. Default 60s, maximum "
                 "3600s."
             ),
         ),
@@ -167,10 +163,7 @@ async def rocq_lsp_run_command(
     Prefer calling this right after imports. If local definitions, scopes, or
     modules are needed, call it between lemmas/definitions.
 
-    overall_timeout_seconds is a soft coq-lsp deadline, not the MCP host's
-    tool-call timeout. The host timeout should be greater than
-    overall_timeout_seconds plus the hard timeout grace if callers want this
-    tool to return a timeout result.
+    overall_timeout_seconds is a soft deadline for reporting partial results. It should be lower than the host's tool call timeout. 
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
     result = await manager.run_command(
