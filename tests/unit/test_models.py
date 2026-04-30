@@ -62,7 +62,7 @@ def test_diagnostic_render_options_control_proof_state_and_location() -> None:
     }
 
 
-def test_compile_result_always_renders_counts(tmp_path: Path) -> None:
+def test_compile_result_renders_nonzero_counts(tmp_path: Path) -> None:
     source = tmp_path / "src" / "Demo.v"
     source.parent.mkdir()
     source.write_text("Check nat.\n", encoding="utf-8")
@@ -83,12 +83,12 @@ def test_compile_result_always_renders_counts(tmp_path: Path) -> None:
     assert result.render() == {
         "status": "complete",
         "file": "src/Demo.v",
-        "counts": {"errors": 1, "warnings": 0, "infos": 0},
+        "counts": {"errors": 1},
         "diagnostics": [{"level": "error", "message": "bad"}],
     }
 
 
-def test_compile_result_counts_include_zero_fields(
+def test_compile_result_counts_omit_zero_fields(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -107,7 +107,26 @@ def test_compile_result_counts_include_zero_fields(
         ],
     )
 
-    assert result.render()["counts"] == {"errors": 0, "warnings": 1, "infos": 0}
+    assert result.render()["counts"] == {"warnings": 1}
+
+
+def test_compile_result_omits_counts_without_diagnostics(tmp_path: Path) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    result = CompileResult.from_diagnostics(
+        status="complete",
+        file=str(source),
+        uri=source.as_uri(),
+        workspace=str(tmp_path),
+        version=1,
+        completed=None,
+        diagnostics=[],
+    )
+
+    assert result.render() == {
+        "status": "complete",
+        "file": "Demo.v",
+    }
 
 
 def test_compile_result_renders_compilation_time_and_long_running_commands(
@@ -140,7 +159,6 @@ def test_compile_result_renders_compilation_time_and_long_running_commands(
         "status": "complete",
         "file": "Demo.v",
         "compilation_time_seconds": 1.235,
-        "counts": {"errors": 0, "warnings": 0, "infos": 0},
         "long_running_commands": [
             {
                 "location": "3:3 to 3:11",
@@ -366,7 +384,7 @@ def test_compile_result_hard_caps_requested_message_limit(tmp_path: Path) -> Non
 
     dumped = result.render(RenderOptions(message_limit=1000))
     assert len(dumped["diagnostics"]) == 50
-    assert dumped["counts"] == {"errors": 51, "warnings": 0, "infos": 0}
+    assert dumped["counts"] == {"errors": 51}
     assert dumped["omitted_counts"] == {"errors": 1}
     assert dumped["message_limit"] == 50
 
@@ -391,13 +409,14 @@ def test_compile_result_filters_diagnostics_by_severity(tmp_path: Path) -> None:
     )
 
     warning_dumped = result.render(RenderOptions(severity="warning"))
-    assert warning_dumped["counts"] == {"errors": 1, "warnings": 1, "infos": 0}
+    assert warning_dumped["counts"] == {"errors": 1, "warnings": 1}
     assert [item["message"] for item in warning_dumped["diagnostics"]] == [
         "bad",
         "careful",
     ]
 
     error_dumped = result.render(RenderOptions(severity="error"))
+    assert error_dumped["counts"] == {"errors": 1}
     assert [item["message"] for item in error_dumped["diagnostics"]] == ["bad"]
 
 

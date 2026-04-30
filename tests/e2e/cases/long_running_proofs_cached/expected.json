@@ -8,9 +8,7 @@
       "file": "src/cache.v",
       "compilation_time_seconds": "$SECONDS",
       "counts": {
-        "errors": 1,
-        "warnings": 0,
-        "infos": 0
+        "errors": 1
       },
       "diagnostics": [
         {
@@ -47,12 +45,7 @@
     "result": {
       "status": "complete",
       "file": "src/cache.v",
-      "compilation_time_seconds": "$SECONDS",
-      "counts": {
-        "errors": 0,
-        "warnings": 0,
-        "infos": 0
-      }
+      "compilation_time_seconds": "$SECONDS"
     }
   }
 ]

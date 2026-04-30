@@ -6,12 +6,7 @@
     "result": {
       "status": "complete",
       "file": "src/base.v",
-      "compilation_time_seconds": "$SECONDS",
-      "counts": {
-        "errors": 0,
-        "warnings": 0,
-        "infos": 0
-      }
+      "compilation_time_seconds": "$SECONDS"
     }
   },
   {
@@ -21,12 +16,7 @@
     "result": {
       "status": "complete",
       "file": "src/lang/modes.v",
-      "compilation_time_seconds": "$SECONDS",
-      "counts": {
-        "errors": 0,
-        "warnings": 0,
-        "infos": 0
-      }
+      "compilation_time_seconds": "$SECONDS"
     }
   },
   {
@@ -43,9 +33,7 @@
       "file": "src/lang/modes.v",
       "compilation_time_seconds": "$SECONDS",
       "counts": {
-        "errors": 2,
-        "warnings": 0,
-        "infos": 0
+        "errors": 2
       },
       "diagnostics": [
         {

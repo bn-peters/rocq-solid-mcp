@@ -388,7 +388,6 @@ class CompileResult(BaseModel):
                     errors=len(buckets["errors"]),
                     warnings=len(buckets["warnings"]),
                     infos=len(buckets["infos"]),
-                    include_zero=True,
                 ),
                 "omitted_counts": omitted_counts,
                 "message_limit": message_limit if has_omissions else None,
@@ -494,16 +493,12 @@ def command_location(line: int, character: int) -> str:
     return f"{line}:{character}"
 
 
-def diagnostic_counts(
-    *, errors: int, warnings: int, infos: int, include_zero: bool = False
-) -> dict[str, int]:
+def diagnostic_counts(*, errors: int, warnings: int, infos: int) -> dict[str, int]:
     counts = {
         "errors": errors,
         "warnings": warnings,
         "infos": infos,
     }
-    if include_zero:
-        return counts
     return {key: count for key, count in counts.items() if count > 0}
 
 

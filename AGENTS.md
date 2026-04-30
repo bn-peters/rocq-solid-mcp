@@ -130,8 +130,8 @@ and attaches proof states without applying agent-facing filtering. The
 empty fields, filters duplicate proof errors by default, and applies
 minimum severity filtering, suppresses later global errors after the first
 error without `proof_name`, and applies per-severity diagnostic limits. Counts
-are rendered on every compile result and include `errors`, `warnings`, and
-`infos`, including zero-valued buckets. When diagnostics are omitted because of
+include only nonzero `errors`, `warnings`, and `infos` buckets and are omitted
+when no diagnostics remain after filtering. When diagnostics are omitted because of
 `message_limit`, the response includes `omitted_counts` and the effective
 `message_limit`.
 
