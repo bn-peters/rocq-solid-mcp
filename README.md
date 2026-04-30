@@ -23,12 +23,15 @@ above that level. Compile results always include `counts` with `errors`,
 a compact `timeout_context` that reports the request operation, timeout
 kind and settings, the latest checked position, the latest processing range,
 and a small preview of the next unchecked source line when available. Optional
-overall request timeouts can be passed per compile or command/Search call; the
-MCP default is 60 seconds and the maximum is 3600 seconds. Optional
-per-command timeouts use coq-lsp sentence execution notifications, so the
-timeout unit is one Rocq sentence such as `sleep 5.` or `repeat ... .`, not an
-internal Ltac substep. The prototype talks to `coq-lsp` directly over stdio
-JSON-RPC.
+soft coq-lsp partial-result deadlines can be passed per compile or
+command/Search call; the default is 60 seconds and the maximum is 3600 seconds.
+If a host-level MCP timeout or cancellation fires first, the server cleans up
+`coq-lsp` but cannot guarantee a normal tool result, so host timeouts should be
+greater than `overall_timeout_seconds + ROCQ_LSP_HARD_TIMEOUT_GRACE` when
+callers want partial diagnostics back. Optional per-command timeouts use
+coq-lsp sentence execution notifications, so the timeout unit is one Rocq
+sentence such as `sleep 5.` or `repeat ... .`, not an internal Ltac substep. The
+prototype talks to `coq-lsp` directly over stdio JSON-RPC.
 
 Compile calls can pass `restart=True` to tell `coq-lsp` that externally
 compiled dependencies may have changed before checking the requested file.
@@ -81,21 +84,24 @@ This asks the existing `coq-lsp` process to invalidate cached `Require` state
 after `.vo` files have changed; it does not restart the server process and does
 not rebuild dependencies. Recompile edited dependencies externally first.
 
-When `coq/getDocument` times out, the response status is `timeout` and the
-rendered result includes `timeout_context`. `checked_until` is taken from the
-partial `completed.range.end` when cancellation returns a partial document; if
-not, it falls back to the start of the latest `$/coq/fileProgress` processing
-range. The context also includes `latest_processing_range` and `next_unchecked`
-as compact 1-based locations without exposing raw LSP progress payloads.
+When the soft `coq/getDocument` deadline fires, the response status is
+`timeout` and the rendered result includes `timeout_context`. `checked_until`
+is taken from the partial `completed.range.end` when cancellation returns a
+partial document; if not, it falls back to the start of the latest
+`$/coq/fileProgress` processing range. The context also includes
+`latest_processing_range` and `next_unchecked` as compact 1-based locations
+without exposing raw LSP progress payloads.
 
 When command timeout is enabled, the client watches `$/coq/executionInformation`
 notifications during `coq/getDocument`. Each new sentence resets the command
 deadline. If the current sentence exceeds the configured limit, the client sends
 `$/cancelRequest` and returns `status: "timeout"` with
 `timeout_context.timeout_kind: "command"`, the timed-out sentence range, and a
-source preview. The `overall_timeout_seconds` request timeout remains the outer
-safety net for parsing stalls, missing execution notifications, or
-non-interruptible work.
+source preview. The `overall_timeout_seconds` soft deadline remains the outer
+server-side partial-result deadline for parsing stalls, missing execution
+notifications, or non-interruptible work. MCP host cancellation is a harder
+outer abort: the server sends `$/cancelRequest` to `coq-lsp` and may reset the
+workspace session, but the client may already have abandoned the result.
 
 `coq-lsp` performance data is enabled with `send_perf_data`. After successful
 `coq/getDocument` calls, the manager waits briefly for `$/coq/filePerfData` and
@@ -131,9 +137,14 @@ all normalized diagnostics. `counts` is always rendered and includes `errors`,
 `severity` is a render-only minimum diagnostic level. Allowed values are
 `info`, `warning`, and `error`; `info` preserves the default behavior,
 `warning` returns warnings and errors, and `error` returns errors only.
-`overall_timeout_seconds` controls the outer `coq-lsp` request wait for compile
-and command/Search calls. It defaults to 60 seconds and may be at most 3600
-seconds.
+`overall_timeout_seconds` controls the soft `coq-lsp` partial-result deadline
+for compile and command/Search calls. If it fires before the MCP host's own
+tool-call timeout or cancellation, the server cancels the underlying
+`coq-lsp` request and returns partial diagnostics, progress context, or partial
+command output when available. It defaults to 60 seconds and may be at most
+3600 seconds. Configure MCP host timeouts above
+`overall_timeout_seconds + ROCQ_LSP_HARD_TIMEOUT_GRACE` if callers should
+receive these partial timeout results.
 `command_timeout_seconds` overrides `ROCQ_LSP_COMMAND_TIMEOUT` for one compile:
 `None` uses the server default of 5 seconds, `0` disables the sentence
 watchdog, and positive values enable it for that call.
@@ -151,7 +162,8 @@ added automatically.
 
 - `ROCQ_LSP_BINARY` defaults to `coq-lsp`
 - `ROCQ_LSP_USE_OPAM` defaults to `1`; set to `0` to run the binary directly
-- `ROCQ_LSP_TIMEOUT` defaults to `60` and is capped at `3600`
+- `ROCQ_LSP_TIMEOUT` is the default soft partial-result deadline; it defaults
+  to `60` and is capped at `3600`
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE` defaults to `5`
 - `ROCQ_LSP_COMMAND_TIMEOUT` defaults to `5`; set `0` to disable per-sentence
   command timeouts by default
@@ -193,18 +205,18 @@ through the same cached manager. Scenarios may also define a top-level
 `timeout_policy` to override the harness defaults for timeout-specific coverage,
 including `command_seconds` for per-sentence timeout scenarios. Individual
 compile and command steps may pass `overall_timeout_seconds` to override the
-outer request timeout for that step. Scenario compile steps may set
+soft partial-result deadline for that step. Scenario compile steps may set
 `command_timeout_seconds` to exercise per-call compile timeout overrides,
 `long_running_seconds` to opt in or out of long-running command reporting, or
 `severity` and `message_limit` to exercise render-time diagnostic filtering.
 The e2e suite covers diagnostic severity filtering and dense counts, command
 output info levels for `Search`, `Check`, and `Compute`, command caching after
-slow proofs, soft timeout recovery, hard-timeout session reset, per-call compile
-command timeout overrides, per-sentence command timeout behavior, request
-timeouts resuming from cached progress while preserving diagnostics, cached
-repeated compile errors, long-running command reporting with cached recompiles
-ignored, and lemma-header errors that would otherwise cascade into proof-mode
-diagnostics.
+slow proofs, soft partial-result timeout recovery, hard-timeout session reset,
+per-call compile command timeout overrides, per-sentence command timeout
+behavior, soft deadlines resuming from cached progress while preserving
+diagnostics, cached repeated compile errors, long-running command reporting
+with cached recompiles ignored, and lemma-header errors that would otherwise
+cascade into proof-mode diagnostics.
 `tests/e2e/test_compile_restart.py` covers refreshing a client file after a
 dependency `.vo` is rebuilt.
 Use `make promote` to refresh promoted e2e transcripts after intentional output
