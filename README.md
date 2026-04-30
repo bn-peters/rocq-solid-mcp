@@ -1,4 +1,79 @@
+# Ben's Rocq MCP
+
+A Rocq MCP set up for how agents like to work
+
+If you notice that your agent misbehaves with this MCP, please let me know! It
+would be particularly helpful if you could share your transcript, which you can
+find at ~/.codex/sessions/.
+
+The MCP exposes two tools:
+1. `check`, which generates diagnostics for a given file. It can return errors
+   from multiple proofs at once. Proof state is cached for more efficient
+   compilation.
+2. `run_at`, which runs one-off commands at a given position in a file. This is
+   intended to be used for queries like `Search` and `Check`, or for one-off
+   debugging commands.
+
+## Installation
+
+This package depends on a patched version of `coq-lsp`. It is compatible with
+Rocq 9.0, 9.1, and 9.2. To install it:
+```bash
+opam repo add bpeters https://gitlab.mpi-sws.org/bpeters/opam.git
+opam install bens-rocq-lsp
+```
+You might be asked to uninstall `coq-lsp`. Don't worry, `bens-rocq-lsp` is
+(probably) compatible with your other tools. It must be installed in all opam
+switches you plan to use Ben's Rocq MCP with.
+
+Then:
+```
+uv tool install -e .
+```
+
+## Usage
+
+To teach Codex about Ben's Rocq MCP:
+```bash
+codex mcp add bens-rocq-mcp rocq-lsp-mcp
+```
+
+The MCP figures out the right switch itself if you have linked with `opam
+switch link . [switch]`. The MCP does not support `dune`-based projects; Your
+project must contain a `_CoqProject` or `_RocqProject` file.
+
+You should consider disabling all other Rocq MCPs. If you have slow-to-compile
+files, you should consider increasing tool timeout; This MCP has its own
+timeout mechanism. Add this to `.codex/config.toml` in your repository:
+```
+[mcp_servers.rocq-mcp]
+enabled = false
+
+[mcp_servers.bens-rocq-mcp]
+tool_timeout_sec = 300
+```
+You should mention the precise value you chose for `tool_timeout_sec` in your
+`AGENTS.md` so that your agent can set up the right timeouts.
+
+## Tools
+
+The server exposes two tools: `check` for obtaining file diagnostics and
+`run_at` for running one-off commands.
+
+Find the full tool definitions in
+[src/rocq_lsp_mcp/server.py](src/rocq_lsp_mcp/server.py). **You should read
+those!**
+
+
+
+
+
+
+**The rest of this file is a long AI-generated repository summary. I didn't
+feel like deleting it, but I'm not convinced it's useful :)**
+
 # rocq-lsp-mcp-prototype
+
 
 Prototype MCP server that checks Rocq files and runs one-off Rocq commands
 through persistent project-scoped `coq-lsp` sessions. Check diagnostics expose
