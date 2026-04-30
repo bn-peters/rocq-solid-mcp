@@ -62,6 +62,8 @@ returns compact feedback output for the requested command.
 
 The prototype intentionally talks to `coq-lsp` directly. Do not reintroduce an
 LSP client library unless the user explicitly asks for that direction.
+The main source of documentation on `coq-lsp` is the upstream protocol guide:
+https://github.com/rocq-community/rocq-lsp/blob/main/etc/doc/PROTOCOL.md
 
 ## Runtime Behavior
 
