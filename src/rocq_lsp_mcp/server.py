@@ -94,9 +94,9 @@ async def rocq_lsp_check_file(
     This file reports at least the first error in the file, and usually more.
     It also reports tactics and commands taking a long time.
 
-    This check is efficient due to caching. It creates no build artifacts. Use
-    `restart = true` to clear the cache when upstream dependencies have been
-    recompiled.
+    This check is efficient due to caching. It creates no build artifacts, and
+    does not recompile upstream dependencies itself. Use `restart = true` to
+    clear the cache when upstream dependencies have been recompiled.
 
     overall_timeout_seconds is a soft deadline for returning partial diagnostics
     before the MCP host cancels the tool call. It should be lower than the
@@ -156,7 +156,7 @@ async def rocq_lsp_run_at(
     """Run Rocq commands at a file position and return their output.
 
     Use this for one-off Rocq tasks such as Check, Search, Locate, Require, or
-    testing notations in a local context.
+    other one-off debuggint asks.
 
     Prefer calling this right after imports. If local definitions, scopes, or
     modules are needed, call it between lemmas/definitions.
