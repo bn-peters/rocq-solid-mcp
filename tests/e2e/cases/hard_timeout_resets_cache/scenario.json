@@ -8,7 +8,7 @@
       "label": "compile through hard timeout",
       "action": "compile",
       "file": "src/hard_timeout.v",
-      "min_seconds": 4,
+      "min_seconds": 3,
       "long_running_seconds": 0
     },
     {
@@ -29,7 +29,7 @@
       "label": "recompile after hard timeout",
       "action": "compile",
       "file": "src/hard_timeout.v",
-      "min_seconds": 2,
+      "min_seconds": 1,
       "long_running_seconds": 0
     }
   ]

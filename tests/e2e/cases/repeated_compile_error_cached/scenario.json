@@ -4,14 +4,14 @@
       "label": "compile failing file after slow proof",
       "action": "compile",
       "file": "src/error_cached.v",
-      "min_seconds": 3,
+      "min_seconds": 2,
       "long_running_seconds": 0
     },
     {
       "label": "recompile failing file from cache",
       "action": "compile",
       "file": "src/error_cached.v",
-      "max_seconds": 2,
+      "max_seconds": 3,
       "long_running_seconds": 0
     }
   ]

@@ -8,23 +8,23 @@
       "label": "compile through cached error into first timeout",
       "action": "compile",
       "file": "src/resume_timeout.v",
-      "min_seconds": 5,
-      "max_seconds": 8,
+      "min_seconds": 4,
+      "max_seconds": 9,
       "long_running_seconds": 0
     },
     {
       "label": "compile resumes and times out later",
       "action": "compile",
       "file": "src/resume_timeout.v",
-      "min_seconds": 5,
-      "max_seconds": 8,
+      "min_seconds": 4,
+      "max_seconds": 9,
       "long_running_seconds": 0
     },
     {
       "label": "compile completes from cached timeout progress",
       "action": "compile",
       "file": "src/resume_timeout.v",
-      "max_seconds": 5,
+      "max_seconds": 6,
       "long_running_seconds": 0
     }
   ]

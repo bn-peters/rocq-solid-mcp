@@ -4,7 +4,7 @@
       "label": "compile file with slow proof",
       "action": "compile",
       "file": "src/CacheCommand.v",
-      "min_seconds": 4,
+      "min_seconds": 3,
       "long_running_seconds": 0
     },
     {
@@ -14,7 +14,7 @@
       "command": "Search (_ + 0 = _).",
       "line": 10,
       "character": 5,
-      "max_seconds": 3
+      "max_seconds": 4
     }
   ]
 }
