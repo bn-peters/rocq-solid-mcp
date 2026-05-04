@@ -97,7 +97,7 @@ error without a
 infos are retained internally but omitted from the check tool response. This
 broad cascade guard can hide later independent top-level errors that also lack
 `proof_name`. Returned error diagnostics are limited by `ROCQ_LSP_MESSAGE_LIMIT`,
-which defaults to 20 and is capped at 50. Check results include `counts` for
+which defaults to 10 and is capped at 50. Check results include `counts` for
 nonzero error diagnostics only; clean results omit `counts`. Timeout results include
 a compact `timeout_context` that reports the request operation, timeout
 kind and settings, the latest checked position, the latest processing range,
@@ -208,7 +208,7 @@ The server exposes two MCP tools:
 `rocq_check_file` returns error diagnostics only. Warning and info
 diagnostics are intentionally omitted from this tool response; recompile the
 file with Rocq, for example `rocq c path/to/file.v`, when warnings are needed.
-`ROCQ_LSP_MESSAGE_LIMIT` caps returned errors, defaults to 20, and is capped to
+`ROCQ_LSP_MESSAGE_LIMIT` caps returned errors, defaults to 10, and is capped to
 50. When errors are omitted, the response includes `omitted_counts` and
 `message_limit` alongside total `counts`. The limit is applied only while
 rendering the MCP response; internal check results retain all normalized
@@ -246,7 +246,7 @@ The tool returns one rendered result for the full commands string.
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE` defaults to `5`
 - `ROCQ_LSP_COMMAND_TIMEOUT` defaults to `5`; set `0` to disable per-sentence
   command timeouts by default
-- `ROCQ_LSP_MESSAGE_LIMIT` defaults to `20`; values above `50` are capped
+- `ROCQ_LSP_MESSAGE_LIMIT` defaults to `10`; values above `50` are capped
 - `ROCQ_LSP_MAX_ERRORS` defaults to `1000000`
 - `ROCQ_LSP_WORKSPACE` optionally pins the workspace root
 - `ROCQ_LSP_IDLE_TTL_SECONDS` defaults to `1800`

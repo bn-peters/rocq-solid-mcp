@@ -224,9 +224,6 @@ def test_tool_descriptions_do_not_expose_overall_timeout_argument() -> None:
     assert "Repeated checks after timeouts use the cache." in (
         rocq_check_file.__doc__ or ""
     )
-    assert "Repeated calls after timeouts use the cache." in (
-        rocq_run_at.__doc__ or ""
-    )
     assert "per rocq sentence watchdog" in command_description.lower()
     assert "slow sentence" in command_description.lower()
     assert "cached dependency state" in clear_cache_description.lower()

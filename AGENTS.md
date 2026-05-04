@@ -84,7 +84,7 @@ The check MCP tool receives a Rocq file path, optional
 diagnostics; warning and info diagnostics are intentionally omitted from the
 tool response. Recommend recompiling the file with Rocq, for example
 `rocq c path/to/file.v`, when callers need warnings. Returned errors are capped
-by `ROCQ_LSP_MESSAGE_LIMIT`, which defaults to 20 and is capped at 50. The
+by `ROCQ_LSP_MESSAGE_LIMIT`, which defaults to 10 and is capped at 50. The
 limit is render-only and does not truncate the internal `CheckResult`.
 `ROCQ_LSP_TIMEOUT` controls the soft `coq-lsp` partial-result deadline for
 check and `run_at` calls. Set it slightly lower than the host-level MCP
@@ -212,7 +212,7 @@ The prototype reads these environment variables:
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE`, default `5`
 - `ROCQ_LSP_COMMAND_TIMEOUT`, default `5`; set `0` to disable per-sentence
   command timeout by default
-- `ROCQ_LSP_MESSAGE_LIMIT`, default `20`; values above `50` are capped
+- `ROCQ_LSP_MESSAGE_LIMIT`, default `10`; values above `50` are capped
 - `ROCQ_LSP_MAX_ERRORS`, default `1000000`
 - `ROCQ_LSP_WORKSPACE`, optional workspace override
 - `ROCQ_LSP_IDLE_TTL_SECONDS`, default `1800`

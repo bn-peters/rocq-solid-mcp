@@ -354,7 +354,7 @@ def test_check_result_limits_errors_by_default(
     dumped = result.render()
     assert len(dumped["diagnostics"]) == DEFAULT_MESSAGE_LIMIT
     assert dumped["counts"] == {"errors": 22}
-    assert dumped["omitted_counts"] == {"errors": 2}
+    assert dumped["omitted_counts"] == {"errors": 12}
     assert dumped["message_limit"] == DEFAULT_MESSAGE_LIMIT
     assert [diagnostic["message"] for diagnostic in dumped["diagnostics"]] == [
         *[f"bad {index}" for index in range(DEFAULT_MESSAGE_LIMIT)],
