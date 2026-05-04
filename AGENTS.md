@@ -14,11 +14,10 @@ returns compact feedback output for the requested commands string.
   `RocqLspManager`, and the MCP tools
   `rocq_lsp_check_file(file: str, message_limit: int = 10,
   severity: str = "info",
-  overall_timeout_seconds: float = 60,
   command_timeout_seconds: float | None = None,
   restart: bool = False)` and
   `rocq_lsp_run_at(file: str, commands: str, line: int,
-  character: int = 1, overall_timeout_seconds: float = 60)`.
+  character: int = 1)`.
   Tool handlers render internal result models before returning MCP output.
 - `src/rocq_lsp_mcp/manager.py` is the orchestration layer. It resolves files,
   infers workspaces from `_RocqProject` or `_CoqProject`, keeps cached
@@ -82,32 +81,28 @@ https://github.com/rocq-community/rocq-lsp/blob/main/etc/doc/PROTOCOL.md
 ## Runtime Behavior
 
 The check MCP tool receives a Rocq file path, optional `message_limit`,
-optional `severity`, optional `overall_timeout_seconds`, optional
-`command_timeout_seconds`, and optional `restart`; `message_limit` and
-`severity` are render-only and do not truncate the internal `CheckResult`.
+optional `severity`, optional `command_timeout_seconds`, and optional
+`restart`; `message_limit` and `severity` are render-only and do not truncate
+the internal `CheckResult`.
 `severity` may be `info`, `warning`, or `error`; only diagnostics at or above
-that level are returned. `overall_timeout_seconds` controls a soft `coq-lsp`
-partial-result deadline. If it fires before the MCP host cancels the tool call,
-the server cancels the underlying `coq-lsp` request and returns partial
-diagnostics, progress context, or partial `run_at` output when available. It
-defaults to 60 seconds and is capped at 3600 seconds.
-Host-level MCP timeouts should be greater than
-`overall_timeout_seconds + ROCQ_LSP_HARD_TIMEOUT_GRACE` when callers want
-partial timeout results back.
+that level are returned. `ROCQ_LSP_TIMEOUT` controls the soft `coq-lsp`
+partial-result deadline for check and `run_at` calls. Set it slightly lower
+than the host-level MCP timeout, leaving room for
+`ROCQ_LSP_HARD_TIMEOUT_GRACE`, when callers want partial timeout results back.
 For `command_timeout_seconds`, `None` uses `ROCQ_LSP_COMMAND_TIMEOUT`, which
 defaults to 5 seconds, `0` disables the command watchdog for that call, and
 positive values enable it. The server reports `long_running_commands` for
 commands that actually ran during check and took at least 80% of
-`overall_timeout_seconds`. `restart=True` sends `coq/workspace_update` with
-empty object params before the file's `didOpen` or `didChange`, asking the
-existing `coq-lsp` process to invalidate cached `Require` state after external
-`.vo` files have changed. It does not restart the server process and does not
-rebuild dependencies; callers must recompile edited dependencies first. The
-`run_at` MCP tool receives a Rocq file path, one string containing one or more
-complete commands ending in `.`, a 1-based line/character position, and optional
-`overall_timeout_seconds`; it is useful for one-off tasks such as `Check`,
-`Search`, `Require`, `Locate`, and notation experiments. On each call, the
-manager resolves the file, infers a workspace by
+the configured request timeout. `restart=True` sends `coq/workspace_update`
+with empty object params before the file's `didOpen` or `didChange`, asking
+the existing `coq-lsp` process to invalidate cached `Require` state after
+external `.vo` files have changed. It does not restart the server process and
+does not rebuild dependencies; callers must recompile edited dependencies
+first. The `run_at` MCP tool receives a Rocq file path, one string containing
+one or more complete commands ending in `.`, and a 1-based line/character
+position; it is useful for one-off tasks such as `Check`, `Search`, `Require`,
+`Locate`, and notation experiments. On each call, the manager resolves the
+file, infers a workspace by
 walking upward to the nearest `_RocqProject` or
 `_CoqProject`, then delegates to the cached `RocqLspSession` for that
 workspace. If no project file is found, the file's parent directory is used.
@@ -162,8 +157,8 @@ the start of one Rocq sentence and resets the command deadline. If that sentence
 exceeds the deadline, the client sends `$/cancelRequest` and the manager returns
 `status: "timeout"` with `timeout_kind: "command"`, `command_timeout_seconds`,
 the timed-out sentence range, and a source preview. This is per Rocq sentence,
-not per internal Ltac substep. The `overall_timeout_seconds` soft deadline
-remains the outer server-side partial-result deadline for check and `run_at`
+not per internal Ltac substep. The `ROCQ_LSP_TIMEOUT` request deadline remains
+the outer server-side partial-result deadline for check and `run_at`
 calls. MCP host cancellation is a harder outer abort: the server
 sends `$/cancelRequest` to `coq-lsp` and may reset the workspace session, but
 the client may already have abandoned the result.
@@ -191,10 +186,10 @@ queued for a check are not stopped.
 
 Timeout and cancellation handling has three layers:
 
-- `overall_timeout_seconds` is the soft `coq/getDocument` or
-  `petanque/run_at_point` partial-result deadline; it defaults to 60 seconds
-  and is capped at 3600 seconds. `ROCQ_LSP_TIMEOUT` provides the same bounded
-  default.
+- `ROCQ_LSP_TIMEOUT` is the soft `coq/getDocument` or
+  `petanque/run_at_point` partial-result deadline; it defaults to 60 seconds,
+  is capped at 3600 seconds, and should be set slightly lower than the overall
+  MCP tool timeout.
 - `ROCQ_LSP_COMMAND_TIMEOUT` is an optional per-sentence watchdog during
   `coq/getDocument`; unset or non-positive values disable it.
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE` is the extra wait after sending
@@ -212,7 +207,7 @@ The prototype reads these environment variables:
 - `ROCQ_LSP_BINARY`, default `coq-lsp`
 - `ROCQ_LSP_USE_OPAM`, default `1`; set to `0` to run the binary directly
 - `ROCQ_LSP_TIMEOUT`, default soft partial-result deadline `60`, capped at
-  `3600`
+  `3600`, and should be set slightly lower than the overall MCP tool timeout
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE`, default `5`
 - `ROCQ_LSP_COMMAND_TIMEOUT`, default `5`; set `0` to disable per-sentence
   command timeout by default
@@ -290,15 +285,14 @@ still depends on the GitLab runner having the local cache available.
 - `tests/e2e/test_scenarios.py` runs promoted scenario fixtures that copy whole
   Rocq projects, check files or run `run_at` through one cached manager, edit
   files, and check concise agent-facing transcripts. Scenario files may define a
-  top-level `timeout_policy` for timeout-specific coverage. Scenario check
-  and `run_at` steps may include `overall_timeout_seconds` to override the soft
-  partial-result deadline, plus `min_seconds` or `max_seconds` timing
-  assertions for cache-sensitive behavior; timings are asserted by the harness
-  but omitted from promoted transcripts. Scenario
-  check steps may also include `command_timeout_seconds` to cover per-call
-  check timeout overrides, manager-level `long_running_seconds` to exercise
-  long-running command reporting, or `severity` and `message_limit` to cover
-  render-time diagnostic filtering.
+  top-level `timeout_policy` for timeout-specific coverage. Scenario check and
+  `run_at` steps may include `min_seconds` or `max_seconds` timing assertions
+  for cache-sensitive behavior; timings are asserted by the harness but omitted
+  from promoted transcripts. Scenario check steps may also include
+  `command_timeout_seconds` to cover per-call check timeout overrides,
+  manager-level `long_running_seconds` to exercise long-running command
+  reporting, or `severity` and `message_limit` to cover render-time diagnostic
+  filtering.
   `diagnostic_message_limit` covers default
   per-severity diagnostic truncation. `diagnostic_severity_filter` covers
   real warning diagnostics, proof-script errors, dense counts, and `severity`

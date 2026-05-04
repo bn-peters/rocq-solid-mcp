@@ -6,7 +6,7 @@ from fastmcp import Context, FastMCP
 from fastmcp.server.lifespan import lifespan
 from pydantic import Field
 
-from .config import DEFAULT_OVERALL_TIMEOUT_SECONDS, MAX_OVERALL_TIMEOUT_SECONDS
+from .config import bounded_overall_timeout_seconds
 from .manager import RocqLspManager
 from .models import (
     DEFAULT_DIAGNOSTIC_SEVERITY,
@@ -56,22 +56,12 @@ async def rocq_lsp_check_file(
             ),
         ),
     ] = DEFAULT_DIAGNOSTIC_SEVERITY,
-    overall_timeout_seconds: Annotated[
-        float,
-        Field(
-            gt=0,
-            le=MAX_OVERALL_TIMEOUT_SECONDS,
-            description=(
-                "Timeout at which partial diagnostics are returned. Default 60s, maximum 3600s."
-            ),
-        ),
-    ] = DEFAULT_OVERALL_TIMEOUT_SECONDS,
     command_timeout_seconds: Annotated[
         float | None,
         Field(
             description=(
-                "Maximal per Rocq sentence compile time. Default "
-                "5s, 0 disables."
+                "Per Rocq sentence watchdog for check calls. Default 5s, "
+                "0 disables; slow sentences are cancelled."
             ),
         ),
     ] = None,
@@ -97,16 +87,15 @@ async def rocq_lsp_check_file(
     does not recompile upstream dependencies itself. Use `restart = true` to
     clear the cache when upstream dependencies have been recompiled.
 
-    overall_timeout_seconds is a soft deadline for returning partial diagnostics
-    before the MCP host cancels the tool call. It should be lower than the
-    host's tool call timeout. Repeated checks after timeouts use the cache.
+    Repeated checks after timeouts use the cache.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
     result = await manager.check_file(
         file,
-        overall_timeout_seconds=overall_timeout_seconds,
         command_timeout_seconds=command_timeout_seconds,
-        long_running_seconds=_long_running_alert_threshold(overall_timeout_seconds),
+        long_running_seconds=_long_running_alert_threshold(
+            manager.config.timeout_policy.request_seconds
+        ),
         restart=restart,
     )
     return result.render(
@@ -140,17 +129,6 @@ async def rocq_lsp_run_at(
         int,
         Field(description="1-based column offset. Defaults to 1 (start of line)."),
     ] = 1,
-    overall_timeout_seconds: Annotated[
-        float,
-        Field(
-            gt=0,
-            le=MAX_OVERALL_TIMEOUT_SECONDS,
-            description=(
-                "Soft coq-lsp request deadline for partial run_at output before "
-                "the MCP host cancels, in seconds. Default 60s, maximum 3600s."
-            ),
-        ),
-    ] = DEFAULT_OVERALL_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     """Run Rocq commands at a file position and return their output.
 
@@ -160,8 +138,7 @@ async def rocq_lsp_run_at(
     Prefer calling this right after imports. If local definitions, scopes, or
     modules are needed, call it between lemmas/definitions.
 
-    overall_timeout_seconds is a soft deadline for reporting partial results.
-    It should be lower than the host's tool call timeout.
+    Repeated calls after timeouts use the cache.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
     result = await manager.run_at(
@@ -169,13 +146,12 @@ async def rocq_lsp_run_at(
         commands,
         line,
         character,
-        overall_timeout_seconds=overall_timeout_seconds,
     )
     return result.render()
 
 
-def _long_running_alert_threshold(overall_timeout_seconds: float) -> float:
-    return min(float(overall_timeout_seconds), MAX_OVERALL_TIMEOUT_SECONDS) * 0.8
+def _long_running_alert_threshold(request_timeout_seconds: float | None) -> float:
+    return bounded_overall_timeout_seconds(request_timeout_seconds) * 0.8
 
 
 def main() -> None:

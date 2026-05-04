@@ -51,9 +51,11 @@ enabled = false
 
 [mcp_servers.bens-rocq-mcp]
 tool_timeout_sec = 300
+env = { ROCQ_LSP_TIMEOUT = "290" }
 ```
-You should mention the precise value you chose for `tool_timeout_sec` in your
-`AGENTS.md` so that your agent can set up the right timeouts.
+Set `ROCQ_LSP_TIMEOUT` slightly lower than `tool_timeout_sec` so the MCP can
+return partial timeout results before Codex cancels the whole tool call. You
+should mention both precise values in your `AGENTS.md`.
 
 ## Tools
 
@@ -83,8 +85,8 @@ output for the provided commands string. Check results include
 `checking_time_seconds`, rounded to
 milliseconds, and may include `long_running_commands` entries with source text
 and location for commands that actually ran during that check and exceeded the
-80% alert threshold derived from the overall timeout. Results include the file
-relative to the workspace. Raw LSP
+80% alert threshold derived from the configured request timeout. Results
+include the file relative to the workspace. Raw LSP
 plumbing such as document URIs, positions, duplicated ranges, versions, empty
 lists, and null fields is omitted from the MCP response. Agent-facing check
 results keep only the first error for each `proof_name` and, after the first
@@ -99,13 +101,12 @@ above that level. Check results include `counts` for nonzero diagnostic
 buckets only; clean results omit `counts`. Timeout results include
 a compact `timeout_context` that reports the request operation, timeout
 kind and settings, the latest checked position, the latest processing range,
-and a small preview of the next unchecked source line when available. Optional
-soft coq-lsp partial-result deadlines can be passed per check or `run_at` call;
-the default is 60 seconds and the maximum is 3600 seconds.
-If a host-level MCP timeout or cancellation fires first, the server cleans up
-`coq-lsp` but cannot guarantee a normal tool result, so host timeouts should be
-greater than `overall_timeout_seconds + ROCQ_LSP_HARD_TIMEOUT_GRACE` when
-callers want partial diagnostics back. Optional per-command timeouts use
+and a small preview of the next unchecked source line when available. The soft
+coq-lsp partial-result deadline is configured with `ROCQ_LSP_TIMEOUT`; the
+default is 60 seconds and the maximum is 3600 seconds. Set it slightly lower
+than the host-level MCP tool timeout so the server can return partial
+diagnostics before the host cancels the whole tool call, leaving room for
+`ROCQ_LSP_HARD_TIMEOUT_GRACE`. Optional per-command timeouts use
 coq-lsp sentence execution notifications, so the timeout unit is one Rocq
 sentence such as `sleep 5.` or `repeat ... .`, not an internal Ltac substep. The
 prototype talks to `coq-lsp` directly over stdio JSON-RPC.
@@ -177,7 +178,7 @@ notifications during `coq/getDocument`. Each new sentence resets the command
 deadline. If the current sentence exceeds the configured limit, the client sends
 `$/cancelRequest` and returns `status: "timeout"` with
 `timeout_context.timeout_kind: "command"`, the timed-out sentence range, and a
-source preview. The `overall_timeout_seconds` soft deadline remains the outer
+source preview. The `ROCQ_LSP_TIMEOUT` request deadline remains the outer
 server-side partial-result deadline for parsing stalls, missing execution
 notifications, or non-interruptible work. MCP host cancellation is a harder
 outer abort: the server sends `$/cancelRequest` to `coq-lsp` and may reset the
@@ -188,8 +189,8 @@ workspace session, but the client may already have abandoned the result.
 uses sentence execution notifications from the same document version to keep
 only commands that ran during the current check step. Entries with
 `info.cache_hit: true` are ignored, entries below 80% of
-`overall_timeout_seconds` are ignored, and the rendered result is capped at 10
-long-running commands.
+the configured request timeout are ignored, and the rendered result is capped
+at 10 long-running commands.
 
 ## Run
 
@@ -201,11 +202,9 @@ The server exposes two MCP tools:
 
 - `rocq_lsp_check_file(file: str, message_limit: int = 10,
   severity: str = "info",
-  overall_timeout_seconds: float = 60,
   command_timeout_seconds: float | None = None,
   restart: bool = False)`
-- `rocq_lsp_run_at(file: str, commands: str, line: int, character: int = 1,
-  overall_timeout_seconds: float = 60)`
+- `rocq_lsp_run_at(file: str, commands: str, line: int, character: int = 1)`
 
 `message_limit` caps returned diagnostics per severity bucket. Values above 50
 are capped to 50. When diagnostics are omitted, the response includes
@@ -216,19 +215,19 @@ and `infos` buckets and is omitted when no diagnostics remain after filtering.
 `severity` is a render-only minimum diagnostic level. Allowed values are
 `info`, `warning`, and `error`; `info` preserves the default behavior,
 `warning` returns warnings and errors, and `error` returns errors only.
-`overall_timeout_seconds` controls the soft `coq-lsp` partial-result deadline
-for check and `run_at` calls. If it fires before the MCP host's own
-tool-call timeout or cancellation, the server cancels the underlying
-`coq-lsp` request and returns partial diagnostics, progress context, or partial
-`run_at` output when available. It defaults to 60 seconds and may be at most
-3600 seconds. Configure MCP host timeouts above
-`overall_timeout_seconds + ROCQ_LSP_HARD_TIMEOUT_GRACE` if callers should
-receive these partial timeout results.
+`ROCQ_LSP_TIMEOUT` controls the soft `coq-lsp` partial-result deadline for
+check and `run_at` calls. If it fires before the MCP host's own tool-call
+timeout or cancellation, the server cancels the underlying `coq-lsp` request
+and returns partial diagnostics, progress context, or partial `run_at` output
+when available. It defaults to 60 seconds and may be at most 3600 seconds. Set
+it slightly lower than the MCP host tool timeout, leaving room for
+`ROCQ_LSP_HARD_TIMEOUT_GRACE`, if callers should receive these partial timeout
+results.
 `command_timeout_seconds` overrides `ROCQ_LSP_COMMAND_TIMEOUT` for one check:
 `None` uses the server default of 5 seconds, `0` disables the sentence
 watchdog, and positive values enable it for that call.
 `long_running_commands` reports commands that actually ran during the check
-and took at least 80% of `overall_timeout_seconds`.
+and took at least 80% of the configured request timeout.
 `restart=True` sends `coq/workspace_update` before checking so `coq-lsp`
 refreshes imports from recompiled dependencies while keeping the same server
 process alive.
@@ -244,7 +243,8 @@ The tool returns one rendered result for the full commands string.
 - `ROCQ_LSP_BINARY` defaults to `coq-lsp`
 - `ROCQ_LSP_USE_OPAM` defaults to `1`; set to `0` to run the binary directly
 - `ROCQ_LSP_TIMEOUT` is the default soft partial-result deadline; it defaults
-  to `60` and is capped at `3600`
+  to `60`, is capped at `3600`, and should be set slightly lower than the
+  overall MCP tool timeout
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE` defaults to `5`
 - `ROCQ_LSP_COMMAND_TIMEOUT` defaults to `5`; set `0` to disable per-sentence
   command timeouts by default
@@ -285,12 +285,10 @@ from promoted transcripts. Scenario `run_at` steps call `rocq_lsp_run_at`
 through the same cached manager. Scenarios may also define a top-level
 `timeout_policy` to override the harness defaults for timeout-specific coverage,
 including `command_seconds` for per-sentence timeout scenarios. Individual
-check and `run_at` steps may pass `overall_timeout_seconds` to override the
-soft partial-result deadline for that step. Scenario check steps may pass
-`command_timeout_seconds` or the manager-level `long_running_seconds` threshold
-to exercise per-call check timeout overrides and long-running command
-reporting, or `severity` and `message_limit` to exercise render-time diagnostic
-filtering.
+check steps may pass `command_timeout_seconds` or the manager-level
+`long_running_seconds` threshold to exercise per-call check timeout overrides
+and long-running command reporting, or `severity` and `message_limit` to
+exercise render-time diagnostic filtering.
 The e2e suite covers diagnostic severity filtering and dense counts, `run_at`
 output info levels for `Search`, `Check`, and `Compute`, `run_at` caching after
 slow proofs, soft partial-result timeout recovery, hard-timeout session reset,

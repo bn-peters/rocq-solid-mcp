@@ -19,6 +19,9 @@ class FakeManager:
     ) -> None:
         self.result = result
         self.run_at_result = run_at_result
+        self.config = SimpleNamespace(
+            timeout_policy=SimpleNamespace(request_seconds=60.0)
+        )
         self.check_kwargs: dict[str, Any] | None = None
         self.run_at_calls: list[dict[str, Any]] = []
 
@@ -77,7 +80,6 @@ async def test_check_tool_applies_severity_filter(tmp_path: Path) -> None:
 
     assert manager.check_kwargs == {
         "file": str(source),
-        "overall_timeout_seconds": 60.0,
         "command_timeout_seconds": None,
         "long_running_seconds": 48.0,
         "restart": False,
@@ -127,7 +129,6 @@ async def test_run_at_tool_passes_commands_string(tmp_path: Path) -> None:
         commands="Require Import Arith. Check Nat.add. Search (_ + _).",
         line=1,
         character=2,
-        overall_timeout_seconds=2.5,
     )
 
     assert manager.run_at_calls == [
@@ -136,7 +137,6 @@ async def test_run_at_tool_passes_commands_string(tmp_path: Path) -> None:
             "commands": "Require Import Arith. Check Nat.add. Search (_ + _).",
             "line": 1,
             "character": 2,
-            "overall_timeout_seconds": 2.5,
         }
     ]
     assert dumped["status"] == "complete"
@@ -149,24 +149,23 @@ async def test_run_at_tool_passes_commands_string(tmp_path: Path) -> None:
     ]
 
 
-def test_timeout_tool_descriptions_distinguish_soft_and_host_timeouts() -> None:
-    check_description = _field_description(
-        rocq_lsp_check_file, "overall_timeout_seconds"
-    )
+def test_tool_descriptions_do_not_expose_overall_timeout_argument() -> None:
+    check_hints = get_type_hints(rocq_lsp_check_file, include_extras=True)
+    run_at_hints = get_type_hints(rocq_lsp_run_at, include_extras=True)
     command_description = _field_description(
         rocq_lsp_check_file, "command_timeout_seconds"
     )
-    run_at_description = _field_description(
-        rocq_lsp_run_at, "overall_timeout_seconds"
-    )
 
-    assert "soft coq-lsp request deadline" in check_description.lower()
-    assert "MCP host cancels" in check_description
-    assert "partial diagnostics" in check_description
-    assert "per Rocq sentence watchdog" in command_description
-    assert "slow sentence" in command_description
-    assert "soft coq-lsp request deadline" in run_at_description.lower()
-    assert "MCP host cancels" in run_at_description
+    assert "overall_timeout_seconds" not in check_hints
+    assert "overall_timeout_seconds" not in run_at_hints
+    assert "Repeated checks after timeouts use the cache." in (
+        rocq_lsp_check_file.__doc__ or ""
+    )
+    assert "Repeated calls after timeouts use the cache." in (
+        rocq_lsp_run_at.__doc__ or ""
+    )
+    assert "per rocq sentence watchdog" in command_description.lower()
+    assert "slow sentence" in command_description.lower()
 
 
 def _field_description(function: Any, parameter: str) -> str:
