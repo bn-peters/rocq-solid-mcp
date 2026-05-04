@@ -59,13 +59,14 @@ that caching makes up for this overall.
 ## Tools
 
 The server exposes two tools: `check` for obtaining file diagnostics and
-`run_at` for running one-off commands.
-
-Find the full tool definitions in
+`run_at` for running one-off commands. Find the full tool definitions in
 [src/rocq_lsp_mcp/server.py](src/rocq_lsp_mcp/server.py). **You should read
 those!**
 
-
+I believe that these two tools are sufficient for most, if not all Rocq tasks.
+If you find yourself needing something else, please let me know! If possible,
+including an agent transcript, where a task could've been completed more
+effectively with additional tools.
 
 
 
