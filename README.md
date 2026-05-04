@@ -1,15 +1,12 @@
 # Ben's Rocq MCP
 
-A Rocq MCP set up for how agents like to work
-
 If you notice that your agent misbehaves with this MCP, please let me know! It
-would be particularly helpful if you could share your transcript, which you can
-find at ~/.codex/sessions/.
+would be particularly helpful if you could share your transcripts, which you
+can find at ~/.codex/sessions/.
 
 The MCP exposes two tools:
 1. `check`, which generates diagnostics for a given file. It can return errors
-   from multiple proofs at once. Proof state is cached for more efficient
-   compilation.
+   from multiple proofs at once. Proof states are cached. 
 2. `run_at`, which runs one-off commands at a given position in a file. This is
    intended to be used for queries like `Search` and `Check`, or for one-off
    debugging commands.
@@ -39,8 +36,9 @@ codex mcp add bens-rocq-mcp bens-rocq-mcp
 ```
 
 The MCP figures out the right switch itself if you have linked with `opam
-switch link . [switch]`. The MCP does not support `dune`-based projects; Your
-project must contain a `_CoqProject` or `_RocqProject` file.
+switch link . [switch]`. The MCP currently does not support `dune`-based
+projects; Your project must contain a `_CoqProject` or `_RocqProject` file with
+suitable `-R` and `-Q` entries.
 
 You should consider disabling all other Rocq MCPs. If you have slow-to-compile
 files, you should consider increasing tool timeout; This MCP has its own
@@ -54,7 +52,9 @@ tool_timeout_sec = 300
 env = { ROCQ_LSP_TIMEOUT = "290" }
 ```
 Set `ROCQ_LSP_TIMEOUT` slightly lower than `tool_timeout_sec` so the MCP can
-return partial timeout results before Codex cancels the whole tool call.
+return partial timeout results before Codex cancels the whole tool call. The
+`check` tool is considerably slower than standard compilation, but I expect
+that caching makes up for this overall.
 
 ## Tools
 
