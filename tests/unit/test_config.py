@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from rocq_lsp_mcp.config import (
     DEFAULT_COMMAND_TIMEOUT_SECONDS,
+    DEFAULT_MESSAGE_LIMIT,
+    MAX_MESSAGE_LIMIT,
     MAX_OVERALL_TIMEOUT_SECONDS,
     load_config,
     rocq_lsp_command,
@@ -28,6 +30,7 @@ def test_load_config_reads_opam_and_idle_ttl(monkeypatch) -> None:
         "ROCQ_LSP_TIMEOUT",
         "ROCQ_LSP_HARD_TIMEOUT_GRACE",
         "ROCQ_LSP_COMMAND_TIMEOUT",
+        "ROCQ_LSP_MESSAGE_LIMIT",
         "ROCQ_LSP_MAX_ERRORS",
         "ROCQ_LSP_WORKSPACE",
     ):
@@ -40,6 +43,7 @@ def test_load_config_reads_opam_and_idle_ttl(monkeypatch) -> None:
     assert config.use_opam is False
     assert config.idle_ttl_seconds == 12.5
     assert config.timeout_policy.command_seconds == DEFAULT_COMMAND_TIMEOUT_SECONDS
+    assert config.message_limit == DEFAULT_MESSAGE_LIMIT
 
 
 def test_load_config_reads_command_timeout(monkeypatch) -> None:
@@ -56,6 +60,14 @@ def test_load_config_caps_overall_timeout(monkeypatch) -> None:
     config = load_config()
 
     assert config.timeout_policy.request_seconds == MAX_OVERALL_TIMEOUT_SECONDS
+
+
+def test_load_config_reads_and_caps_message_limit(monkeypatch) -> None:
+    monkeypatch.setenv("ROCQ_LSP_MESSAGE_LIMIT", "999")
+
+    config = load_config()
+
+    assert config.message_limit == MAX_MESSAGE_LIMIT
 
 
 def test_load_config_disables_non_positive_command_timeout(monkeypatch) -> None:

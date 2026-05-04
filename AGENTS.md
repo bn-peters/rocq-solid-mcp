@@ -12,9 +12,7 @@ returns compact feedback output for the requested commands string.
 
 - `src/rocq_lsp_mcp/server.py` defines the FastMCP server, the lifespan-managed
   `RocqLspManager`, and the MCP tools
-  `rocq_lsp_check_file(file: str, message_limit: int = 10,
-  severity: str = "info",
-  overall_timeout_seconds: float = 60,
+  `rocq_lsp_check_file(file: str, overall_timeout_seconds: float = 60,
   command_timeout_seconds: float | None = None,
   restart: bool = False)` and
   `rocq_lsp_run_at(file: str, commands: str, line: int,
@@ -56,17 +54,17 @@ returns compact feedback output for the requested commands string.
   long-running command data, and timeout state.
   Their `render(options)` methods are the only place that decides the compact
   MCP output shape: file display, severity labels, location format, proof-state
-  inclusion, duplicate proof-error filtering, minimum severity filtering,
-  global cascade-error suppression, per-severity message limits, timeout
-  formatting, check-time formatting, long-running command
-  formatting, and empty-field pruning. Default rendering keeps only the first
+  inclusion, duplicate proof-error filtering, error-only check rendering,
+  global cascade-error suppression, message limits, timeout formatting,
+  check-time formatting, long-running command formatting, and empty-field
+  pruning. Default rendering keeps only the first
   error for each `proof_name` and, after the first error without a
   `proof_name`, suppresses later errors that also lack a `proof_name`; warnings
-  and infos are preserved. This broad cascade guard can hide later independent
-  top-level errors that also lack `proof_name`. Rendering applies the requested
-  minimum severity, caps returned diagnostics at 10 per severity bucket with a
-  hard cap of 50, and includes compact `timeout_context` only for timeout
-  results.
+  and infos are retained internally but omitted from default check output. This
+  broad cascade guard can hide later independent top-level errors that also
+  lack `proof_name`. Rendering caps returned error diagnostics at 20 by default
+  with a hard cap of 50, and includes compact `timeout_context` only for
+  timeout results.
 - `src/rocq_lsp_mcp/config.py` loads environment configuration, defines
   `TimeoutPolicy`, builds the `opam exec -- coq-lsp` command, and builds the
   `coq-lsp` initialization settings. `send_execinfo` is enabled so per-call
@@ -81,12 +79,14 @@ https://github.com/rocq-community/rocq-lsp/blob/main/etc/doc/PROTOCOL.md
 
 ## Runtime Behavior
 
-The check MCP tool receives a Rocq file path, optional `message_limit`,
-optional `severity`, optional `overall_timeout_seconds`, optional
-`command_timeout_seconds`, and optional `restart`; `message_limit` and
-`severity` are render-only and do not truncate the internal `CheckResult`.
-`severity` may be `info`, `warning`, or `error`; only diagnostics at or above
-that level are returned. `overall_timeout_seconds` controls a soft `coq-lsp`
+The check MCP tool receives a Rocq file path, optional
+`overall_timeout_seconds`, optional `command_timeout_seconds`, and optional
+`restart`. It reports only error diagnostics; warning and info diagnostics are
+intentionally omitted from the tool response. Recommend recompiling the file
+with Rocq, for example `rocq c path/to/file.v`, when callers need warnings.
+Returned errors are capped by `ROCQ_LSP_MESSAGE_LIMIT`, which defaults to 20
+and is capped at 50. The limit is render-only and does not truncate the
+internal `CheckResult`. `overall_timeout_seconds` controls a soft `coq-lsp`
 partial-result deadline. If it fires before the MCP host cancels the tool call,
 the server cancels the underlying `coq-lsp` request and returns partial
 diagnostics, progress context, or partial `run_at` output when available. It
@@ -128,11 +128,11 @@ Checking is driven by `coq/getDocument` with `goals="Str"`. This asks
 and attaches proof states without applying agent-facing filtering. The
 `CheckResult.render(RenderOptions(...))` step converts raw LSP ranges to
 1-based locations, severity numbers to `error`, `warning`, or `info`, removes
-empty fields, filters duplicate proof errors by default, and applies
-minimum severity filtering, suppresses later global errors after the first
-error without `proof_name`, and applies per-severity diagnostic limits. Counts
-include only nonzero `errors`, `warnings`, and `infos` buckets and are omitted
-when no diagnostics remain after filtering. When diagnostics are omitted because of
+empty fields, filters duplicate proof errors by default, omits non-error
+diagnostics from default check output, suppresses later global errors after the
+first error without `proof_name`, and applies diagnostic limits. Counts include
+only nonzero diagnostic buckets after filtering and are omitted when no
+diagnostics remain after filtering. When diagnostics are omitted because of
 `message_limit`, the response includes `omitted_counts` and the effective
 `message_limit`.
 
@@ -216,6 +216,7 @@ The prototype reads these environment variables:
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE`, default `5`
 - `ROCQ_LSP_COMMAND_TIMEOUT`, default `5`; set `0` to disable per-sentence
   command timeout by default
+- `ROCQ_LSP_MESSAGE_LIMIT`, default `20`; values above `50` are capped
 - `ROCQ_LSP_MAX_ERRORS`, default `1000000`
 - `ROCQ_LSP_WORKSPACE`, optional workspace override
 - `ROCQ_LSP_IDLE_TTL_SECONDS`, default `1800`
@@ -297,14 +298,12 @@ still depends on the GitLab runner having the local cache available.
   but omitted from promoted transcripts. Scenario
   check steps may also include `command_timeout_seconds` to cover per-call
   check timeout overrides, manager-level `long_running_seconds` to exercise
-  long-running command reporting, or `severity` and `message_limit` to cover
-  render-time diagnostic filtering.
-  `diagnostic_message_limit` covers default
-  per-severity diagnostic truncation. `diagnostic_severity_filter` covers
-  real warning diagnostics, proof-script errors, dense counts, and `severity`
-  filtering. `run_at_info_outputs` covers promoted `Search`, `Check`, and
-  `Compute` outputs rendered at info level. `run_at_search` covers promoted
-  output for a narrow `Search` query. `run_at_cached_after_slow_proof`
+  long-running command reporting.
+  `diagnostic_message_limit` covers the default error diagnostic limit.
+  `diagnostic_errors_only` covers error-only check rendering when the file
+  also produces a warning. `run_at_info_outputs` covers promoted `Search`,
+  `Check`, and `Compute` outputs rendered at info level. `run_at_search` covers
+  promoted output for a narrow `Search` query. `run_at_cached_after_slow_proof`
   checks that `Search` after a cached slow proof is quick. `timeout_recovery`
   uses the local `sleep` tactic to cover a soft `coq/getDocument` timeout
   followed by a successful recheck in the same manager.

@@ -6,13 +6,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-DEFAULT_MESSAGE_LIMIT = 10
-MAX_MESSAGE_LIMIT = 50
+from .config import DEFAULT_MESSAGE_LIMIT, bounded_message_limit
+
 DEFAULT_LONG_RUNNING_SECONDS = 3.0
 MAX_LONG_RUNNING_COMMANDS = 10
 LocationFormat = Literal["range", "point"]
 DiagnosticSeverity = Literal["info", "warning", "error"]
-DEFAULT_DIAGNOSTIC_SEVERITY: DiagnosticSeverity = "info"
+DEFAULT_DIAGNOSTIC_SEVERITY: DiagnosticSeverity = "error"
 DIAGNOSTIC_LEVEL_PRIORITY = {
     "info": 1,
     "warning": 2,
@@ -403,12 +403,6 @@ class CheckResult(BaseModel):
                 "message": self.message,
             }
         )
-
-
-def bounded_message_limit(limit: int | None) -> int:
-    if limit is None:
-        return DEFAULT_MESSAGE_LIMIT
-    return min(max(limit, 0), MAX_MESSAGE_LIMIT)
 
 
 def diagnostic_buckets(diagnostics: list[Diagnostic]) -> dict[str, list[Diagnostic]]:

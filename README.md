@@ -76,10 +76,12 @@ feel like deleting it, but I'm not convinced it's useful :)**
 
 
 Prototype MCP server that checks Rocq files and runs one-off Rocq commands
-through persistent project-scoped `coq-lsp` sessions. Check diagnostics expose
-a human-facing `level`, `location`, message, optional `proof_name`, and compact
-proof-state context when available. `run_at` results expose compact feedback
-output for the provided commands string. Check results include
+through persistent project-scoped `coq-lsp` sessions. Check diagnostics report
+errors only and expose a human-facing `level`, `location`, message, optional
+`proof_name`, and compact proof-state context when available. Recompile the
+file with Rocq, for example `rocq c path/to/file.v`, when warnings are needed.
+`run_at` results expose compact feedback output for the provided commands
+string, including warning feedback when `coq-lsp` returns it. Check results include
 `checking_time_seconds`, rounded to
 milliseconds, and may include `long_running_commands` entries with source text
 and location for commands that actually ran during that check and exceeded the
@@ -90,13 +92,11 @@ lists, and null fields is omitted from the MCP response. Agent-facing check
 results keep only the first error for each `proof_name` and, after the first
 error without a
 `proof_name`, suppress later errors that also lack a `proof_name`. Warnings and
-infos are preserved. This broad cascade guard can hide later independent
-top-level errors that also lack `proof_name`. Returned diagnostics are limited
-per severity bucket: the default is 10 errors, 10 warnings, and 10 info/hint
-callers may request up to the hard cap of 50 per bucket. Callers may also set
-`severity` to `info`, `warning`, or `error` to return only diagnostics at or
-above that level. Check results include `counts` for nonzero diagnostic
-buckets only; clean results omit `counts`. Timeout results include
+infos are retained internally but omitted from the check tool response. This
+broad cascade guard can hide later independent top-level errors that also lack
+`proof_name`. Returned error diagnostics are limited by `ROCQ_LSP_MESSAGE_LIMIT`,
+which defaults to 20 and is capped at 50. Check results include `counts` for
+nonzero error diagnostics only; clean results omit `counts`. Timeout results include
 a compact `timeout_context` that reports the request operation, timeout
 kind and settings, the latest checked position, the latest processing range,
 and a small preview of the next unchecked source line when available. Optional
@@ -131,9 +131,9 @@ compiled dependencies may have changed before checking the requested file.
   `Diagnostic` models without deciding what the MCP response should include.
 - `models.py` holds internal result models, `TimeoutContext`, and the
   `RenderOptions`-driven render step that applies agent-facing filtering,
-  severity filtering, message limits, location formatting, timeout formatting,
-  long-running command formatting, check-time formatting, and empty-field
-  pruning.
+  error-only check rendering, message limits, location formatting, timeout
+  formatting, long-running command formatting, check-time formatting, and
+  empty-field pruning.
 
 For `Attempt to save an incomplete proof` diagnostics, the `Qed.` span may only
 contain the save error. The manager asks `proof/goals` with `mode: "Prev"` at
@@ -199,23 +199,20 @@ uv run bens-rocq-mcp
 
 The server exposes two MCP tools:
 
-- `rocq_lsp_check_file(file: str, message_limit: int = 10,
-  severity: str = "info",
-  overall_timeout_seconds: float = 60,
+- `rocq_lsp_check_file(file: str, overall_timeout_seconds: float = 60,
   command_timeout_seconds: float | None = None,
   restart: bool = False)`
 - `rocq_lsp_run_at(file: str, commands: str, line: int, character: int = 1,
   overall_timeout_seconds: float = 60)`
 
-`message_limit` caps returned diagnostics per severity bucket. Values above 50
-are capped to 50. When diagnostics are omitted, the response includes
-`omitted_counts` and `message_limit` alongside total `counts`. The limit is
-applied only while rendering the MCP response; internal check results retain
-all normalized diagnostics. `counts` includes only nonzero `errors`, `warnings`,
-and `infos` buckets and is omitted when no diagnostics remain after filtering.
-`severity` is a render-only minimum diagnostic level. Allowed values are
-`info`, `warning`, and `error`; `info` preserves the default behavior,
-`warning` returns warnings and errors, and `error` returns errors only.
+`rocq_lsp_check_file` returns error diagnostics only. Warning and info
+diagnostics are intentionally omitted from this tool response; recompile the
+file with Rocq, for example `rocq c path/to/file.v`, when warnings are needed.
+`ROCQ_LSP_MESSAGE_LIMIT` caps returned errors, defaults to 20, and is capped to
+50. When errors are omitted, the response includes `omitted_counts` and
+`message_limit` alongside total `counts`. The limit is applied only while
+rendering the MCP response; internal check results retain all normalized
+diagnostics.
 `overall_timeout_seconds` controls the soft `coq-lsp` partial-result deadline
 for check and `run_at` calls. If it fires before the MCP host's own
 tool-call timeout or cancellation, the server cancels the underlying
@@ -248,6 +245,7 @@ The tool returns one rendered result for the full commands string.
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE` defaults to `5`
 - `ROCQ_LSP_COMMAND_TIMEOUT` defaults to `5`; set `0` to disable per-sentence
   command timeouts by default
+- `ROCQ_LSP_MESSAGE_LIMIT` defaults to `20`; values above `50` are capped
 - `ROCQ_LSP_MAX_ERRORS` defaults to `1000000`
 - `ROCQ_LSP_WORKSPACE` optionally pins the workspace root
 - `ROCQ_LSP_IDLE_TTL_SECONDS` defaults to `1800`
@@ -289,16 +287,15 @@ check and `run_at` steps may pass `overall_timeout_seconds` to override the
 soft partial-result deadline for that step. Scenario check steps may pass
 `command_timeout_seconds` or the manager-level `long_running_seconds` threshold
 to exercise per-call check timeout overrides and long-running command
-reporting, or `severity` and `message_limit` to exercise render-time diagnostic
-filtering.
-The e2e suite covers diagnostic severity filtering and dense counts, `run_at`
-output info levels for `Search`, `Check`, and `Compute`, `run_at` caching after
-slow proofs, soft partial-result timeout recovery, hard-timeout session reset,
-per-call check command timeout overrides, per-sentence command timeout
-behavior, soft deadlines resuming from cached progress while preserving
-diagnostics, cached repeated check errors, long-running command reporting
-with cached rechecks ignored, and lemma-header errors that would otherwise
-cascade into proof-mode diagnostics.
+reporting.
+The e2e suite covers error-only check rendering and dense error limits,
+`run_at` output info levels for `Search`, `Check`, and `Compute`, `run_at`
+caching after slow proofs, soft partial-result timeout recovery, hard-timeout
+session reset, per-call check command timeout overrides, per-sentence command
+timeout behavior, soft deadlines resuming from cached progress while preserving
+diagnostics, cached repeated check errors, long-running command reporting with
+cached rechecks ignored, and lemma-header errors that would otherwise cascade
+into proof-mode diagnostics.
 `tests/e2e/test_check_restart.py` covers refreshing a client file after a
 dependency `.vo` is rebuilt.
 Use `make promote` to refresh promoted e2e transcripts after intentional output

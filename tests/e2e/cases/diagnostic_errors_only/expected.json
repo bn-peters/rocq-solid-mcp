@@ -1,0 +1,43 @@
+[
+  {
+    "step": "check errors only",
+    "action": "check",
+    "file": "src/severities.v",
+    "result": {
+      "status": "complete",
+      "file": "src/severities.v",
+      "checking_time_seconds": "$SECONDS",
+      "counts": {
+        "errors": 2
+      },
+      "diagnostics": [
+        {
+          "level": "error",
+          "message": "The reference missing_tactic was not found in the current environment.",
+          "location": "6:3 to 6:17",
+          "proof_name": "bad_missing_tactic",
+          "proof_state": {
+            "goals": [
+              {
+                "conclusion": "True"
+              }
+            ]
+          }
+        },
+        {
+          "level": "error",
+          "message": "The reference invalid_tactic was not found in the current environment.",
+          "location": "11:3 to 11:17",
+          "proof_name": "bad_invalid_tactic",
+          "proof_state": {
+            "goals": [
+              {
+                "conclusion": "True"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]
