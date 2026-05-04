@@ -110,7 +110,7 @@ coq-lsp sentence execution notifications, so the timeout unit is one Rocq
 sentence such as `sleep 5.` or `repeat ... .`, not an internal Ltac substep. The
 prototype talks to `coq-lsp` directly over stdio JSON-RPC.
 
-Check calls can pass `restart=True` to tell `coq-lsp` that externally
+Check calls can pass `clear_cache=True` to tell `coq-lsp` that externally
 compiled dependencies may have changed before checking the requested file.
 
 ## Architecture
@@ -158,7 +158,7 @@ process starts as `opam exec -- coq-lsp` with `cwd` set to the inferred
 workspace so local opam switches select the matching Rocq and `coq-lsp`
 versions.
 
-If a check call has `restart=True`, the manager sends `coq/workspace_update`
+If a check call has `clear_cache=True`, the manager sends `coq/workspace_update`
 with empty object params before sending the file's `didOpen` or `didChange`.
 This asks the existing `coq-lsp` process to invalidate cached `Require` state
 after `.vo` files have changed; it does not restart the server process and does
@@ -201,7 +201,7 @@ The server exposes two MCP tools:
 
 - `rocq_lsp_check_file(file: str,
   command_timeout_seconds: float | None = None,
-  restart: bool = False)`
+  clear_cache: bool = False)`
 - `rocq_lsp_run_at(file: str, commands: str, line: int, character: int = 1)`
 
 `rocq_lsp_check_file` returns error diagnostics only. Warning and info
@@ -225,7 +225,7 @@ results.
 watchdog, and positive values enable it for that call.
 `long_running_commands` reports commands that actually ran during the check
 and took at least 80% of the configured request timeout.
-`restart=True` sends `coq/workspace_update` before checking so `coq-lsp`
+`clear_cache=True` sends `coq/workspace_update` before checking so `coq-lsp`
 refreshes imports from recompiled dependencies while keeping the same server
 process alive.
 

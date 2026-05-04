@@ -91,12 +91,13 @@ async def test_check_tool_reports_errors_only_with_configured_limit(
         "file": str(source),
         "command_timeout_seconds": None,
         "long_running_seconds": 48.0,
-        "restart": False,
+        "clear_cache": False,
     }
     assert [item["message"] for item in dumped["diagnostics"]] == ["bad 1"]
     assert dumped["counts"] == {"errors": 2}
     assert dumped["omitted_counts"] == {"errors": 1}
     assert dumped["message_limit"] == 1
+    assert "restart" not in signature(rocq_lsp_check_file).parameters
     assert "severity" not in signature(rocq_lsp_check_file).parameters
     assert "message_limit" not in signature(rocq_lsp_check_file).parameters
 
@@ -216,6 +217,7 @@ def test_tool_descriptions_do_not_expose_overall_timeout_argument() -> None:
     command_description = _field_description(
         rocq_lsp_check_file, "command_timeout_seconds"
     )
+    clear_cache_description = _field_description(rocq_lsp_check_file, "clear_cache")
 
     assert "overall_timeout_seconds" not in check_hints
     assert "overall_timeout_seconds" not in run_at_hints
@@ -227,6 +229,7 @@ def test_tool_descriptions_do_not_expose_overall_timeout_argument() -> None:
     )
     assert "per rocq sentence watchdog" in command_description.lower()
     assert "slow sentence" in command_description.lower()
+    assert "cached dependency state" in clear_cache_description.lower()
 
 
 def _field_description(function: Any, parameter: str) -> str:

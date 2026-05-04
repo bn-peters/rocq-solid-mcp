@@ -14,7 +14,7 @@ returns compact feedback output for the requested commands string.
   `RocqLspManager`, and the MCP tools
   `rocq_lsp_check_file(file: str,
   command_timeout_seconds: float | None = None,
-  restart: bool = False)` and
+  clear_cache: bool = False)` and
   `rocq_lsp_run_at(file: str, commands: str, line: int,
   character: int = 1)`.
   Tool handlers render internal result models before returning MCP output.
@@ -80,7 +80,7 @@ https://github.com/rocq-community/rocq-lsp/blob/main/etc/doc/PROTOCOL.md
 ## Runtime Behavior
 
 The check MCP tool receives a Rocq file path, optional
-`command_timeout_seconds`, and optional `restart`. It reports only error
+`command_timeout_seconds`, and optional `clear_cache`. It reports only error
 diagnostics; warning and info diagnostics are intentionally omitted from the
 tool response. Recommend recompiling the file with Rocq, for example
 `rocq c path/to/file.v`, when callers need warnings. Returned errors are capped
@@ -94,7 +94,7 @@ For `command_timeout_seconds`, `None` uses `ROCQ_LSP_COMMAND_TIMEOUT`, which
 defaults to 5 seconds, `0` disables the command watchdog for that call, and
 positive values enable it. The server reports `long_running_commands` for
 commands that actually ran during check and took at least 80% of
-the configured request timeout. `restart=True` sends `coq/workspace_update`
+the configured request timeout. `clear_cache=True` sends `coq/workspace_update`
 with empty object params before the file's `didOpen` or `didChange`, asking
 the existing `coq-lsp` process to invalidate cached `Require` state after
 external `.vo` files have changed. It does not restart the server process and
@@ -320,9 +320,9 @@ still depends on the GitLab runner having the local cache available.
   `long_running_proofs_cached` opts in to long-running command reporting and
   verifies that the first slow `sleep 5.` tactic is reported while the later
   cached recheck is not.
-- `tests/e2e/test_check_restart.py` covers the check tool's `restart`
+- `tests/e2e/test_check_restart.py` covers the check tool's `clear_cache`
   argument by recompiling a dependency externally, showing a stale import
-  without `restart`, then refreshing it through `coq/workspace_update`.
+  without `clear_cache`, then refreshing it through `coq/workspace_update`.
   `lemma_header_cascade_error` covers malformed lemma headers that should report
   only the originating lemma diagnostic instead of downstream proof-mode
   cascade errors.
