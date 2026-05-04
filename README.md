@@ -54,8 +54,7 @@ tool_timeout_sec = 300
 env = { ROCQ_LSP_TIMEOUT = "290" }
 ```
 Set `ROCQ_LSP_TIMEOUT` slightly lower than `tool_timeout_sec` so the MCP can
-return partial timeout results before Codex cancels the whole tool call. You
-should mention both precise values in your `AGENTS.md`.
+return partial timeout results before Codex cancels the whole tool call.
 
 ## Tools
 
