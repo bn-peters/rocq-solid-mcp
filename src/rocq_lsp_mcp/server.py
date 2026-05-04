@@ -109,11 +109,16 @@ async def rocq_lsp_run_at(
 ) -> dict[str, Any]:
     """Run Rocq commands at a file position and return their output.
 
-    Use this for one-off Rocq tasks such as Check, Search, Locate, Require, or
-    other one-off debugging asks.
+    Use this for running Rocq commands, such as:
+    - Search Nat.add.
+    - Check (3 + 4).
+    - About Nat.add.
+    - Locate "+".
+    - Show. (to show the proof state at a position)
+    The tool is also useful for one-off debugging tasks.
 
-    Prefer calling this tool right after imports. If local definitions, scopes,
-    or modules are needed, call it between lemmas/definitions.
+    Usually, this tool should be run right after imports or between
+    lemmas/definitions. Sometimes, it's also useful between tactics.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
     result = await manager.run_at(
