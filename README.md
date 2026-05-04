@@ -1,5 +1,7 @@
 # Ben's Rocq MCP
 
+*I'm accepting better name proposals.*
+
 If you notice that your agent misbehaves with this MCP, please let me know! It
 would be particularly helpful if you could share your transcripts, which you
 can find at ~/.codex/sessions/.
@@ -8,7 +10,7 @@ The MCP exposes two tools:
 1. `check`, which generates diagnostics for a given file. It can return errors
    from multiple proofs at once. Proof states are cached. 
 2. `run_at`, which runs one-off commands at a given position in a file. This is
-   intended to be used for queries like `Search` and `Check`, or for one-off
+   intended to be used for queries like `Search` and `Check`, and for one-off
    debugging commands.
 
 ## Installation
@@ -58,14 +60,12 @@ that caching makes up for this overall.
 
 ## Tools
 
-The server exposes two tools: `check` for obtaining file diagnostics and
-`run_at` for running one-off commands. Find the full tool definitions in
-[src/rocq_lsp_mcp/server.py](src/rocq_lsp_mcp/server.py). **You should read
-those!**
+**You should read the full tool prompts at
+[src/rocq_lsp_mcp/server.py](src/rocq_lsp_mcp/server.py).**
 
-I believe that these two tools are sufficient for most, if not all Rocq tasks.
-If you find yourself needing something else, please let me know! If possible,
-including an agent transcript, where a task could've been completed more
+I hope that these two tools are sufficient for most, if not all Rocq tasks. If
+you find yourself needing something else, please let me know! If possible,
+include an agent transcript where a task could've been completed more
 effectively with additional tools.
 
 
