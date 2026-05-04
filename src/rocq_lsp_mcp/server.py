@@ -38,7 +38,7 @@ async def rocq_check_file(
         Field(
             description=(
                 "Per Rocq sentence watchdog for checking. None uses the server "
-                "default, 0 disables it, and positive values cancel a slow sentence."
+                "default, 0 disables it, and positive values abort on slow sentences."
             ),
         ),
     ] = None,
@@ -46,27 +46,26 @@ async def rocq_check_file(
         bool,
         Field(
             description=(
-                "Clear coq-lsp's cached dependency state before checking this file."
+                "Clear cached dependency state before checking."
             ),
         ),
     ] = False,
 ) -> dict[str, Any]:
     """Check a Rocq file and report diagnostics.
 
-    Use this to check files for errors. This tool reports only error
-    diagnostics. (To find warnings, recompile the file manually.) Error
-    diagnostics include the proof state at the error position and precise
-    ranges.
+    Use this to check files for errors. (To find warnings, recompile the file
+    manually.) Error diagnostics include the proof state at error positions.
 
-    The first error in the file is always reported, and usually later errors as
-    well. If there are many errors, some might be omitted. The tool also
-    reports Rocq sentences taking a long time.
+    The first error in a file is always reported, and many forms of later
+    errors as well. The list of errors may be truncated. The tool also reports
+    Rocq sentences running for long time.
 
-    This tool is efficient due to caching. It creates no build artifacts, and
-    does not recompile upstream dependencies itself. Use `clear_cache = true`
-    when upstream dependencies have been recompiled. Timeouts are handled
-    gracefully, and partial diagnostics are returned when possible.
-    Repeated checks after timeouts use the cache.
+    This tool is very efficient due to caching. It creates no build artifacts,
+    and does not recompile upstream dependencies itself. Use `clear_cache =
+    true` when upstream dependencies have been recompiled. 
+
+    Timeouts are handled gracefully, and partial diagnostics are returned when
+    possible. Repeated checks after timeouts use the cache.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
     result = await manager.check_file(
@@ -111,15 +110,15 @@ async def rocq_run_at(
 
     Use this for running Rocq commands, such as:
     - Search Nat.add.
+    - Search insert delete "_eq".
     - Check (3 + 4).
     - About Nat.add.
     - Locate "+".
     - Show. (to show the proof state at a position)
     The tool is also useful for one-off debugging tasks.
 
-    Prefer calling this tool right after imports. If local definitions, scopes,
-    or modules are needed, call it between lemmas/definitions.
-    Repeated calls after timeouts use the cache.
+    Prefer calling this tool right after imports or between lemmas/definitions.
+    Only use within proofs when necessary.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
     result = await manager.run_at(
