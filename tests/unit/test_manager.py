@@ -412,6 +412,14 @@ async def test_check_file_keeps_only_first_error_per_proof_name_and_global_error
     ]
     assert [diagnostic["message"] for diagnostic in result.render()["diagnostics"]] == [
         "first foo",
+        "first bar",
+        "global first",
+    ]
+    assert [
+        diagnostic["message"]
+        for diagnostic in result.render(RenderOptions(severity="info"))["diagnostics"]
+    ] == [
+        "first foo",
         "foo warning",
         "first bar",
         "global first",
@@ -457,7 +465,9 @@ async def test_check_file_accepts_requested_message_limit(tmp_path: Path) -> Non
     assert result.error_count == 3
     assert result.warning_count == 3
     assert result.info_count == 3
-    assert result.render(RenderOptions(message_limit=2))["omitted_counts"] == {
+    assert result.render(
+        RenderOptions(message_limit=2, severity="info")
+    )["omitted_counts"] == {
         "errors": 1,
         "warnings": 1,
         "infos": 1,

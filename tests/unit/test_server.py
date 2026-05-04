@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from inspect import signature
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, get_args, get_type_hints
@@ -16,11 +17,13 @@ class FakeManager:
         self,
         result: CheckResult,
         run_at_result: RunAtResult | None = None,
+        message_limit: int = 20,
     ) -> None:
         self.result = result
         self.run_at_result = run_at_result
         self.config = SimpleNamespace(
-            timeout_policy=SimpleNamespace(request_seconds=60.0)
+            timeout_policy=SimpleNamespace(request_seconds=60.0),
+            message_limit=message_limit,
         )
         self.check_kwargs: dict[str, Any] | None = None
         self.run_at_calls: list[dict[str, Any]] = []
@@ -51,7 +54,9 @@ class FakeManager:
 
 
 @pytest.mark.asyncio
-async def test_check_tool_applies_severity_filter(tmp_path: Path) -> None:
+async def test_check_tool_reports_errors_only_with_configured_limit(
+    tmp_path: Path,
+) -> None:
     source = tmp_path / "Demo.v"
     source.write_text("Check nat.\n", encoding="utf-8")
     result = CheckResult.from_diagnostics(
@@ -62,12 +67,17 @@ async def test_check_tool_applies_severity_filter(tmp_path: Path) -> None:
         version=1,
         completed=None,
         diagnostics=[
-            Diagnostic.from_lsp({"range": {}, "message": "bad", "severity": 1}),
+            Diagnostic.from_lsp(
+                {"range": {}, "message": "bad 1", "severity": 1},
+            ).model_copy(update={"proof_name": "one"}),
+            Diagnostic.from_lsp(
+                {"range": {}, "message": "bad 2", "severity": 1},
+            ).model_copy(update={"proof_name": "two"}),
             Diagnostic.from_lsp({"range": {}, "message": "careful", "severity": 2}),
             Diagnostic.from_lsp({"range": {}, "message": "note", "severity": 3}),
         ],
     )
-    manager = FakeManager(result)
+    manager = FakeManager(result, message_limit=1)
     ctx = SimpleNamespace(
         request_context=SimpleNamespace(lifespan_context=manager),
     )
@@ -75,7 +85,6 @@ async def test_check_tool_applies_severity_filter(tmp_path: Path) -> None:
     dumped = await rocq_lsp_check_file(
         ctx=ctx,
         file=str(source),
-        severity="warning",
     )
 
     assert manager.check_kwargs == {
@@ -84,10 +93,12 @@ async def test_check_tool_applies_severity_filter(tmp_path: Path) -> None:
         "long_running_seconds": 48.0,
         "restart": False,
     }
-    assert [item["message"] for item in dumped["diagnostics"]] == [
-        "bad",
-        "careful",
-    ]
+    assert [item["message"] for item in dumped["diagnostics"]] == ["bad 1"]
+    assert dumped["counts"] == {"errors": 2}
+    assert dumped["omitted_counts"] == {"errors": 1}
+    assert dumped["message_limit"] == 1
+    assert "severity" not in signature(rocq_lsp_check_file).parameters
+    assert "message_limit" not in signature(rocq_lsp_check_file).parameters
 
 
 @pytest.mark.asyncio
@@ -146,6 +157,56 @@ async def test_run_at_tool_passes_commands_string(tmp_path: Path) -> None:
     assert [item["text"] for item in dumped["output"]] == [
         "Nat.add : nat -> nat -> nat",
         "Nat.add_comm: forall n m, n + m = m + n",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_run_at_tool_renders_warning_feedback(tmp_path: Path) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    check_result = CheckResult.from_diagnostics(
+        status="complete",
+        file=str(source),
+        uri=source.as_uri(),
+        workspace=str(tmp_path),
+        version=1,
+        completed=None,
+        diagnostics=[],
+    )
+    run_at_result = RunAtResult.from_feedback(
+        status="complete",
+        file=str(source),
+        commands="Definition f x := match x with | true => true | y => false end.",
+        location="1:1",
+        uri=source.as_uri(),
+        workspace=str(tmp_path),
+        version=1,
+        feedback={
+            "feedback": [
+                [
+                    2,
+                    "Unused variable y might be a misspelled constructor.",
+                ]
+            ]
+        },
+    )
+    manager = FakeManager(check_result, run_at_result=run_at_result)
+    ctx = SimpleNamespace(
+        request_context=SimpleNamespace(lifespan_context=manager),
+    )
+
+    dumped = await rocq_lsp_run_at(
+        ctx=ctx,
+        file=str(source),
+        commands="Definition f x := match x with | true => true | y => false end.",
+        line=1,
+    )
+
+    assert dumped["output"] == [
+        {
+            "level": "warning",
+            "text": "Unused variable y might be a misspelled constructor.",
+        }
     ]
 
 

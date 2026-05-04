@@ -8,12 +8,7 @@ from pydantic import Field
 
 from .config import bounded_overall_timeout_seconds
 from .manager import RocqLspManager
-from .models import (
-    DEFAULT_DIAGNOSTIC_SEVERITY,
-    DEFAULT_MESSAGE_LIMIT,
-    DiagnosticSeverity,
-    RenderOptions,
-)
+from .models import RenderOptions
 
 
 @lifespan
@@ -38,30 +33,12 @@ async def rocq_lsp_check_file(
             description="Absolute path to a .v file.",
         ),
     ],
-    message_limit: Annotated[
-        int,
-        Field(
-            description=(
-                "Maximum returned diagnostics per category "
-                "(error, warning, info). Default 10, maximum 50."
-            ),
-        ),
-    ] = DEFAULT_MESSAGE_LIMIT,
-    severity: Annotated[
-        DiagnosticSeverity,
-        Field(
-            description=(
-                "Minimum diagnostic severity to return: "
-                "info, warning, or error. Default info."
-            ),
-        ),
-    ] = DEFAULT_DIAGNOSTIC_SEVERITY,
     command_timeout_seconds: Annotated[
         float | None,
         Field(
             description=(
-                "Per Rocq sentence watchdog for check calls. Default 5s, "
-                "0 disables; slow sentences are cancelled."
+                "Per Rocq sentence watchdog for checking. None uses the server "
+                "default, 0 disables it, and positive values cancel a slow sentence."
             ),
         ),
     ] = None,
@@ -77,11 +54,16 @@ async def rocq_lsp_check_file(
 ) -> dict[str, Any]:
     """Check a Rocq file and report diagnostics.
 
-    Use this to check files for errors. The diagnostics include the proof state
-    at error position and precise ranges.
+    Use this to check files for errors. This tool reports only error
+    diagnostics; warning and info diagnostics are intentionally omitted. To find
+    warnings, recompile the file with Rocq, for example `rocq c path/to/file.v`.
+    Error diagnostics include the proof state at the error position and precise
+    ranges.
 
     The first error in the file is always reported, and usually later errors as
-    well. The tool also reports Rocq sentences taking a long time.
+    well. Returned errors are capped by the server message limit, which defaults
+    to 20 and can be overridden with `ROCQ_LSP_MESSAGE_LIMIT`. The tool also
+    reports Rocq sentences taking a long time.
 
     This check is efficient due to caching. It creates no build artifacts, and
     does not recompile upstream dependencies itself. Use `restart = true` to
@@ -98,9 +80,7 @@ async def rocq_lsp_check_file(
         ),
         restart=restart,
     )
-    return result.render(
-        RenderOptions(message_limit=message_limit, severity=severity)
-    )
+    return result.render(RenderOptions(message_limit=manager.config.message_limit))
 
 
 @mcp.tool()

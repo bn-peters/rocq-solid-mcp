@@ -163,6 +163,41 @@ async def test_run_at_search_returns_feedback(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_run_at_reports_warning_feedback(tmp_path: Path) -> None:
+    source = tmp_path / "WarningAtPoint.v"
+    sentence = "Check nat."
+    source.write_text(f"{sentence}\n", encoding="utf-8")
+    manager = RocqLspManager(
+        RocqLspConfig(
+            binary="coq-lsp",
+            timeout_policy=TimeoutPolicy(
+                request_seconds=30,
+                cancel_grace_seconds=5,
+            ),
+            max_errors=1000000,
+            workspace=tmp_path,
+        )
+    )
+    try:
+        result = await manager.run_at(
+            str(source),
+            "Inductive foo := A | B. "
+            "Definition food (x : foo) := match x with | A => 0 | b => 1 end.",
+            line=1,
+            character=len(sentence) + 1,
+        )
+    finally:
+        await manager.close()
+
+    assert result.status == "complete"
+    assert any(
+        item.render().get("level") == "warning"
+        and "Unused variable b" in item.text
+        for item in result.output
+    )
+
+
+@pytest.mark.asyncio
 async def test_run_at_can_run_require_before_check(tmp_path: Path) -> None:
     source = tmp_path / "RequireAtPoint.v"
     sentence = "Check nat."

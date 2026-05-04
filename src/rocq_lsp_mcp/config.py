@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 DEFAULT_COMMAND_TIMEOUT_SECONDS = 5.0
+DEFAULT_MESSAGE_LIMIT = 20
+MAX_MESSAGE_LIMIT = 50
 DEFAULT_OVERALL_TIMEOUT_SECONDS = 60.0
 MAX_OVERALL_TIMEOUT_SECONDS = 3600.0
 
@@ -22,6 +24,7 @@ class RocqLspConfig:
     timeout_policy: TimeoutPolicy
     max_errors: int
     workspace: Path | None
+    message_limit: int = DEFAULT_MESSAGE_LIMIT
     use_opam: bool = True
     idle_ttl_seconds: float = 1800.0
 
@@ -41,6 +44,12 @@ def bounded_overall_timeout_seconds(value: float | None) -> float:
     if value is None:
         return DEFAULT_OVERALL_TIMEOUT_SECONDS
     return min(float(value), MAX_OVERALL_TIMEOUT_SECONDS)
+
+
+def bounded_message_limit(limit: int | None) -> int:
+    if limit is None:
+        return DEFAULT_MESSAGE_LIMIT
+    return min(max(int(limit), 0), MAX_MESSAGE_LIMIT)
 
 
 def _int_env(name: str, default: str) -> int:
@@ -71,6 +80,9 @@ def load_config() -> RocqLspConfig:
         ),
         max_errors=_int_env("ROCQ_LSP_MAX_ERRORS", "1000000"),
         workspace=Path(workspace).expanduser().resolve() if workspace else None,
+        message_limit=bounded_message_limit(
+            _int_env("ROCQ_LSP_MESSAGE_LIMIT", str(DEFAULT_MESSAGE_LIMIT))
+        ),
         use_opam=_bool_env("ROCQ_LSP_USE_OPAM", "1"),
         idle_ttl_seconds=_float_env("ROCQ_LSP_IDLE_TTL_SECONDS", "1800"),
     )

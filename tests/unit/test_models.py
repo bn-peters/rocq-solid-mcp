@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from rocq_lsp_mcp.config import DEFAULT_MESSAGE_LIMIT, MAX_MESSAGE_LIMIT
 from rocq_lsp_mcp.models import (
     RunAtResult,
     CheckResult,
@@ -107,7 +108,8 @@ def test_check_result_counts_omit_zero_fields(
         ],
     )
 
-    assert result.render()["counts"] == {"warnings": 1}
+    assert "counts" not in result.render()
+    assert result.render(RenderOptions(severity="info"))["counts"] == {"warnings": 1}
 
 
 def test_check_result_omits_counts_without_diagnostics(tmp_path: Path) -> None:
@@ -313,7 +315,7 @@ def test_timeout_context_builds_from_manager_state() -> None:
     }
 
 
-def test_check_result_limits_diagnostics_per_level_by_default(
+def test_check_result_limits_errors_by_default(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -323,7 +325,7 @@ def test_check_result_limits_diagnostics_per_level_by_default(
             Diagnostic.from_lsp(
                 {"range": {}, "message": f"bad {index}", "severity": 1}
             ).model_copy(update={"proof_name": f"proof_{index}"})
-            for index in range(12)
+            for index in range(22)
         ],
         *[
             Diagnostic.from_lsp(
@@ -350,17 +352,15 @@ def test_check_result_limits_diagnostics_per_level_by_default(
     )
 
     dumped = result.render()
-    assert len(dumped["diagnostics"]) == 30
-    assert dumped["counts"] == {"errors": 12, "warnings": 11, "infos": 13}
-    assert dumped["omitted_counts"] == {"errors": 2, "warnings": 1, "infos": 3}
-    assert dumped["message_limit"] == 10
+    assert len(dumped["diagnostics"]) == DEFAULT_MESSAGE_LIMIT
+    assert dumped["counts"] == {"errors": 22}
+    assert dumped["omitted_counts"] == {"errors": 2}
+    assert dumped["message_limit"] == DEFAULT_MESSAGE_LIMIT
     assert [diagnostic["message"] for diagnostic in dumped["diagnostics"]] == [
-        *[f"bad {index}" for index in range(10)],
-        *[f"careful {index}" for index in range(10)],
-        *[f"note {index}" for index in range(10)],
+        *[f"bad {index}" for index in range(DEFAULT_MESSAGE_LIMIT)],
     ]
-    assert result.error_count == 12
-    assert len(result.errors) == 12
+    assert result.error_count == 22
+    assert len(result.errors) == 22
 
 
 def test_check_result_hard_caps_requested_message_limit(tmp_path: Path) -> None:
@@ -386,7 +386,7 @@ def test_check_result_hard_caps_requested_message_limit(tmp_path: Path) -> None:
     assert len(dumped["diagnostics"]) == 50
     assert dumped["counts"] == {"errors": 51}
     assert dumped["omitted_counts"] == {"errors": 1}
-    assert dumped["message_limit"] == 50
+    assert dumped["message_limit"] == MAX_MESSAGE_LIMIT
 
 
 def test_check_result_filters_diagnostics_by_severity(tmp_path: Path) -> None:
@@ -407,6 +407,10 @@ def test_check_result_filters_diagnostics_by_severity(tmp_path: Path) -> None:
             Diagnostic.from_lsp({"range": {}, "message": "unknown"}),
         ],
     )
+
+    default_dumped = result.render()
+    assert default_dumped["counts"] == {"errors": 1}
+    assert [item["message"] for item in default_dumped["diagnostics"]] == ["bad"]
 
     warning_dumped = result.render(RenderOptions(severity="warning"))
     assert warning_dumped["counts"] == {"errors": 1, "warnings": 1}
@@ -448,12 +452,21 @@ def test_check_result_render_deduplicates_proof_errors(tmp_path: Path) -> None:
 
     assert [item["message"] for item in result.render()["diagnostics"]] == [
         "first foo",
-        "foo warning",
     ]
+    assert [
+        item["message"]
+        for item in result.render(RenderOptions(severity="info"))["diagnostics"]
+    ] == ["first foo", "foo warning"]
     assert [
         item["message"]
         for item in result.render(
             RenderOptions(deduplicate_proof_errors=False)
+        )["diagnostics"]
+    ] == ["first foo", "second foo"]
+    assert [
+        item["message"]
+        for item in result.render(
+            RenderOptions(severity="info", deduplicate_proof_errors=False)
         )["diagnostics"]
     ] == ["first foo", "second foo", "foo warning"]
     assert result.error_count == 2
@@ -489,6 +502,13 @@ def test_check_result_render_suppresses_later_global_errors(
 
     assert [item["message"] for item in result.render()["diagnostics"]] == [
         "first global",
+        "proof error",
+    ]
+    assert [
+        item["message"]
+        for item in result.render(RenderOptions(severity="info"))["diagnostics"]
+    ] == [
+        "first global",
         "global warning",
         "proof error",
     ]
@@ -500,7 +520,6 @@ def test_check_result_render_suppresses_later_global_errors(
     ] == [
         "first global",
         "global cascade",
-        "global warning",
         "proof error",
     ]
     assert result.error_count == 3

@@ -1,0 +1,9 @@
+{
+  "steps": [
+    {
+      "label": "check errors only",
+      "action": "check",
+      "file": "src/severities.v"
+    }
+  ]
+}
