@@ -25,10 +25,12 @@ You might be asked to uninstall `coq-lsp`. Don't worry, `bens-rocq-lsp` is
 (probably) compatible with your other tools. It must be installed in all opam
 switches you plan to use Ben's Rocq MCP with.
 
-Then:
+Then execute in a clone of this repository:
 ```
 uv tool install -e .
 ```
+This installs the package to `~/.local/bin/`. You can also install the package
+with other tools.
 
 ## Usage
 
