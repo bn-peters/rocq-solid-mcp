@@ -55,21 +55,18 @@ async def rocq_lsp_check_file(
     """Check a Rocq file and report diagnostics.
 
     Use this to check files for errors. This tool reports only error
-    diagnostics; warning and info diagnostics are intentionally omitted. To find
-    warnings, recompile the file with Rocq, for example `rocq c path/to/file.v`.
-    Error diagnostics include the proof state at the error position and precise
+    diagnostics. (To find warnings, recompile the file manually.) Error
+    diagnostics include the proof state at the error position and precise
     ranges.
 
     The first error in the file is always reported, and usually later errors as
-    well. Returned errors are capped by the server message limit, which defaults
-    to 20 and can be overridden with `ROCQ_LSP_MESSAGE_LIMIT`. The tool also
+    well. If there are many errors, some might be omitted. The tool also
     reports Rocq sentences taking a long time.
 
-    This check is efficient due to caching. It creates no build artifacts, and
+    This tool is efficient due to caching. It creates no build artifacts, and
     does not recompile upstream dependencies itself. Use `restart = true` to
-    clear the cache when upstream dependencies have been recompiled.
-
-    Repeated checks after timeouts use the cache.
+    clear the cache when upstream dependencies have been recompiled. Timeouts
+    are handled gracefully, and partial diagnostics are returned when possible.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
     result = await manager.check_file(
@@ -113,12 +110,10 @@ async def rocq_lsp_run_at(
     """Run Rocq commands at a file position and return their output.
 
     Use this for one-off Rocq tasks such as Check, Search, Locate, Require, or
-    other one-off debuggint asks.
+    other one-off debugging asks.
 
-    Prefer calling this right after imports. If local definitions, scopes, or
-    modules are needed, call it between lemmas/definitions.
-
-    Repeated calls after timeouts use the cache.
+    Prefer calling this tool right after imports. If local definitions, scopes,
+    or modules are needed, call it between lemmas/definitions.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
     result = await manager.run_at(
