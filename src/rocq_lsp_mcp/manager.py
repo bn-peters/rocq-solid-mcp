@@ -58,7 +58,7 @@ class RocqLspManager:
         command_timeout_seconds: float | None = None,
         overall_timeout_seconds: float | None = None,
         long_running_seconds: float | None = DEFAULT_LONG_RUNNING_SECONDS,
-        restart: bool = False,
+        clear_cache: bool = False,
     ) -> CheckResult:
         started_at = time.monotonic()
         command_timeout = self._effective_command_timeout(command_timeout_seconds)
@@ -89,7 +89,7 @@ class RocqLspManager:
                 command_timeout,
                 overall_timeout,
                 long_running_threshold,
-                restart,
+                clear_cache,
             )
             return result.model_copy(
                 update={"checking_time_seconds": self._elapsed_seconds(started_at)}
@@ -170,7 +170,7 @@ class RocqLspManager:
         command_timeout: float | None,
         overall_timeout: float,
         long_running_threshold: float | None,
-        restart: bool,
+        clear_cache: bool,
     ) -> CheckResult:
         client = session.client
         uri = path.as_uri()
@@ -192,7 +192,7 @@ class RocqLspManager:
         session.notifications.clear(uri, version)
 
         try:
-            if restart:
+            if clear_cache:
                 await client.notify_workspace_update()
             if uri in session.versions:
                 await client.notify_document_changed(path, content, version)

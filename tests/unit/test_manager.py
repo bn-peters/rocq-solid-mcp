@@ -344,7 +344,7 @@ async def test_check_file_opens_then_changes(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_check_file_restart_notifies_workspace_before_change(
+async def test_check_file_clear_cache_notifies_workspace_before_change(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -354,7 +354,7 @@ async def test_check_file_restart_notifies_workspace_before_change(
     manager = FakeManager(client, notifications, tmp_path)
 
     first = await manager.check_file(str(source))
-    second = await manager.check_file(str(source), restart=True)
+    second = await manager.check_file(str(source), clear_cache=True)
 
     assert first.status == "complete"
     assert second.status == "complete"

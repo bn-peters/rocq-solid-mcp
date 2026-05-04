@@ -42,12 +42,11 @@ async def rocq_check_file(
             ),
         ),
     ] = None,
-    restart: Annotated[
+    clear_cache: Annotated[
         bool,
         Field(
             description=(
-                "Notify coq-lsp that compiled dependencies may have changed before "
-                "checking this file."
+                "Clear coq-lsp's cached dependency state before checking this file."
             ),
         ),
     ] = False,
@@ -64,9 +63,9 @@ async def rocq_check_file(
     reports Rocq sentences taking a long time.
 
     This tool is efficient due to caching. It creates no build artifacts, and
-    does not recompile upstream dependencies itself. Use `restart = true` to
-    clear the cache when upstream dependencies have been recompiled. Timeouts
-    are handled gracefully, and partial diagnostics are returned when possible.
+    does not recompile upstream dependencies itself. Use `clear_cache = true`
+    when upstream dependencies have been recompiled. Timeouts are handled
+    gracefully, and partial diagnostics are returned when possible.
     Repeated checks after timeouts use the cache.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
@@ -76,7 +75,7 @@ async def rocq_check_file(
         long_running_seconds=_long_running_alert_threshold(
             manager.config.timeout_policy.request_seconds
         ),
-        restart=restart,
+        clear_cache=clear_cache,
     )
     return result.render(RenderOptions(message_limit=manager.config.message_limit))
 
@@ -118,8 +117,9 @@ async def rocq_run_at(
     - Show. (to show the proof state at a position)
     The tool is also useful for one-off debugging tasks.
 
-    Usually, this tool should be run right after imports or between
-    lemmas/definitions. Sometimes, it's also useful between tactics.
+    Prefer calling this tool right after imports. If local definitions, scopes,
+    or modules are needed, call it between lemmas/definitions.
+    Repeated calls after timeouts use the cache.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
     result = await manager.run_at(
