@@ -199,12 +199,12 @@ uv run bens-rocq-mcp
 
 The server exposes two MCP tools:
 
-- `rocq_lsp_check_file(file: str,
+- `rocq_check_file(file: str,
   command_timeout_seconds: float | None = None,
   restart: bool = False)`
-- `rocq_lsp_run_at(file: str, commands: str, line: int, character: int = 1)`
+- `rocq_run_at(file: str, commands: str, line: int, character: int = 1)`
 
-`rocq_lsp_check_file` returns error diagnostics only. Warning and info
+`rocq_check_file` returns error diagnostics only. Warning and info
 diagnostics are intentionally omitted from this tool response; recompile the
 file with Rocq, for example `rocq c path/to/file.v`, when warnings are needed.
 `ROCQ_LSP_MESSAGE_LIMIT` caps returned errors, defaults to 20, and is capped to
@@ -229,7 +229,7 @@ and took at least 80% of the configured request timeout.
 refreshes imports from recompiled dependencies while keeping the same server
 process alive.
 
-`rocq_lsp_run_at` takes a 1-based line and character position in `file`.
+`rocq_run_at` takes a 1-based line and character position in `file`.
 `commands` is one string containing one or more complete Rocq commands ending in
 `.`; punctuation is not added automatically. It can run `Require` as well as
 one-off queries such as `Check`, `Search`, `Locate`, or notation experiments.
@@ -279,7 +279,7 @@ unavailable. E2e scenarios with compiled dependencies also skip when `rocq` is
 unavailable.
 Scenario check and `run_at` steps may include timing assertions for
 cache-sensitive behavior; those timings are asserted by the harness but omitted
-from promoted transcripts. Scenario `run_at` steps call `rocq_lsp_run_at`
+from promoted transcripts. Scenario `run_at` steps call `rocq_run_at`
 through the same cached manager. Scenarios may also define a top-level
 `timeout_policy` to override the harness defaults for timeout-specific coverage,
 including `command_seconds` for per-sentence timeout scenarios. Individual

@@ -9,7 +9,7 @@ import pytest
 from pydantic.fields import FieldInfo
 
 from rocq_lsp_mcp.models import RunAtResult, CheckResult, Diagnostic
-from rocq_lsp_mcp.server import rocq_lsp_check_file, rocq_lsp_run_at
+from rocq_lsp_mcp.server import rocq_check_file, rocq_run_at
 
 
 class FakeManager:
@@ -82,7 +82,7 @@ async def test_check_tool_reports_errors_only_with_configured_limit(
         request_context=SimpleNamespace(lifespan_context=manager),
     )
 
-    dumped = await rocq_lsp_check_file(
+    dumped = await rocq_check_file(
         ctx=ctx,
         file=str(source),
     )
@@ -97,8 +97,8 @@ async def test_check_tool_reports_errors_only_with_configured_limit(
     assert dumped["counts"] == {"errors": 2}
     assert dumped["omitted_counts"] == {"errors": 1}
     assert dumped["message_limit"] == 1
-    assert "severity" not in signature(rocq_lsp_check_file).parameters
-    assert "message_limit" not in signature(rocq_lsp_check_file).parameters
+    assert "severity" not in signature(rocq_check_file).parameters
+    assert "message_limit" not in signature(rocq_check_file).parameters
 
 
 @pytest.mark.asyncio
@@ -134,7 +134,7 @@ async def test_run_at_tool_passes_commands_string(tmp_path: Path) -> None:
         request_context=SimpleNamespace(lifespan_context=manager),
     )
 
-    dumped = await rocq_lsp_run_at(
+    dumped = await rocq_run_at(
         ctx=ctx,
         file=str(source),
         commands="Require Import Arith. Check Nat.add. Search (_ + _).",
@@ -195,7 +195,7 @@ async def test_run_at_tool_renders_warning_feedback(tmp_path: Path) -> None:
         request_context=SimpleNamespace(lifespan_context=manager),
     )
 
-    dumped = await rocq_lsp_run_at(
+    dumped = await rocq_run_at(
         ctx=ctx,
         file=str(source),
         commands="Definition f x := match x with | true => true | y => false end.",
@@ -211,19 +211,19 @@ async def test_run_at_tool_renders_warning_feedback(tmp_path: Path) -> None:
 
 
 def test_tool_descriptions_do_not_expose_overall_timeout_argument() -> None:
-    check_hints = get_type_hints(rocq_lsp_check_file, include_extras=True)
-    run_at_hints = get_type_hints(rocq_lsp_run_at, include_extras=True)
+    check_hints = get_type_hints(rocq_check_file, include_extras=True)
+    run_at_hints = get_type_hints(rocq_run_at, include_extras=True)
     command_description = _field_description(
-        rocq_lsp_check_file, "command_timeout_seconds"
+        rocq_check_file, "command_timeout_seconds"
     )
 
     assert "overall_timeout_seconds" not in check_hints
     assert "overall_timeout_seconds" not in run_at_hints
     assert "Repeated checks after timeouts use the cache." in (
-        rocq_lsp_check_file.__doc__ or ""
+        rocq_check_file.__doc__ or ""
     )
     assert "Repeated calls after timeouts use the cache." in (
-        rocq_lsp_run_at.__doc__ or ""
+        rocq_run_at.__doc__ or ""
     )
     assert "per rocq sentence watchdog" in command_description.lower()
     assert "slow sentence" in command_description.lower()

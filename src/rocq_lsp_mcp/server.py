@@ -25,7 +25,7 @@ mcp = FastMCP("bens-rocq-mcp", lifespan=app_lifespan)
 
 
 @mcp.tool()
-async def rocq_lsp_check_file(
+async def rocq_check_file(
     ctx: Context,
     file: Annotated[
         str,
@@ -67,6 +67,7 @@ async def rocq_lsp_check_file(
     does not recompile upstream dependencies itself. Use `restart = true` to
     clear the cache when upstream dependencies have been recompiled. Timeouts
     are handled gracefully, and partial diagnostics are returned when possible.
+    Repeated checks after timeouts use the cache.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
     result = await manager.check_file(
@@ -81,7 +82,7 @@ async def rocq_lsp_check_file(
 
 
 @mcp.tool()
-async def rocq_lsp_run_at(
+async def rocq_run_at(
     file: Annotated[str, Field(description="Absolute path to a .v file.")],
     commands: Annotated[
         str,
@@ -114,6 +115,7 @@ async def rocq_lsp_run_at(
 
     Prefer calling this tool right after imports. If local definitions, scopes,
     or modules are needed, call it between lemmas/definitions.
+    Repeated calls after timeouts use the cache.
     """
     manager: RocqLspManager = ctx.request_context.lifespan_context
     result = await manager.run_at(

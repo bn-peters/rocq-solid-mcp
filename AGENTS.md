@@ -12,10 +12,10 @@ returns compact feedback output for the requested commands string.
 
 - `src/rocq_lsp_mcp/server.py` defines the FastMCP server, the lifespan-managed
   `RocqLspManager`, and the MCP tools
-  `rocq_lsp_check_file(file: str,
+  `rocq_check_file(file: str,
   command_timeout_seconds: float | None = None,
   restart: bool = False)` and
-  `rocq_lsp_run_at(file: str, commands: str, line: int,
+  `rocq_run_at(file: str, commands: str, line: int,
   character: int = 1)`.
   Tool handlers render internal result models before returning MCP output.
 - `src/rocq_lsp_mcp/manager.py` is the orchestration layer. It resolves files,
