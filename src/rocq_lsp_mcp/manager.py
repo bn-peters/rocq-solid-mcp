@@ -168,7 +168,7 @@ class RocqLspManager:
         session: RocqLspSession,
         path: Path,
         command_timeout: float | None,
-        overall_timeout: float,
+        overall_timeout: float | None,
         long_running_threshold: float | None,
         clear_cache: bool,
     ) -> CheckResult:
@@ -336,7 +336,7 @@ class RocqLspManager:
         commands: str,
         line: int,
         character: int,
-        overall_timeout: float,
+        overall_timeout: float | None,
     ) -> RunAtResult:
         client = session.client
         uri = path.as_uri()
@@ -451,11 +451,13 @@ class RocqLspManager:
             return None
         return override
 
-    def _effective_overall_timeout(self, override: float | None) -> float:
+    def _effective_overall_timeout(self, override: float | None) -> float | None:
         if override is None:
             return bounded_overall_timeout_seconds(
                 self.config.timeout_policy.request_seconds
             )
+        if override <= 0:
+            return None
         return bounded_overall_timeout_seconds(override)
 
     def _effective_long_running_threshold(self, override: float | None) -> float | None:
@@ -582,7 +584,7 @@ class RocqLspManager:
         uri: str,
         version: int,
         raw_diagnostics: list[dict[str, Any]],
-        overall_timeout: float,
+        overall_timeout: float | None,
     ) -> dict[str, Any]:
         states: dict[str, Any] = {}
         requested: set[str] = set()

@@ -10,6 +10,11 @@ returns compact feedback output for the requested commands string.
 
 ## Package Layout
 
+- `src/rocq_lsp_mcp/cli.py` defines the `bens-rocq-mcp` console entry point.
+  With no arguments it starts the MCP server. `bens-rocq-mcp check
+  path/to/file.v` runs a one-shot check through `RocqLspManager` and prints
+  formatted JSON with no diagnostic message limit, no request timeout, no
+  per-sentence command timeout, and no long-running command reporting.
 - `src/rocq_lsp_mcp/server.py` defines the FastMCP server, the lifespan-managed
   `RocqLspManager`, and the MCP tools
   `rocq_check_file(file: str,
@@ -62,7 +67,7 @@ returns compact feedback output for the requested commands string.
   `proof_name`, suppresses later errors that also lack a `proof_name`; warnings
   and infos are retained internally but omitted from default check output. This
   broad cascade guard can hide later independent top-level errors that also
-  lack `proof_name`. Rendering caps returned error diagnostics at 20 by default
+  lack `proof_name`. Rendering caps returned error diagnostics at 10 by default
   with a hard cap of 50, and includes compact `timeout_context` only for
   timeout results.
 - `src/rocq_lsp_mcp/config.py` loads environment configuration, defines
@@ -99,7 +104,11 @@ with empty object params before the file's `didOpen` or `didChange`, asking
 the existing `coq-lsp` process to invalidate cached `Require` state after
 external `.vo` files have changed. It does not restart the server process and
 does not rebuild dependencies; callers must recompile edited dependencies
-first. The `run_at` MCP tool receives a Rocq file path, one string containing
+first. The `check` CLI subcommand has no flags and deliberately ignores the
+MCP-oriented timeout and message-limit defaults: it disables the request
+timeout, per-sentence command timeout, diagnostic truncation, and
+timeout-derived long-running command reporting for a single formatted JSON
+result. The `run_at` MCP tool receives a Rocq file path, one string containing
 one or more complete commands ending in `.`, and a 1-based line/character
 position; it is useful for one-off tasks such as `Check`, `Search`, `Require`,
 `Locate`, and notation experiments. On each call, the manager resolves the

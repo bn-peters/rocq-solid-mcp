@@ -17,7 +17,7 @@ dev = [
 ]
 
 [project.scripts]
-bens-rocq-mcp = "rocq_lsp_mcp.server:main"
+bens-rocq-mcp = "rocq_lsp_mcp.cli:main"
 
 [build-system]
 requires = ["setuptools>=68.0"]

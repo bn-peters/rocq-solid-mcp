@@ -200,6 +200,10 @@ at 10 long-running commands.
 uv run bens-rocq-mcp
 ```
 
+Running `bens-rocq-mcp` with no subcommand starts the MCP server. Running
+`bens-rocq-mcp check path/to/file.v` performs one check and prints formatted
+JSON.
+
 The server exposes two MCP tools:
 
 - `rocq_check_file(file: str,

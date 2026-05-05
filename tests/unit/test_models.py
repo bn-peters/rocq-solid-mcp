@@ -389,6 +389,32 @@ def test_check_result_hard_caps_requested_message_limit(tmp_path: Path) -> None:
     assert dumped["message_limit"] == MAX_MESSAGE_LIMIT
 
 
+def test_check_result_can_render_without_message_limit(tmp_path: Path) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+
+    result = CheckResult.from_diagnostics(
+        status="complete",
+        file=str(source),
+        uri=source.as_uri(),
+        workspace=str(tmp_path),
+        version=1,
+        completed=None,
+        diagnostics=[
+            Diagnostic.from_lsp(
+                {"range": {}, "message": f"bad {index}", "severity": 1}
+            ).model_copy(update={"proof_name": f"proof_{index}"})
+            for index in range(51)
+        ],
+    )
+
+    dumped = result.render(RenderOptions(message_limit=None))
+    assert len(dumped["diagnostics"]) == 51
+    assert dumped["counts"] == {"errors": 51}
+    assert "omitted_counts" not in dumped
+    assert "message_limit" not in dumped
+
+
 def test_check_result_filters_diagnostics_by_severity(tmp_path: Path) -> None:
     source = tmp_path / "Demo.v"
     source.write_text("Check nat.\n", encoding="utf-8")

@@ -81,7 +81,7 @@ class FakeClient:
         *,
         uri: str,
         version: int,
-        timeout: float,
+        timeout: float | None,
         hard_timeout_grace: float,
         command_timeout: float | None = None,
         goals: str | None = None,
@@ -159,7 +159,7 @@ class FakeClient:
         version: int,
         position: dict[str, int],
         commands: str,
-        timeout: float,
+        timeout: float | None,
         hard_timeout_grace: float,
     ) -> tuple[dict[str, Any], bool]:
         self.run_at_requests.append(
@@ -492,6 +492,25 @@ async def test_check_file_forwards_overall_timeout_override(
         client.get_document_requests[1]["timeout"]
         == MAX_OVERALL_TIMEOUT_SECONDS
     )
+
+
+@pytest.mark.asyncio
+async def test_check_file_can_disable_timeouts(tmp_path: Path) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    manager = FakeManager(client, notifications, tmp_path, command_seconds=5)
+
+    await manager.check_file(
+        str(source),
+        command_timeout_seconds=0,
+        overall_timeout_seconds=0,
+        long_running_seconds=0,
+    )
+
+    assert client.get_document_requests[0]["timeout"] is None
+    assert client.get_document_requests[0]["command_timeout"] is None
 
 
 @pytest.mark.asyncio

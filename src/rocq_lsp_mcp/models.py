@@ -24,7 +24,7 @@ DIAGNOSTIC_LEVEL_PRIORITY = {
 class RenderOptions:
     include_proof_state: bool = True
     include_timeout_context: bool = True
-    message_limit: int = DEFAULT_MESSAGE_LIMIT
+    message_limit: int | None = DEFAULT_MESSAGE_LIMIT
     severity: DiagnosticSeverity = DEFAULT_DIAGNOSTIC_SEVERITY
     location_format: LocationFormat = "range"
     deduplicate_proof_errors: bool = True
@@ -213,7 +213,7 @@ class RunAtResult(BaseModel):
 class TimeoutContext(BaseModel):
     operation: str = "coq/getDocument"
     timeout_kind: str = "request"
-    request_timeout_seconds: int | float
+    request_timeout_seconds: int | float | None = None
     cancel_grace_seconds: int | float
     checked_until: dict[str, int] | None = None
     latest_processing_range: dict[str, Any] | None = None
@@ -355,10 +355,18 @@ class CheckResult(BaseModel):
 
     def render(self, options: RenderOptions | None = None) -> dict[str, Any]:
         options = options or RenderOptions()
-        message_limit = bounded_message_limit(options.message_limit)
+        message_limit = (
+            None
+            if options.message_limit is None
+            else bounded_message_limit(options.message_limit)
+        )
         diagnostics = _render_diagnostics(self.diagnostics, options)
         buckets = diagnostic_buckets(diagnostics)
-        limited_diagnostics = limit_diagnostics(diagnostics, message_limit)
+        limited_diagnostics = (
+            diagnostics
+            if message_limit is None
+            else limit_diagnostics(diagnostics, message_limit)
+        )
         limited_buckets = diagnostic_buckets(limited_diagnostics)
         omitted_errors = len(buckets["errors"]) - len(limited_buckets["errors"])
         omitted_warnings = len(buckets["warnings"]) - len(limited_buckets["warnings"])

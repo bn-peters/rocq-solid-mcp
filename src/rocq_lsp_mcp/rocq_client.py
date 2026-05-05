@@ -190,7 +190,7 @@ class RocqLspClient:
         *,
         uri: str,
         version: int,
-        timeout: float,
+        timeout: float | None,
         hard_timeout_grace: float,
         command_timeout: float | None = None,
         goals: str | None = None,
@@ -402,7 +402,7 @@ class RocqLspClient:
         version: int,
         position: dict[str, int],
         commands: str,
-        timeout: float,
+        timeout: float | None,
         hard_timeout_grace: float,
     ) -> tuple[dict[str, Any], bool]:
         request_id = self._reserve_request()
