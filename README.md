@@ -45,7 +45,7 @@ projects; Your project must contain a `_CoqProject` or `_RocqProject` file with
 suitable `-R` and `-Q` entries.
 
 You should consider disabling all other Rocq MCPs. If you have slow-to-compile
-files, you should consider increasing tool timeout; This MCP has its own
+files, you should increase the tool timeout; This MCP has its own
 timeout mechanism. Add this to `.codex/config.toml` in your repository:
 ```
 [mcp_servers.rocq-mcp]
@@ -56,7 +56,7 @@ tool_timeout_sec = 300
 env = { ROCQ_LSP_TIMEOUT = "290" }
 ```
 Set `ROCQ_LSP_TIMEOUT` slightly lower than `tool_timeout_sec` so the MCP can
-return partial timeout results before Codex cancels the whole tool call. The
+return partial timeout results before Codex cancels the entire tool call. The
 `check` tool is considerably slower than standard compilation, but I expect
 that caching makes up for this overall.
 
