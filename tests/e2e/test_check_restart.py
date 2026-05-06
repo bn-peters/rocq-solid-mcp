@@ -78,10 +78,75 @@ async def test_check_clear_cache_refreshes_recompiled_dependencies(
     assert refreshed.restarted is True
 
 
-def compile_dependency(project: Path) -> None:
+@pytest.mark.asyncio
+async def test_check_restarts_when_coqproject_changes(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    theories = project / "theories"
+    clients = project / "clients"
+    theories.mkdir(parents=True)
+    clients.mkdir()
+    project_file = project / "_CoqProject"
+    project_file.write_text(
+        "-Q theories restart_before\n-Q clients restart_clients\n",
+        encoding="utf-8",
+    )
+
+    base = theories / "Base.v"
+    client = clients / "UseBase.v"
+    base.write_text(base_source(41), encoding="utf-8")
+    client.write_text(client_source(41, library="restart_before"), encoding="utf-8")
+    compile_dependency(project, library="restart_before")
+
+    manager = RocqLspManager(
+        RocqLspConfig(
+            binary="coq-lsp",
+            timeout_policy=TimeoutPolicy(
+                request_seconds=30,
+                cancel_grace_seconds=5,
+                command_seconds=5,
+            ),
+            max_errors=1000000,
+            workspace=None,
+        )
+    )
+    try:
+        first = await manager.check_file(str(client), long_running_seconds=0)
+
+        project_file.write_text(
+            "-Q theories restart_after\n-Q clients restart_clients\n",
+            encoding="utf-8",
+        )
+        client.write_text(
+            client_source(41, library="restart_after"),
+            encoding="utf-8",
+        )
+        compile_dependency(project, library="restart_after")
+        stale = await manager.check_file(str(client), long_running_seconds=0)
+        restarted = await manager.check_file(
+            str(client),
+            long_running_seconds=0,
+            clear_cache=True,
+        )
+    finally:
+        await manager.close()
+
+    assert first.status == "complete"
+    assert first.error_count == 0
+    assert first.restarted is False
+    assert stale.status == "complete"
+    assert stale.error_count > 0
+    assert stale.restarted is False
+    assert restarted.status == "complete"
+    assert restarted.error_count == 0
+    assert restarted.restarted is True
+
+
+def compile_dependency(project: Path, *, library: str = "restart_demo") -> None:
     try:
         subprocess.run(
-            ["rocq", "c", "-Q", "theories", "restart_demo", "theories/Base.v"],
+            ["rocq", "c", "-Q", "theories", library, "theories/Base.v"],
             cwd=project,
             check=True,
             text=True,
@@ -96,9 +161,9 @@ def base_source(value: int) -> str:
     return f"Definition imported_value : nat := {value}.\n"
 
 
-def client_source(value: int) -> str:
+def client_source(value: int, *, library: str = "restart_demo") -> str:
     return (
-        "From restart_demo Require Import Base.\n\n"
+        f"From {library} Require Import Base.\n\n"
         f"Lemma imported_value_current : imported_value = {value}.\n"
         "Proof. reflexivity. Qed.\n"
     )
