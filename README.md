@@ -39,19 +39,16 @@ To teach Codex about Ben's Rocq MCP:
 codex mcp add bens-rocq-mcp bens-rocq-mcp
 ```
 
+The MCP looks for `_CoqProject` and `_RocqProject` files to set up file
+dependencies correctly. To generate them in a `dune`-based project, add
+`(generate_project_file)` to your `coq.theory` stanzas.
+
 The MCP figures out the right switch itself if you have linked with `opam
-switch link . [switch]`. The MCP currently does not support `dune`-based
-projects; Your project must contain a `_CoqProject` or `_RocqProject` file with
-suitable `-R` and `-Q` entries.
-If the configured launcher is unavailable, for example `opam` is not on
-`PATH` or direct `coq-lsp` execution is enabled but `coq-lsp` is not on
-`PATH`, `check` and `run_at` return `status: "failed"` with a message that
-shows the command tried and the relevant `ROCQ_LSP_BINARY` /
-`ROCQ_LSP_USE_OPAM` settings to fix.
+switch link . [switch]`. 
 
 You should consider disabling all other Rocq MCPs. If you have slow-to-compile
-files, you should increase the tool timeout; This MCP has its own
-timeout mechanism. Add this to `.codex/config.toml` in your repository:
+files, you should increase the tool timeout; This MCP has its own timeout
+mechanism. Add this to `.codex/config.toml` in your repository:
 ```
 [mcp_servers.rocq-mcp]
 enabled = false
