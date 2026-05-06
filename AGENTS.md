@@ -118,6 +118,12 @@ file, infers a workspace by walking upward to the nearest `_RocqProject` or
 file path. If no project file is found, the file's parent directory is used.
 The session sends either `textDocument/didOpen` or `textDocument/didChange`
 through its client. The document version increments on every call.
+If the configured launcher cannot be started, such as missing `opam` when
+`ROCQ_LSP_USE_OPAM=1` or missing direct `coq-lsp` when
+`ROCQ_LSP_USE_OPAM=0`, both MCP tools return `status: "failed"` with an
+informative message instead of raising a raw subprocess error. The message
+includes the command that was tried and points callers at `ROCQ_LSP_BINARY` and
+`ROCQ_LSP_USE_OPAM`.
 
 Each requested file gets a separate long-lived `coq-lsp` process. The process
 starts with `cwd` set to the inferred workspace and, by default, with

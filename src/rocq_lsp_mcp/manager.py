@@ -21,6 +21,7 @@ from .rocq_client import (
     RocqLspClient,
     RocqLspHardTimeout,
     RocqLspResponseError,
+    RocqLspUnavailableError,
 )
 from .session import RocqLspSession
 
@@ -84,7 +85,20 @@ class RocqLspManager:
 
         workspace = self._infer_workspace(path)
         session_key = self._session_key(path)
-        session, created = await self._checkout_session(session_key, workspace)
+        try:
+            session, created = await self._checkout_session(session_key, workspace)
+        except RocqLspUnavailableError as exc:
+            return CheckResult.from_diagnostics(
+                status="failed",
+                file=str(path),
+                uri=path.as_uri(),
+                workspace=str(workspace),
+                version=None,
+                completed=None,
+                diagnostics=[],
+                checking_time_seconds=self._elapsed_seconds(started_at),
+                message=str(exc),
+            )
         try:
             if clear_cache and not created:
                 session = await self._restart_checked_out_session(
@@ -160,7 +174,20 @@ class RocqLspManager:
                 message=validation_error,
             )
 
-        session, _created = await self._checkout_session(session_key, workspace)
+        try:
+            session, _created = await self._checkout_session(session_key, workspace)
+        except RocqLspUnavailableError as exc:
+            return RunAtResult.from_feedback(
+                status="failed",
+                file=str(path),
+                commands=stripped_commands,
+                location=location,
+                uri=path.as_uri(),
+                workspace=str(workspace),
+                version=None,
+                feedback=[],
+                message=str(exc),
+            )
         try:
             return await self._run_at_with_session(
                 session,

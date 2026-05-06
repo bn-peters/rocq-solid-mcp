@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shlex
+import shutil
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,6 +34,10 @@ class RocqLspHardTimeout(TimeoutError):
 
 
 class RocqLspProcessExited(RuntimeError):
+    pass
+
+
+class RocqLspUnavailableError(RuntimeError):
     pass
 
 
@@ -77,41 +83,54 @@ class RocqLspClient:
         self.restart_required_after_external_cancellation = False
 
     async def start(self) -> None:
-        self.process = await asyncio.create_subprocess_exec(
-            *self.command,
-            cwd=self.workspace,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        self._reader_task = asyncio.create_task(self._reader_loop())
-        self._stderr_task = asyncio.create_task(self._drain_stderr())
+        self._ensure_launcher_available()
+        try:
+            self.process = await asyncio.create_subprocess_exec(
+                *self.command,
+                cwd=self.workspace,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            self._reader_task = asyncio.create_task(self._reader_loop())
+            self._stderr_task = asyncio.create_task(self._drain_stderr())
 
-        await self.request(
-            "initialize",
-            {
-                "processId": os.getpid(),
-                "clientInfo": {"name": "bens-rocq-mcp"},
-                "rootPath": str(self.workspace),
-                "rootUri": self.workspace.as_uri(),
-                "workspaceFolders": [
-                    {"uri": self.workspace.as_uri(), "name": self.workspace.name}
-                ],
-                "capabilities": {
-                    "textDocument": {
-                        "publishDiagnostics": {
-                            "relatedInformation": True,
-                            "dataSupport": True,
-                        }
+            await self.request(
+                "initialize",
+                {
+                    "processId": os.getpid(),
+                    "clientInfo": {"name": "bens-rocq-mcp"},
+                    "rootPath": str(self.workspace),
+                    "rootUri": self.workspace.as_uri(),
+                    "workspaceFolders": [
+                        {"uri": self.workspace.as_uri(), "name": self.workspace.name}
+                    ],
+                    "capabilities": {
+                        "textDocument": {
+                            "publishDiagnostics": {
+                                "relatedInformation": True,
+                                "dataSupport": True,
+                            }
+                        },
+                        "workspace": {"workspaceFolders": True},
                     },
-                    "workspace": {"workspaceFolders": True},
+                    "initializationOptions": rocq_lsp_settings(self.max_errors),
+                    "trace": "off",
                 },
-                "initializationOptions": rocq_lsp_settings(self.max_errors),
-                "trace": "off",
-            },
-            timeout=self.request_timeout,
-        )
-        await self.notify("initialized", {})
+                timeout=self.request_timeout,
+            )
+            await self.notify("initialized", {})
+        except asyncio.CancelledError:
+            raise
+        except FileNotFoundError as exc:
+            program = str(exc.filename or self.command[0])
+            raise RocqLspUnavailableError(
+                self._command_not_found_message(program)
+            ) from exc
+        except Exception as exc:
+            raise RocqLspUnavailableError(
+                await self._startup_failure_message(exc)
+            ) from exc
 
     async def close(self, *, hard: bool = False) -> None:
         if hard:
@@ -608,3 +627,64 @@ class RocqLspClient:
         if isinstance(result, dict):
             return result
         return {"result": result}
+
+    def _ensure_launcher_available(self) -> None:
+        launcher = self.command[0]
+        if _looks_like_path(launcher):
+            launcher_path = Path(launcher)
+            if not launcher_path.is_absolute():
+                launcher_path = self.workspace / launcher_path
+            if launcher_path.exists():
+                return
+        elif shutil.which(launcher) is not None:
+            return
+        raise RocqLspUnavailableError(self._command_not_found_message(launcher))
+
+    def _command_not_found_message(self, program: str) -> str:
+        tried = shlex.join(self.command)
+        if program == "opam":
+            advice = (
+                "Install opam, or set ROCQ_LSP_USE_OPAM=0 if ROCQ_LSP_BINARY "
+                "points to a directly runnable coq-lsp binary."
+            )
+        else:
+            advice = (
+                "Install bens-rocq-lsp/coq-lsp, set ROCQ_LSP_BINARY to its full "
+                "path, or set ROCQ_LSP_USE_OPAM=1 to run it through an opam switch."
+            )
+        if _looks_like_path(program):
+            reason = f"executable path '{program}' was not found"
+        else:
+            reason = f"required executable '{program}' was not found on PATH"
+        return f"Unable to start coq-lsp: {reason}. Tried command: {tried}. {advice}"
+
+    async def _startup_failure_message(self, exc: Exception) -> str:
+        await self._collect_startup_stderr()
+        message = (
+            "Unable to start coq-lsp: the server exited or failed during "
+            f"initialization. Tried command: {shlex.join(self.command)}. "
+            f"Workspace: {self.workspace}. Cause: {exc}."
+        )
+        stderr = "\n".join(self.stderr_lines[-20:]).strip()
+        if stderr:
+            message += f" stderr:\n{stderr}"
+        message += (
+            " Ensure bens-rocq-lsp/coq-lsp is installed in the selected opam "
+            "switch or set ROCQ_LSP_BINARY/ROCQ_LSP_USE_OPAM to the correct "
+            "launcher."
+        )
+        return message
+
+    async def _collect_startup_stderr(self) -> None:
+        process = self.process
+        if process is not None and process.returncode is None:
+            with suppress(Exception):
+                await asyncio.wait_for(process.wait(), timeout=0.2)
+        stderr_task = self._stderr_task
+        if stderr_task is not None and not stderr_task.done():
+            with suppress(Exception):
+                await asyncio.wait_for(asyncio.shield(stderr_task), timeout=0.2)
+
+
+def _looks_like_path(program: str) -> bool:
+    return "/" in program

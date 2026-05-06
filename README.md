@@ -43,6 +43,11 @@ The MCP figures out the right switch itself if you have linked with `opam
 switch link . [switch]`. The MCP currently does not support `dune`-based
 projects; Your project must contain a `_CoqProject` or `_RocqProject` file with
 suitable `-R` and `-Q` entries.
+If the configured launcher is unavailable, for example `opam` is not on
+`PATH` or direct `coq-lsp` execution is enabled but `coq-lsp` is not on
+`PATH`, `check` and `run_at` return `status: "failed"` with a message that
+shows the command tried and the relevant `ROCQ_LSP_BINARY` /
+`ROCQ_LSP_USE_OPAM` settings to fix.
 
 You should consider disabling all other Rocq MCPs. If you have slow-to-compile
 files, you should increase the tool timeout; This MCP has its own

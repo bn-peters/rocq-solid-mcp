@@ -19,6 +19,7 @@ from rocq_lsp_mcp.rocq_client import (
     GetDocumentResult,
     RocqLspHardTimeout,
     RocqLspResponseError,
+    RocqLspUnavailableError,
     language_id_for_path,
 )
 from rocq_lsp_mcp.session import RocqLspSession
@@ -240,6 +241,24 @@ class FakeManager(RocqLspManager):
         )
 
 
+class UnavailableManager(RocqLspManager):
+    def __init__(self, workspace: Path, message: str) -> None:
+        config = RocqLspConfig(
+            binary="coq-lsp",
+            timeout_policy=TimeoutPolicy(
+                request_seconds=1,
+                cancel_grace_seconds=0.01,
+            ),
+            max_errors=1000000,
+            workspace=workspace,
+        )
+        super().__init__(config=config)
+        self.message = message
+
+    async def _create_session(self, workspace: Path) -> RocqLspSession:
+        raise RocqLspUnavailableError(self.message)
+
+
 def diagnostic(
     message: str,
     severity: int,
@@ -315,6 +334,47 @@ def file_perf_data(
             }
         ],
     }
+
+
+@pytest.mark.asyncio
+async def test_check_file_reports_unavailable_coq_lsp_startup(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    message = "Unable to start coq-lsp: required executable 'coq-lsp' was not found."
+    manager = UnavailableManager(tmp_path, message)
+
+    result = await manager.check_file(str(source))
+
+    rendered = result.render()
+    assert result.status == "failed"
+    assert result.message == message
+    assert result.workspace == str(tmp_path)
+    assert rendered["status"] == "failed"
+    assert rendered["file"] == "Demo.v"
+    assert rendered["message"] == message
+
+
+@pytest.mark.asyncio
+async def test_run_at_reports_unavailable_coq_lsp_startup(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    message = "Unable to start coq-lsp: required executable 'coq-lsp' was not found."
+    manager = UnavailableManager(tmp_path, message)
+
+    result = await manager.run_at(str(source), "Check nat.", 1)
+
+    rendered = result.render()
+    assert result.status == "failed"
+    assert result.message == message
+    assert result.workspace == str(tmp_path)
+    assert rendered["status"] == "failed"
+    assert rendered["file"] == "Demo.v"
+    assert rendered["commands"] == "Check nat."
+    assert rendered["message"] == message
 
 
 @pytest.mark.asyncio

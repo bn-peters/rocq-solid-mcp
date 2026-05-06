@@ -7,7 +7,11 @@ from typing import Any
 import pytest
 
 from rocq_lsp_mcp.notifications import NotificationStore
-from rocq_lsp_mcp.rocq_client import RocqLspClient, RocqLspHardTimeout
+from rocq_lsp_mcp.rocq_client import (
+    RocqLspClient,
+    RocqLspHardTimeout,
+    RocqLspUnavailableError,
+)
 
 
 def client_with_store(tmp_path: Path, store: NotificationStore) -> RocqLspClient:
@@ -41,6 +45,51 @@ def completed_document() -> dict[str, Any]:
             },
         }
     }
+
+
+@pytest.mark.asyncio
+async def test_start_reports_missing_direct_binary(tmp_path: Path) -> None:
+    store = NotificationStore()
+    client = RocqLspClient(
+        binary="definitely-not-a-coq-lsp-binary",
+        use_opam=False,
+        workspace=tmp_path,
+        max_errors=1000000,
+        request_timeout=5,
+        notifications=store,
+    )
+
+    with pytest.raises(RocqLspUnavailableError) as exc_info:
+        await client.start()
+
+    message = str(exc_info.value)
+    assert "required executable 'definitely-not-a-coq-lsp-binary'" in message
+    assert "Tried command: definitely-not-a-coq-lsp-binary" in message
+    assert "ROCQ_LSP_BINARY" in message
+
+
+@pytest.mark.asyncio
+async def test_start_reports_missing_opam_launcher(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PATH", "")
+    store = NotificationStore()
+    client = RocqLspClient(
+        binary="coq-lsp",
+        use_opam=True,
+        workspace=tmp_path,
+        max_errors=1000000,
+        request_timeout=5,
+        notifications=store,
+    )
+
+    with pytest.raises(RocqLspUnavailableError) as exc_info:
+        await client.start()
+
+    message = str(exc_info.value)
+    assert "required executable 'opam'" in message
+    assert "Tried command: opam exec -- coq-lsp" in message
+    assert "ROCQ_LSP_USE_OPAM=0" in message
 
 
 @pytest.mark.asyncio
