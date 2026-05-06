@@ -226,7 +226,7 @@ def test_tool_descriptions_do_not_expose_overall_timeout_argument() -> None:
     )
     assert "per rocq sentence watchdog" in command_description.lower()
     assert "slow sentence" in command_description.lower()
-    assert "cached dependency state" in clear_cache_description.lower()
+    assert "restart this file's coq-lsp process" in clear_cache_description.lower()
 
 
 def _field_description(function: Any, parameter: str) -> str:

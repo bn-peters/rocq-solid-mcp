@@ -50,7 +50,6 @@ class FakeClient:
         self.timed_out_range = timed_out_range
         self.opened: list[tuple[Path, int]] = []
         self.changed: list[tuple[Path, int]] = []
-        self.workspace_updates = 0
         self.goal_requests: list[dict[str, Any]] = []
         self.get_document_requests: list[dict[str, Any]] = []
         self.run_at_requests: list[dict[str, Any]] = []
@@ -59,10 +58,6 @@ class FakeClient:
         self.closed = False
         self.pending_cleared = False
         self.hard_timeout = False
-
-    async def notify_workspace_update(self) -> None:
-        self.workspace_updates += 1
-        self.events.append("workspace_update")
 
     async def notify_document_opened(
         self, file_path: Path, content: str, version: int
@@ -344,7 +339,7 @@ async def test_check_file_opens_then_changes(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_check_file_clear_cache_notifies_workspace_before_change(
+async def test_check_file_clear_cache_restarts_process_before_open(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -358,17 +353,37 @@ async def test_check_file_clear_cache_notifies_workspace_before_change(
 
     assert first.status == "complete"
     assert second.status == "complete"
-    assert second.restarted is False
-    assert client.workspace_updates == 1
-    assert client.opened == [(source.resolve(), 1)]
-    assert client.changed == [(source.resolve(), 2)]
+    assert second.restarted is True
+    assert client.pending_cleared is True
+    assert client.killed is True
+    assert client.opened == [(source.resolve(), 1), (source.resolve(), 1)]
+    assert client.changed == []
     assert client.events == [
         "opened:1",
         "get_document:1",
-        "workspace_update",
-        "changed:2",
-        "get_document:2",
+        "opened:1",
+        "get_document:1",
     ]
+
+
+@pytest.mark.asyncio
+async def test_check_file_clear_cache_does_not_restart_new_session(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    manager = FakeManager(client, notifications, tmp_path)
+
+    result = await manager.check_file(str(source), clear_cache=True)
+
+    assert result.status == "complete"
+    assert result.restarted is False
+    assert client.pending_cleared is False
+    assert client.killed is False
+    assert client.opened == [(source.resolve(), 1)]
+    assert client.changed == []
 
 
 @pytest.mark.asyncio
@@ -920,7 +935,7 @@ async def test_run_at_hard_timeout_resets_session(tmp_path: Path) -> None:
     assert result.restarted is True
     assert client.pending_cleared is True
     assert client.killed is True
-    assert tmp_path not in manager._sessions
+    assert source.resolve() not in manager._sessions
 
 
 @pytest.mark.asyncio
@@ -1008,7 +1023,7 @@ async def test_hard_timeout_resets_session(tmp_path: Path) -> None:
     assert notifications.cleared == [(source.as_uri(), 1)]
     assert client.pending_cleared is True
     assert client.killed is True
-    assert tmp_path not in manager._sessions
+    assert source.resolve() not in manager._sessions
 
 
 @pytest.mark.asyncio
@@ -1032,7 +1047,7 @@ async def test_check_file_external_cancellation_resets_stuck_session(
 
     assert client.pending_cleared is True
     assert client.killed is True
-    assert tmp_path not in manager._sessions
+    assert source.resolve() not in manager._sessions
 
 
 @pytest.mark.asyncio
@@ -1056,21 +1071,18 @@ async def test_run_at_external_cancellation_resets_stuck_session(
 
     assert client.pending_cleared is True
     assert client.killed is True
-    assert tmp_path not in manager._sessions
+    assert source.resolve() not in manager._sessions
 
 
 @pytest.mark.asyncio
-async def test_check_file_uses_separate_sessions_for_project_roots(
+async def test_check_file_uses_separate_sessions_for_files_in_same_project(
     tmp_path: Path,
 ) -> None:
-    project_a = tmp_path / "a"
-    project_b = tmp_path / "b"
-    project_a.mkdir()
-    project_b.mkdir()
-    (project_a / "_RocqProject").write_text("-Q . A\n", encoding="utf-8")
-    (project_b / "_CoqProject").write_text("-Q . B\n", encoding="utf-8")
-    source_a = project_a / "A.v"
-    source_b = project_b / "B.v"
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "_RocqProject").write_text("-Q . Demo\n", encoding="utf-8")
+    source_a = project / "A.v"
+    source_b = project / "B.v"
     source_a.write_text("Check nat.\n", encoding="utf-8")
     source_b.write_text("Check nat.\n", encoding="utf-8")
     notifications = SpyNotificationStore()
@@ -1080,7 +1092,10 @@ async def test_check_file_uses_separate_sessions_for_project_roots(
     await manager.check_file(str(source_a))
     await manager.check_file(str(source_b))
 
-    assert set(manager._sessions) == {project_a.resolve(), project_b.resolve()}
+    assert set(manager._sessions) == {source_a.resolve(), source_b.resolve()}
+    assert {session.workspace for session in manager._sessions.values()} == {
+        project.resolve()
+    }
     assert client.opened == [(source_a.resolve(), 1), (source_b.resolve(), 1)]
 
 
@@ -1097,6 +1112,8 @@ async def test_idle_cleanup_stops_stale_unlocked_sessions(tmp_path: Path) -> Non
     fresh_workspace = tmp_path / "fresh"
     stale_workspace.mkdir()
     fresh_workspace.mkdir()
+    stale_file = stale_workspace / "Stale.v"
+    fresh_file = fresh_workspace / "Fresh.v"
     stale_client = FakeClient(notifications)
     fresh_client = FakeClient(notifications)
     stale_session = FakeSession(
@@ -1113,13 +1130,13 @@ async def test_idle_cleanup_stops_stale_unlocked_sessions(tmp_path: Path) -> Non
     )
     stale_session.last_used_at = time.monotonic() - 2
     fresh_session.last_used_at = time.monotonic()
-    manager._sessions[stale_workspace] = stale_session
-    manager._sessions[fresh_workspace] = fresh_session
+    manager._sessions[stale_file] = stale_session
+    manager._sessions[fresh_file] = fresh_session
 
     await manager._cleanup_idle_sessions()
 
-    assert stale_workspace not in manager._sessions
-    assert fresh_workspace in manager._sessions
+    assert stale_file not in manager._sessions
+    assert fresh_file in manager._sessions
     assert stale_client.closed is True
     assert fresh_client.closed is False
 
@@ -1135,6 +1152,7 @@ async def test_idle_cleanup_keeps_locked_sessions(tmp_path: Path) -> None:
     )
     workspace = tmp_path / "locked"
     workspace.mkdir()
+    source = workspace / "Locked.v"
     client = FakeClient(notifications)
     session = FakeSession(
         workspace=workspace,
@@ -1143,7 +1161,7 @@ async def test_idle_cleanup_keeps_locked_sessions(tmp_path: Path) -> None:
         notifications=notifications,
     )
     session.last_used_at = time.monotonic() - 2
-    manager._sessions[workspace] = session
+    manager._sessions[source] = session
     await session.lock.acquire()
 
     try:
@@ -1151,7 +1169,7 @@ async def test_idle_cleanup_keeps_locked_sessions(tmp_path: Path) -> None:
     finally:
         session.lock.release()
 
-    assert manager._sessions[workspace] is session
+    assert manager._sessions[source] is session
     assert client.closed is False
 
 
@@ -1159,20 +1177,23 @@ async def test_idle_cleanup_keeps_locked_sessions(tmp_path: Path) -> None:
 async def test_checkout_retries_when_waiting_on_reset_session(tmp_path: Path) -> None:
     notifications = SpyNotificationStore()
     manager = FakeManager(FakeClient(notifications), notifications, tmp_path)
-    original = await manager._checkout_session(tmp_path)
+    source = tmp_path / "Demo.v"
+    original, original_created = await manager._checkout_session(source, tmp_path)
+    assert original_created is True
 
-    waiting = asyncio.create_task(manager._checkout_session(tmp_path))
+    waiting = asyncio.create_task(manager._checkout_session(source, tmp_path))
     while original.active_requests < 2:
         await asyncio.sleep(0)
 
-    await manager._reset_session(tmp_path)
+    await manager._reset_session(source)
     original.lock.release()
     await manager._release_session(original)
-    replacement = await asyncio.wait_for(waiting, timeout=1)
+    replacement, replacement_created = await asyncio.wait_for(waiting, timeout=1)
 
     try:
         assert replacement is not original
-        assert manager._sessions[tmp_path] is replacement
+        assert replacement_created is True
+        assert manager._sessions[source] is replacement
     finally:
         replacement.lock.release()
         await manager._release_session(replacement)

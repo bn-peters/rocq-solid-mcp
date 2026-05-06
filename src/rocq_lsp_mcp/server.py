@@ -46,7 +46,7 @@ async def rocq_check_file(
         bool,
         Field(
             description=(
-                "Clear cached dependency state before checking."
+                "Restart this file's coq-lsp process before checking."
             ),
         ),
     ] = False,
@@ -60,9 +60,9 @@ async def rocq_check_file(
     errors as well. The list of errors may be truncated. The tool also reports
     Rocq sentences running for long time.
 
-    This tool is very efficient due to caching. It creates no build artifacts,
+    This tool is efficient due to per-file caching. It creates no build artifacts,
     and does not recompile upstream dependencies itself. Use `clear_cache =
-    true` when upstream dependencies have been recompiled. 
+    true` when upstream dependencies or project files have changed.
 
     Timeouts are handled gracefully, and partial diagnostics are returned when
     possible. Repeated checks after timeouts use the cache.

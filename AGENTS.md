@@ -3,7 +3,7 @@
 It is the duty of the agent to keep AGENTS.md and README.md up to date.
 
 This package is a Python MCP prototype for checking Rocq files and running
-one-off Rocq commands through persistent project-scoped `coq-lsp` sessions.
+one-off Rocq commands through persistent file-scoped `coq-lsp` sessions.
 Checking returns compact structured diagnostics and, when available,
 proof-state context for the sentence that produced an error. `run_at` execution
 returns compact feedback output for the requested commands string.
@@ -25,12 +25,13 @@ returns compact feedback output for the requested commands string.
   Tool handlers render internal result models before returning MCP output.
 - `src/rocq_lsp_mcp/manager.py` is the orchestration layer. It resolves files,
   infers workspaces from `_RocqProject` or `_CoqProject`, keeps cached
-  sessions per workspace, evicts idle sessions, reads files, routes check and
-  `run_at` requests, and converts outcomes into `CheckResult` or
+  sessions per resolved file path, evicts idle sessions, reads files, routes
+  check and `run_at` requests, and converts outcomes into `CheckResult` or
   `RunAtResult`.
-- `src/rocq_lsp_mcp/session.py` owns the lifecycle for one workspace-backed
-  `coq-lsp` session. It starts and stops the client, keeps the session lock,
-  tracks document versions, and owns the session `NotificationStore`.
+- `src/rocq_lsp_mcp/session.py` owns the lifecycle for one file-scoped,
+  workspace-backed `coq-lsp` session. It starts and stops the client, keeps
+  the session lock, tracks document versions, and owns the session
+  `NotificationStore`.
 - `src/rocq_lsp_mcp/notifications.py` stores LSP notification state. It handles
   `textDocument/publishDiagnostics`, tracks latest diagnostic versions by URI,
   stores latest `$/coq/fileProgress` payloads by URI/version for timeout
@@ -46,9 +47,9 @@ returns compact feedback output for the requested commands string.
 - `src/rocq_lsp_mcp/rocq_client.py` is the manual stdio JSON-RPC client for
   `coq-lsp`. It handles `Content-Length` framing, `initialize`, server
   requests, `coq/getDocument`, `proof/goals`, `petanque/run_at_point`,
-  `coq/workspace_update`, soft request deadlines, host cancellation cleanup,
-  optional per-command watchdog cancellation, process cleanup, and dispatches
-  notifications to `NotificationStore`.
+  soft request deadlines, host cancellation cleanup, optional per-command
+  watchdog cancellation, process cleanup, and dispatches notifications to
+  `NotificationStore`.
 - `src/rocq_lsp_mcp/pretty.py` converts rocq-lsp serialized pretty-print trees
   such as `Pp_glue`, `Pp_box`, and `Pp_print_break` into readable text, then
   normalizes proof-state payloads into compact agent-facing JSON. Goal
@@ -99,12 +100,12 @@ For `command_timeout_seconds`, `None` uses `ROCQ_LSP_COMMAND_TIMEOUT`, which
 defaults to 5 seconds, `0` disables the command watchdog for that call, and
 positive values enable it. The server reports `long_running_commands` for
 commands that actually ran during check and took at least 80% of
-the configured request timeout. `clear_cache=True` sends `coq/workspace_update`
-with empty object params before the file's `didOpen` or `didChange`, asking
-the existing `coq-lsp` process to invalidate cached `Require` state after
-external `.vo` files have changed. It does not restart the server process and
-does not rebuild dependencies; callers must recompile edited dependencies
-first. The `check` CLI subcommand has no flags and deliberately ignores the
+the configured request timeout. `clear_cache=True` kills and replaces the
+cached `coq-lsp` process for the requested file before sending `didOpen`, so
+the new process rereads `_RocqProject` or `_CoqProject` and reloads imports
+from external `.vo` files. It does not rebuild dependencies; callers must
+recompile edited dependencies first. The `check` CLI subcommand has no flags
+and deliberately ignores the
 MCP-oriented timeout and message-limit defaults: it disables the request
 timeout, per-sentence command timeout, diagnostic truncation, and
 timeout-derived long-running command reporting for a single formatted JSON
@@ -112,19 +113,18 @@ result. The `run_at` MCP tool receives a Rocq file path, one string containing
 one or more complete commands ending in `.`, and a 1-based line/character
 position; it is useful for one-off tasks such as `Check`, `Search`, `Require`,
 `Locate`, and notation experiments. On each call, the manager resolves the
-file, infers a workspace by
-walking upward to the nearest `_RocqProject` or
-`_CoqProject`, then delegates to the cached `RocqLspSession` for that
-workspace. If no project file is found, the file's parent directory is used.
+file, infers a workspace by walking upward to the nearest `_RocqProject` or
+`_CoqProject`, then delegates to the cached `RocqLspSession` for that resolved
+file path. If no project file is found, the file's parent directory is used.
 The session sends either `textDocument/didOpen` or `textDocument/didChange`
 through its client. The document version increments on every call.
 
-Each inferred workspace gets a separate long-lived `coq-lsp` process. The
-process starts with `cwd` set to that workspace and, by default, with
+Each requested file gets a separate long-lived `coq-lsp` process. The process
+starts with `cwd` set to the inferred workspace and, by default, with
 `opam exec -- coq-lsp` so local opam switches select the appropriate Rocq and
-`coq-lsp` versions. Calls for different workspaces may use different
-`coq-lsp` processes concurrently. Calls inside the same workspace share one
-session and serialize on that session's lock.
+`coq-lsp` versions. Calls for different files may use different `coq-lsp`
+processes concurrently, even when the files are in the same workspace. Calls
+for the same file share one session and serialize on that session's lock.
 
 Checking is driven by `coq/getDocument` with `goals="Str"`. This asks
 `coq-lsp` for the checked document and proof-state data around spans. The
@@ -170,7 +170,7 @@ the timed-out sentence range, and a source preview. This is per Rocq sentence,
 not per internal Ltac substep. The `ROCQ_LSP_TIMEOUT` request deadline remains
 the outer server-side partial-result deadline for check and `run_at`
 calls. MCP host cancellation is a harder outer abort: the server
-sends `$/cancelRequest` to `coq-lsp` and may reset the workspace session, but
+sends `$/cancelRequest` to `coq-lsp` and may reset the file session, but
 the client may already have abandoned the result.
 
 For `Attempt to save an incomplete proof` diagnostics, the `Qed.` sentence can
@@ -205,7 +205,7 @@ Timeout and cancellation handling has three layers:
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE` is the extra wait after sending
   `$/cancelRequest`, including cleanup after host-level MCP cancellation.
 
-If the hard timeout is hit, the manager kills and drops that workspace session
+If the hard timeout is hit, the manager kills and drops that file session
 so the next call starts with a fresh `coq-lsp`. Hard-timeout responses still
 include timeout context built from any latest progress notification observed
 before the session reset.
@@ -276,7 +276,7 @@ still depends on the GitLab runner having the local cache available.
 ## Test Suite
 
 - `tests/unit/test_manager.py` uses fakes to cover manager behavior, versioning,
-  workspace inference, per-workspace session separation, `run_at` execution,
+  workspace inference, per-file session separation, `run_at` execution,
   idle cleanup, language IDs, timeout context construction, and hard-timeout
   reset logic.
 - `tests/unit/test_config.py` covers command construction and environment
@@ -331,7 +331,8 @@ still depends on the GitLab runner having the local cache available.
   cached recheck is not.
 - `tests/e2e/test_check_restart.py` covers the check tool's `clear_cache`
   argument by recompiling a dependency externally, showing a stale import
-  without `clear_cache`, then refreshing it through `coq/workspace_update`.
+  without `clear_cache`, then refreshing it by restarting the file's
+  `coq-lsp` process.
   `lemma_header_cascade_error` covers malformed lemma headers that should report
   only the originating lemma diagnostic instead of downstream proof-mode
   cascade errors.

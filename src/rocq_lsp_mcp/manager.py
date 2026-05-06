@@ -28,6 +28,8 @@ from .session import RocqLspSession
 class RocqLspManager:
     def __init__(self, config: RocqLspConfig | None = None) -> None:
         self.config = config or load_config()
+        # Sessions are keyed by resolved Rocq file path. Each session still
+        # starts coq-lsp with the inferred workspace as cwd/root.
         self._sessions: dict[Path, RocqLspSession] = {}
         self._sessions_lock = asyncio.Lock()
         self._cleanup_task: asyncio.Task[None] | None = None
@@ -81,16 +83,25 @@ class RocqLspManager:
             )
 
         workspace = self._infer_workspace(path)
-        session = await self._checkout_session(workspace)
+        session_key = self._session_key(path)
+        session, created = await self._checkout_session(session_key, workspace)
         try:
+            if clear_cache and not created:
+                session = await self._restart_checked_out_session(
+                    session_key,
+                    workspace,
+                    session,
+                )
             result = await self._check_with_session(
                 session,
+                session_key,
                 path,
                 command_timeout,
                 overall_timeout,
                 long_running_threshold,
-                clear_cache,
             )
+            if clear_cache and not created:
+                result = result.model_copy(update={"restarted": True})
             return result.model_copy(
                 update={"checking_time_seconds": self._elapsed_seconds(started_at)}
             )
@@ -132,6 +143,7 @@ class RocqLspManager:
             )
 
         workspace = self._infer_workspace(path)
+        session_key = self._session_key(path)
         validation_error = self._run_at_validation_error(
             stripped_commands, line, character
         )
@@ -148,10 +160,11 @@ class RocqLspManager:
                 message=validation_error,
             )
 
-        session = await self._checkout_session(workspace)
+        session, _created = await self._checkout_session(session_key, workspace)
         try:
             return await self._run_at_with_session(
                 session,
+                session_key,
                 path,
                 stripped_commands,
                 line,
@@ -166,11 +179,11 @@ class RocqLspManager:
     async def _check_with_session(
         self,
         session: RocqLspSession,
+        session_key: Path,
         path: Path,
         command_timeout: float | None,
         overall_timeout: float | None,
         long_running_threshold: float | None,
-        clear_cache: bool,
     ) -> CheckResult:
         client = session.client
         uri = path.as_uri()
@@ -192,8 +205,6 @@ class RocqLspManager:
         session.notifications.clear(uri, version)
 
         try:
-            if clear_cache:
-                await client.notify_workspace_update()
             if uri in session.versions:
                 await client.notify_document_changed(path, content, version)
             else:
@@ -265,7 +276,7 @@ class RocqLspManager:
             )
         except asyncio.CancelledError:
             if getattr(client, "restart_required_after_external_cancellation", False):
-                await self._reset_session(session.workspace)
+                await self._reset_session(session_key)
             raise
         except RocqLspHardTimeout as exc:
             raw_diagnostics = await session.notifications.wait_for_diagnostics(
@@ -284,7 +295,7 @@ class RocqLspManager:
                 ),
                 timed_out_range=exc.timed_out_range,
             )
-            await self._reset_session(session.workspace)
+            await self._reset_session(session_key)
             return CheckResult.from_diagnostics(
                 status="timeout",
                 file=str(path),
@@ -332,6 +343,7 @@ class RocqLspManager:
     async def _run_at_with_session(
         self,
         session: RocqLspSession,
+        session_key: Path,
         path: Path,
         commands: str,
         line: int,
@@ -387,10 +399,10 @@ class RocqLspManager:
             )
         except asyncio.CancelledError:
             if getattr(client, "restart_required_after_external_cancellation", False):
-                await self._reset_session(session.workspace)
+                await self._reset_session(session_key)
             raise
         except RocqLspHardTimeout as exc:
-            await self._reset_session(session.workspace)
+            await self._reset_session(session_key)
             return RunAtResult.from_feedback(
                 status="timeout",
                 file=str(path),
@@ -429,20 +441,59 @@ class RocqLspManager:
                 message=str(exc),
             )
 
-    async def _checkout_session(self, workspace: Path) -> RocqLspSession:
+    async def _checkout_session(
+        self,
+        session_key: Path,
+        workspace: Path,
+    ) -> tuple[RocqLspSession, bool]:
         while True:
-            session = await self._reserve_session(workspace)
+            session, created = await self._reserve_session(session_key, workspace)
             try:
                 await session.lock.acquire()
             except BaseException:
                 await self._release_session(session)
                 raise
 
-            if await self._is_current_session(workspace, session):
-                return session
+            if await self._is_current_session(session_key, session):
+                if session.workspace == workspace:
+                    return session, created
+                session.lock.release()
+                await self._release_session(session)
+                await self._reset_session(session_key)
+                continue
 
             session.lock.release()
             await self._release_session(session)
+
+    async def _restart_checked_out_session(
+        self,
+        session_key: Path,
+        workspace: Path,
+        session: RocqLspSession,
+    ) -> RocqLspSession:
+        replacement = await self._create_session(workspace)
+        replacement.active_requests = 1
+        await replacement.lock.acquire()
+
+        replaced = False
+        async with self._sessions_lock:
+            if self._sessions.get(session_key) is session:
+                self._sessions[session_key] = replacement
+                replaced = True
+
+        if not replaced:
+            replacement.lock.release()
+            await self._release_session(replacement)
+            await replacement.stop(hard=True)
+            session.lock.release()
+            await self._release_session(session)
+            checked_out, _created = await self._checkout_session(session_key, workspace)
+            return checked_out
+
+        session.lock.release()
+        await self._release_session(session)
+        await session.stop(hard=True)
+        return replacement
 
     def _effective_command_timeout(self, override: float | None) -> float | None:
         if override is None:
@@ -502,16 +553,22 @@ class RocqLspManager:
                 with suppress(asyncio.CancelledError):
                     await diagnostics_task
 
-    async def _reserve_session(self, workspace: Path) -> RocqLspSession:
+    async def _reserve_session(
+        self,
+        session_key: Path,
+        workspace: Path,
+    ) -> tuple[RocqLspSession, bool]:
         expired: list[RocqLspSession] = []
         session: RocqLspSession | None = None
+        created = False
         try:
             async with self._sessions_lock:
                 expired = self._pop_idle_sessions_locked()
-                session = self._sessions.get(workspace)
+                session = self._sessions.get(session_key)
                 if session is None:
                     session = await self._create_session(workspace)
-                    self._sessions[workspace] = session
+                    self._sessions[session_key] = session
+                    created = True
                 session.active_requests += 1
         finally:
             for expired_session in expired:
@@ -519,13 +576,13 @@ class RocqLspManager:
 
         if session is None:
             raise RuntimeError("failed to create rocq-lsp session")
-        return session
+        return session, created
 
     async def _is_current_session(
-        self, workspace: Path, session: RocqLspSession
+        self, session_key: Path, session: RocqLspSession
     ) -> bool:
         async with self._sessions_lock:
-            return self._sessions.get(workspace) is session
+            return self._sessions.get(session_key) is session
 
     async def _create_session(self, workspace: Path) -> RocqLspSession:
         session = RocqLspSession(workspace=workspace, config=self.config)
@@ -563,18 +620,18 @@ class RocqLspManager:
 
         now = time.monotonic()
         expired: list[RocqLspSession] = []
-        for workspace, session in list(self._sessions.items()):
+        for session_key, session in list(self._sessions.items()):
             if session.active_requests > 0 or session.lock.locked():
                 continue
             if now - session.last_used_at < ttl:
                 continue
             expired.append(session)
-            del self._sessions[workspace]
+            del self._sessions[session_key]
         return expired
 
-    async def _reset_session(self, workspace: Path) -> None:
+    async def _reset_session(self, session_key: Path) -> None:
         async with self._sessions_lock:
-            session = self._sessions.pop(workspace, None)
+            session = self._sessions.pop(session_key, None)
         if session is not None:
             await session.stop(hard=True)
 
@@ -615,6 +672,10 @@ class RocqLspManager:
         if not path.is_absolute():
             path = Path.cwd() / path
         return path.resolve()
+
+    @staticmethod
+    def _session_key(file: Path) -> Path:
+        return file.resolve()
 
     def _infer_workspace(self, file: Path) -> Path:
         if self.config.workspace is not None:

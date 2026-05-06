@@ -75,7 +75,7 @@ async def test_check_clear_cache_refreshes_recompiled_dependencies(
     )
     assert refreshed.status == "complete"
     assert refreshed.error_count == 0
-    assert refreshed.restarted is False
+    assert refreshed.restarted is True
 
 
 def compile_dependency(project: Path) -> None:

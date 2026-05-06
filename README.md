@@ -80,7 +80,7 @@ feel like deleting it, but I'm not convinced it's useful :)**
 
 
 Prototype MCP server that checks Rocq files and runs one-off Rocq commands
-through persistent project-scoped `coq-lsp` sessions. Check diagnostics report
+through persistent file-scoped `coq-lsp` sessions. Check diagnostics report
 errors only and expose a human-facing `level`, `location`, message, optional
 `proof_name`, and compact proof-state context when available. Recompile the
 file with Rocq, for example `rocq c path/to/file.v`, when warnings are needed.
@@ -113,20 +113,23 @@ coq-lsp sentence execution notifications, so the timeout unit is one Rocq
 sentence such as `sleep 5.` or `repeat ... .`, not an internal Ltac substep. The
 prototype talks to `coq-lsp` directly over stdio JSON-RPC.
 
-Check calls can pass `clear_cache=True` to tell `coq-lsp` that externally
-compiled dependencies may have changed before checking the requested file.
+Check calls can pass `clear_cache=True` to restart the requested file's
+`coq-lsp` process before checking, so changed project files or externally
+compiled dependencies are picked up.
 
 ## Architecture
 
 - `server.py` registers the MCP tools, manages one `RocqLspManager`
   for the server lifespan, and renders internal results for MCP output.
-- `manager.py` resolves files and workspaces, keeps the session registry,
-  evicts idle sessions, and orchestrates internal check and `run_at` results.
-- `session.py` owns each workspace session lifecycle, document versions, and
-  notification store.
-- `rocq_client.py` is transport-only JSON-RPC framing, requests, notifications
-  such as `coq/workspace_update`, cancellation, `coq/getDocument`,
-  `proof/goals`, `petanque/run_at_point`, and process cleanup.
+- `manager.py` resolves files and workspaces, keeps the file-keyed session
+  registry, evicts idle sessions, and orchestrates internal check and `run_at`
+  results.
+- `session.py` owns each file-scoped session lifecycle, document versions, and
+  notification store. Each session still starts `coq-lsp` with an inferred
+  workspace root.
+- `rocq_client.py` is transport-only JSON-RPC framing, requests,
+  cancellation, `coq/getDocument`, `proof/goals`, `petanque/run_at_point`, and
+  process cleanup.
 - `notifications.py` stores diagnostics, latest file-progress notifications,
   file performance data, and sentence execution notifications published by
   `coq-lsp`.
@@ -154,18 +157,16 @@ source file.
 
 The manager infers a workspace by walking upward from the requested file and
 using the first directory with `_RocqProject` or `_CoqProject`. If no project
-file is found, the file's parent directory is used. Each workspace gets its own
-cached `coq-lsp` process, so different projects can be checked concurrently while
-files inside one project reuse the same `coq-lsp` cache. By default, each
-process starts as `opam exec -- coq-lsp` with `cwd` set to the inferred
-workspace so local opam switches select the matching Rocq and `coq-lsp`
-versions.
+file is found, the file's parent directory is used. Each requested file gets
+its own cached `coq-lsp` process, while the process still starts as
+`opam exec -- coq-lsp` with `cwd` set to the inferred workspace so local opam
+switches select the matching Rocq and `coq-lsp` versions.
 
-If a check call has `clear_cache=True`, the manager sends `coq/workspace_update`
-with empty object params before sending the file's `didOpen` or `didChange`.
-This asks the existing `coq-lsp` process to invalidate cached `Require` state
-after `.vo` files have changed; it does not restart the server process and does
-not rebuild dependencies. Recompile edited dependencies externally first.
+If a check call has `clear_cache=True`, the manager kills and replaces the
+cached `coq-lsp` process for that file before sending the file's `didOpen`.
+This refreshes cached `Require` state and picks up changed `_RocqProject` or
+`_CoqProject` files. It does not rebuild dependencies. Recompile edited
+dependencies externally first.
 
 When the soft `coq/getDocument` deadline fires, the response status is
 `timeout` and the rendered result includes `timeout_context`. `checked_until`
@@ -184,7 +185,7 @@ source preview. The `ROCQ_LSP_TIMEOUT` request deadline remains the outer
 server-side partial-result deadline for parsing stalls, missing execution
 notifications, or non-interruptible work. MCP host cancellation is a harder
 outer abort: the server sends `$/cancelRequest` to `coq-lsp` and may reset the
-workspace session, but the client may already have abandoned the result.
+file session, but the client may already have abandoned the result.
 
 `coq-lsp` performance data is enabled with `send_perf_data`. After successful
 `coq/getDocument` calls, the manager waits briefly for `$/coq/filePerfData` and
@@ -232,9 +233,9 @@ results.
 watchdog, and positive values enable it for that call.
 `long_running_commands` reports commands that actually ran during the check
 and took at least 80% of the configured request timeout.
-`clear_cache=True` sends `coq/workspace_update` before checking so `coq-lsp`
-refreshes imports from recompiled dependencies while keeping the same server
-process alive.
+`clear_cache=True` restarts the file's `coq-lsp` process before checking so
+`coq-lsp` refreshes imports from recompiled dependencies and rereads project
+configuration.
 
 `rocq_run_at` takes a 1-based line and character position in `file`.
 `commands` is one string containing one or more complete Rocq commands ending in
