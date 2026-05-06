@@ -6,7 +6,6 @@
     "result": {
       "status": "complete",
       "file": "src/severities.v",
-      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 2
       },

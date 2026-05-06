@@ -87,12 +87,11 @@ errors only and expose a human-facing `level`, `location`, message, optional
 `proof_name`, and compact proof-state context when available. Recompile the
 file with Rocq, for example `rocq c path/to/file.v`, when warnings are needed.
 `run_at` results expose compact feedback output for the provided commands
-string, including warning feedback when `coq-lsp` returns it. Check results include
-`checking_time_seconds`, rounded to
-milliseconds, and may include `long_running_commands` entries with source text
-and location for commands that actually ran during that check and exceeded the
-80% alert threshold derived from the configured request timeout. Results
-include the file relative to the workspace. Raw LSP
+string, including warning feedback when `coq-lsp` returns it. Check results may
+include `long_running_commands` entries with source text and location for
+commands that actually ran during that check and exceeded the 80% alert
+threshold derived from the configured request timeout. Results include the file
+relative to the workspace. Raw LSP
 plumbing such as document URIs, positions, duplicated ranges, versions, empty
 lists, and null fields is omitted from the MCP response. Agent-facing check
 results keep only the first error for each `proof_name` and, after the first
@@ -140,8 +139,7 @@ compiled dependencies are picked up.
 - `models.py` holds internal result models, `TimeoutContext`, and the
   `RenderOptions`-driven render step that applies agent-facing filtering,
   error-only check rendering, message limits, location formatting, timeout
-  formatting, long-running command formatting, check-time formatting, and
-  empty-field pruning.
+  formatting, long-running command formatting, and empty-field pruning.
 
 For `Attempt to save an incomplete proof` diagnostics, the `Qed.` span may only
 contain the save error. The manager asks `proof/goals` with `mode: "Prev"` at

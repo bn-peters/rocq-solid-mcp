@@ -299,7 +299,6 @@ class CheckResult(BaseModel):
     timed_out: bool = False
     restarted: bool = False
     timeout_context: TimeoutContext | None = None
-    checking_time_seconds: float | None = None
     long_running_commands: list[LongRunningCommand] = Field(default_factory=list)
     message: str | None = None
 
@@ -333,7 +332,6 @@ class CheckResult(BaseModel):
         timed_out: bool = False,
         restarted: bool = False,
         timeout_context: TimeoutContext | None = None,
-        checking_time_seconds: float | None = None,
         long_running_commands: list[LongRunningCommand] | None = None,
         message: str | None = None,
     ) -> "CheckResult":
@@ -348,7 +346,6 @@ class CheckResult(BaseModel):
             timed_out=timed_out,
             restarted=restarted,
             timeout_context=timeout_context,
-            checking_time_seconds=checking_time_seconds,
             long_running_commands=long_running_commands or [],
             message=message,
         )
@@ -389,9 +386,6 @@ class CheckResult(BaseModel):
             {
                 "status": self.status,
                 "file": display_file(self.file, self.workspace),
-                "checking_time_seconds": rounded_seconds(
-                    self.checking_time_seconds
-                ),
                 "counts": diagnostic_counts(
                     errors=len(buckets["errors"]),
                     warnings=len(buckets["warnings"]),
@@ -568,12 +562,6 @@ def long_running_commands_from_perf_data(
         if len(commands) >= limit:
             break
     return commands
-
-
-def rounded_seconds(value: float | None) -> float | None:
-    if value is None:
-        return None
-    return round(max(0.0, float(value)), 3)
 
 
 def pruned_dict(value: dict[str, Any]) -> dict[str, Any]:

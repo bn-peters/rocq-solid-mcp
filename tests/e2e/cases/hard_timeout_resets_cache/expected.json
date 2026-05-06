@@ -6,7 +6,6 @@
     "result": {
       "status": "timeout",
       "file": "src/hard_timeout.v",
-      "checking_time_seconds": "$SECONDS",
       "timed_out": true,
       "restarted": true,
       "timeout_context": {
@@ -40,8 +39,7 @@
     "file": "src/hard_timeout.v",
     "result": {
       "status": "complete",
-      "file": "src/hard_timeout.v",
-      "checking_time_seconds": "$SECONDS"
+      "file": "src/hard_timeout.v"
     }
   }
 ]

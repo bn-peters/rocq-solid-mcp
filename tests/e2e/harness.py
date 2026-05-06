@@ -202,11 +202,7 @@ def _scrub_value(value: Any, project_root: Path) -> Any:
         return [_scrub_value(item, project_root) for item in value]
     if isinstance(value, dict):
         return {
-            key: (
-                "$SECONDS"
-                if key == "checking_time_seconds"
-                else _scrub_value(item, project_root)
-            )
+            key: _scrub_value(item, project_root)
             for key, item in value.items()
         }
     return value

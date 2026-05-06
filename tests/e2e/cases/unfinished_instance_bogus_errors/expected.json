@@ -6,7 +6,6 @@
     "result": {
       "status": "complete",
       "file": "src/unfinished_instance.v",
-      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1
       },

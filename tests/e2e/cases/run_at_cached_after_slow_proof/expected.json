@@ -5,8 +5,7 @@
     "file": "src/CacheCommand.v",
     "result": {
       "status": "complete",
-      "file": "src/CacheCommand.v",
-      "checking_time_seconds": "$SECONDS"
+      "file": "src/CacheCommand.v"
     }
   },
   {

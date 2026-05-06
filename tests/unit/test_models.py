@@ -131,7 +131,7 @@ def test_check_result_omits_counts_without_diagnostics(tmp_path: Path) -> None:
     }
 
 
-def test_check_result_renders_checking_time_and_long_running_commands(
+def test_check_result_renders_long_running_commands(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -144,7 +144,6 @@ def test_check_result_renders_checking_time_and_long_running_commands(
         version=1,
         completed=None,
         diagnostics=[],
-        checking_time_seconds=1.23456,
         long_running_commands=[
             LongRunningCommand(
                 range={
@@ -160,7 +159,6 @@ def test_check_result_renders_checking_time_and_long_running_commands(
     assert result.render() == {
         "status": "complete",
         "file": "Demo.v",
-        "checking_time_seconds": 1.235,
         "long_running_commands": [
             {
                 "location": "3:3 to 3:11",

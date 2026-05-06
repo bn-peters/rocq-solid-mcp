@@ -5,8 +5,7 @@
     "file": "src/base.v",
     "result": {
       "status": "complete",
-      "file": "src/base.v",
-      "checking_time_seconds": "$SECONDS"
+      "file": "src/base.v"
     }
   },
   {
@@ -15,8 +14,7 @@
     "file": "src/lang/modes.v",
     "result": {
       "status": "complete",
-      "file": "src/lang/modes.v",
-      "checking_time_seconds": "$SECONDS"
+      "file": "src/lang/modes.v"
     }
   },
   {
@@ -31,7 +29,6 @@
     "result": {
       "status": "complete",
       "file": "src/lang/modes.v",
-      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 2
       },

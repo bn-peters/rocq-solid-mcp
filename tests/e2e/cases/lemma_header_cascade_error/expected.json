@@ -6,7 +6,6 @@
     "result": {
       "status": "complete",
       "file": "src/lemma_header_cascade.v",
-      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1
       },

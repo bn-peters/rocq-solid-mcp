@@ -63,7 +63,6 @@ class RocqLspManager:
         long_running_seconds: float | None = DEFAULT_LONG_RUNNING_SECONDS,
         clear_cache: bool = False,
     ) -> CheckResult:
-        started_at = time.monotonic()
         command_timeout = self._effective_command_timeout(command_timeout_seconds)
         overall_timeout = self._effective_overall_timeout(overall_timeout_seconds)
         long_running_threshold = self._effective_long_running_threshold(
@@ -79,7 +78,6 @@ class RocqLspManager:
                 version=None,
                 completed=None,
                 diagnostics=[],
-                checking_time_seconds=self._elapsed_seconds(started_at),
                 message=f"File does not exist: {path}",
             )
 
@@ -96,7 +94,6 @@ class RocqLspManager:
                 version=None,
                 completed=None,
                 diagnostics=[],
-                checking_time_seconds=self._elapsed_seconds(started_at),
                 message=str(exc),
             )
         try:
@@ -116,9 +113,7 @@ class RocqLspManager:
             )
             if clear_cache and not created:
                 result = result.model_copy(update={"restarted": True})
-            return result.model_copy(
-                update={"checking_time_seconds": self._elapsed_seconds(started_at)}
-            )
+            return result
         finally:
             session.lock.release()
             await self._release_session(session)
@@ -544,10 +539,6 @@ class RocqLspManager:
         if override <= 0:
             return None
         return override
-
-    @staticmethod
-    def _elapsed_seconds(started_at: float) -> float:
-        return max(0.0, time.monotonic() - started_at)
 
     async def _check_notifications(
         self,

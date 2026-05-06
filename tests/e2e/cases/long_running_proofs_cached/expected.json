@@ -6,7 +6,6 @@
     "result": {
       "status": "complete",
       "file": "src/cache.v",
-      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1
       },
@@ -44,8 +43,7 @@
     "file": "src/cache.v",
     "result": {
       "status": "complete",
-      "file": "src/cache.v",
-      "checking_time_seconds": "$SECONDS"
+      "file": "src/cache.v"
     }
   }
 ]

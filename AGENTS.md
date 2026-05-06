@@ -56,14 +56,14 @@ returns compact feedback output for the requested commands string.
   hypotheses are rendered as strings like `H : True` or `n := 0 : nat`.
 - `src/rocq_lsp_mcp/models.py` contains the internal Pydantic result models,
   `TimeoutContext`, and `RenderOptions`. Internal models keep normalized raw
-  ranges, document metadata, diagnostics, proof states, check timing,
-  long-running command data, and timeout state.
+  ranges, document metadata, diagnostics, proof states, long-running command
+  data, and timeout state.
   Their `render(options)` methods are the only place that decides the compact
   MCP output shape: file display, severity labels, location format, proof-state
   inclusion, duplicate proof-error filtering, error-only check rendering,
   global cascade-error suppression, message limits, timeout formatting,
-  check-time formatting, long-running command formatting, and empty-field
-  pruning. Default rendering keeps only the first
+  long-running command formatting, and empty-field pruning. Default rendering
+  keeps only the first
   error for each `proof_name` and, after the first error without a
   `proof_name`, suppresses later errors that also lack a `proof_name`; warnings
   and infos are retained internally but omitted from default check output. This
@@ -147,10 +147,9 @@ diagnostics remain after filtering. When diagnostics are omitted because of
 `message_limit`, the response includes `omitted_counts` and the effective
 `message_limit`.
 
-Check results also include `checking_time_seconds`, rounded to
-milliseconds. When enabled, long-running command reporting observes
-`$/coq/filePerfData`, filters out entries below the alert threshold, filters out
-entries with `info.cache_hit: true`, intersects perf entries with
+When enabled, long-running command reporting observes `$/coq/filePerfData`,
+filters out entries below the alert threshold, filters out entries with
+`info.cache_hit: true`, intersects perf entries with
 `$/coq/executionInformation` ranges from the same document version when those
 execution ranges are available, and renders at most 10
 `long_running_commands`. Each entry contains the source text and a 1-based

@@ -5,8 +5,7 @@
     "file": "src/support.v",
     "result": {
       "status": "complete",
-      "file": "src/support.v",
-      "checking_time_seconds": "$SECONDS"
+      "file": "src/support.v"
     }
   },
   {
@@ -16,7 +15,6 @@
     "result": {
       "status": "complete",
       "file": "src/proof.v",
-      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1
       },
@@ -48,8 +46,7 @@
     "file": "src/proof.v",
     "result": {
       "status": "complete",
-      "file": "src/proof.v",
-      "checking_time_seconds": "$SECONDS"
+      "file": "src/proof.v"
     }
   }
 ]

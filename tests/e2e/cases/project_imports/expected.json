@@ -5,8 +5,7 @@
     "file": "theories/Core.v",
     "result": {
       "status": "complete",
-      "file": "theories/Core.v",
-      "checking_time_seconds": "$SECONDS"
+      "file": "theories/Core.v"
     }
   },
   {
@@ -15,8 +14,7 @@
     "file": "clients/UseCore.v",
     "result": {
       "status": "complete",
-      "file": "clients/UseCore.v",
-      "checking_time_seconds": "$SECONDS"
+      "file": "clients/UseCore.v"
     }
   },
   {
@@ -31,7 +29,6 @@
     "result": {
       "status": "complete",
       "file": "clients/UseCore.v",
-      "checking_time_seconds": "$SECONDS",
       "counts": {
         "errors": 1
       },

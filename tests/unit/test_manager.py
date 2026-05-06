@@ -589,7 +589,7 @@ async def test_check_file_can_disable_timeouts(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_check_file_reports_elapsed_time_and_long_running_commands(
+async def test_check_file_reports_long_running_commands(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -611,7 +611,6 @@ async def test_check_file_reports_elapsed_time_and_long_running_commands(
     result = await manager.check_file(str(source), long_running_seconds=3)
 
     rendered = result.render()
-    assert rendered["checking_time_seconds"] >= 0
     assert rendered["long_running_commands"] == [
         {
             "location": "3:3 to 3:11",
