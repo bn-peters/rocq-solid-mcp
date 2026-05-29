@@ -8,7 +8,9 @@ can find at ~/.codex/sessions/.
 
 The MCP exposes two tools:
 1. `check`, which generates diagnostics for a given file. It can return errors
-   from multiple proofs at once. Proof states are cached. 
+   from multiple proofs at once. Proof states are cached.
+    For dune-based Rocq projects, `check` attempts to
+    rebuild dependencies with dune before asking `coq-lsp` to check the file.
 2. `run_at`, which runs one-off commands at a given position in a file. This is
    intended to be used for queries like `Search` and `Check`, and for one-off
    debugging commands.
@@ -44,7 +46,12 @@ dependencies correctly. To generate them in a `dune`-based project, add
 `(generate_project_file)` to your `coq.theory` stanzas.
 
 The MCP figures out the right switch itself if you have linked with `opam
-switch link . [switch]`. 
+switch link . [switch]`.
+
+The MCP currently always needs a `_CoqProject` or
+`_RocqProject` file with -suitable `-R` and `-Q` entries, even if using
+`dune`. You may find the `(generate_project_file)` option for `dune` to
+generate `_RocqProject` files useful.
 
 You should consider disabling all other Rocq MCPs. If you have slow-to-compile
 files, you should increase the tool timeout; This MCP has its own timeout
@@ -116,7 +123,10 @@ prototype talks to `coq-lsp` directly over stdio JSON-RPC.
 
 Check calls can pass `clear_cache=True` to restart the requested file's
 `coq-lsp` process before checking, so changed project files or externally
-compiled dependencies are picked up.
+compiled dependencies are picked up. For dune-based Rocq projects, the manager
+also attempts a dune dependency build before checking; when that step applies,
+and dune reports build actions, it restarts an existing `coq-lsp` process as if
+`clear_cache=True` had been set.
 
 ## Architecture
 
@@ -162,11 +172,16 @@ its own cached `coq-lsp` process, while the process still starts as
 `opam exec -- coq-lsp` with `cwd` set to the inferred workspace so local opam
 switches select the matching Rocq and `coq-lsp` versions.
 
-If a check call has `clear_cache=True`, the manager kills and replaces the
-cached `coq-lsp` process for that file before sending the file's `didOpen`.
-This refreshes cached `Require` state and picks up changed `_RocqProject` or
-`_CoqProject` files. It does not rebuild dependencies. Recompile edited
-dependencies externally first.
+Before a check call, the manager tries to detect dune-based Rocq projects. If
+`dune describe workspace` succeeds and `dune rocq top --no-build --toplevel
+echo file.v` or `dune coq top --no-build --toplevel echo file.v` identifies the
+file, the manager runs `dune rocq top file.v --toplevel echo --display=short` or
+the corresponding `dune coq top` command to build dependencies. When this dune
+step succeeds and emits short-display build output, an existing cached
+`coq-lsp` process for that file is killed and replaced before checking so
+rebuilt dependencies are loaded. If a check call has `clear_cache=True`, the
+same restart happens even outside dune projects, so changed `_RocqProject` or
+`_CoqProject` files are picked up.
 
 When the soft `coq/getDocument` deadline fires, the response status is
 `timeout` and the rendered result includes `timeout_context`. `checked_until`
@@ -236,6 +251,11 @@ and took at least 80% of the configured request timeout.
 `clear_cache=True` restarts the file's `coq-lsp` process before checking so
 `coq-lsp` refreshes imports from recompiled dependencies and rereads project
 configuration.
+When `ROCQ_LSP_DUNE_BUILD=1`, `rocq_check_file` also attempts the dune
+dependency build described above. If dune is missing, no dune workspace is
+detected, or dune does not know the file as a Rocq/Coq toplevel, checking falls
+back to normal `coq-lsp` behavior. If dune recognizes the file but the build
+fails, the check returns `status: "failed"` with dune's output.
 
 `rocq_run_at` takes a 1-based line and character position in `file`.
 `commands` is one string containing one or more complete Rocq commands ending in
@@ -257,6 +277,10 @@ The tool returns one rendered result for the full commands string.
 - `ROCQ_LSP_MAX_ERRORS` defaults to `1000000`
 - `ROCQ_LSP_WORKSPACE` optionally pins the workspace root
 - `ROCQ_LSP_IDLE_TTL_SECONDS` defaults to `1800`
+- `ROCQ_LSP_DUNE_BUILD` defaults to `1`; set to `0` to disable automatic dune
+  dependency builds before `check`
+- `ROCQ_LSP_DUNE_TIMEOUT` defaults to `60`, is capped at `3600`, and limits each
+  dune command used for dependency-build detection or execution
 
 Idle sessions older than `ROCQ_LSP_IDLE_TTL_SECONDS` are cleaned up by the MCP
 server's background reaper and opportunistically during check calls. Sessions
