@@ -103,8 +103,18 @@ commands that actually ran during check and took at least 80% of
 the configured request timeout. `clear_cache=True` kills and replaces the
 cached `coq-lsp` process for the requested file before sending `didOpen`, so
 the new process rereads `_RocqProject` or `_CoqProject` and reloads imports
-from external `.vo` files. It does not rebuild dependencies; callers must
-recompile edited dependencies first. The `check` CLI subcommand has no flags
+from external `.vo` files. When `ROCQ_LSP_DUNE_BUILD=1`, check calls first try
+to detect dune-based Rocq projects with `dune describe workspace` and
+`dune rocq top --no-build --toplevel echo file.v`, falling back to
+`dune coq top --no-build --toplevel echo file.v`. If dune recognizes the file,
+the manager runs `dune rocq top file.v --toplevel echo --display=short` or the
+corresponding `dune coq top` command to build dependencies. If that step
+emits short-display build output for an already cached file session, the manager
+restarts the session as if `clear_cache=True` had been set so rebuilt
+dependencies are reloaded. Missing `dune`, non-dune projects, files not
+recognized by dune, and successful dune top commands with no build output are
+skipped; a recognized dune file whose dependency build fails returns
+`status: "failed"` with dune output. The `check` CLI subcommand has no flags
 and deliberately ignores the
 MCP-oriented timeout and message-limit defaults: it disables the request
 timeout, per-sentence command timeout, diagnostic truncation, and
@@ -230,6 +240,10 @@ The prototype reads these environment variables:
 - `ROCQ_LSP_MAX_ERRORS`, default `1000000`
 - `ROCQ_LSP_WORKSPACE`, optional workspace override
 - `ROCQ_LSP_IDLE_TTL_SECONDS`, default `1800`
+- `ROCQ_LSP_DUNE_BUILD`, default `1`; set to `0` to disable automatic dune
+  dependency builds before check calls
+- `ROCQ_LSP_DUNE_TIMEOUT`, default `60`, capped at `3600`; limits each dune
+  detection or dependency-build command
 
 The prototype is intentionally not security-hardened. Do not add path sandboxing
 or command restrictions unless the task specifically asks for it.

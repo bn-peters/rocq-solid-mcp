@@ -12,7 +12,7 @@ from rocq_lsp_mcp.config import (
     RocqLspConfig,
     TimeoutPolicy,
 )
-from rocq_lsp_mcp.manager import RocqLspManager
+from rocq_lsp_mcp.manager import DuneBuildResult, RocqLspManager
 from rocq_lsp_mcp.models import RenderOptions
 from rocq_lsp_mcp.notifications import NotificationStore
 from rocq_lsp_mcp.rocq_client import (
@@ -216,6 +216,7 @@ class FakeManager(RocqLspManager):
         workspace: Path | None,
         idle_ttl_seconds: float = 1800,
         command_seconds: float | None = None,
+        dune_build_result: DuneBuildResult | None = None,
     ) -> None:
         config = RocqLspConfig(
             binary="coq-lsp",
@@ -231,6 +232,8 @@ class FakeManager(RocqLspManager):
         super().__init__(config=config)
         self.client = client
         self.notifications = notifications
+        self.dune_build_result = dune_build_result
+        self.dune_build_paths: list[Path] = []
 
     async def _create_session(self, workspace: Path) -> RocqLspSession:
         return FakeSession(
@@ -239,6 +242,34 @@ class FakeManager(RocqLspManager):
             client=self.client,
             notifications=self.notifications,
         )
+
+    async def _maybe_build_dune_dependencies(self, path: Path) -> DuneBuildResult:
+        self.dune_build_paths.append(path)
+        return self.dune_build_result or DuneBuildResult()
+
+
+class FakeDuneCommandManager(FakeManager):
+    def __init__(
+        self,
+        client: FakeClient,
+        notifications: SpyNotificationStore,
+        workspace: Path | None,
+        results: list[tuple[int, str, str] | None],
+    ) -> None:
+        super().__init__(client, notifications, workspace)
+        self.results = results
+        self.dune_commands: list[tuple[Path, tuple[str, ...]]] = []
+
+    async def _maybe_build_dune_dependencies(self, path: Path) -> DuneBuildResult:
+        return await RocqLspManager._maybe_build_dune_dependencies(self, path)
+
+    async def _run_dune_command(
+        self,
+        cwd: Path,
+        command: tuple[str, ...],
+    ) -> tuple[int, str, str] | None:
+        self.dune_commands.append((cwd, command))
+        return self.results.pop(0)
 
 
 class UnavailableManager(RocqLspManager):
@@ -444,6 +475,280 @@ async def test_check_file_clear_cache_does_not_restart_new_session(
     assert client.killed is False
     assert client.opened == [(source.resolve(), 1)]
     assert client.changed == []
+
+
+@pytest.mark.asyncio
+async def test_check_file_dune_build_restarts_existing_process_before_open(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    manager = FakeManager(
+        client,
+        notifications,
+        tmp_path,
+        dune_build_result=DuneBuildResult(applied=True),
+    )
+
+    first = await manager.check_file(str(source))
+    second = await manager.check_file(str(source))
+
+    assert first.status == "complete"
+    assert first.restarted is False
+    assert second.status == "complete"
+    assert second.restarted is True
+    assert manager.dune_build_paths == [source.resolve(), source.resolve()]
+    assert client.pending_cleared is True
+    assert client.killed is True
+    assert client.opened == [(source.resolve(), 1), (source.resolve(), 1)]
+    assert client.changed == []
+    assert client.events == [
+        "opened:1",
+        "get_document:1",
+        "opened:1",
+        "get_document:1",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_check_file_dune_build_does_not_restart_new_session(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    manager = FakeManager(
+        client,
+        notifications,
+        tmp_path,
+        dune_build_result=DuneBuildResult(applied=True),
+    )
+
+    result = await manager.check_file(str(source))
+
+    assert result.status == "complete"
+    assert result.restarted is False
+    assert client.pending_cleared is False
+    assert client.killed is False
+    assert client.opened == [(source.resolve(), 1)]
+    assert client.changed == []
+
+
+@pytest.mark.asyncio
+async def test_check_file_clear_cache_and_dune_build_restart_once(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    manager = FakeManager(
+        client,
+        notifications,
+        tmp_path,
+        dune_build_result=DuneBuildResult(applied=True),
+    )
+
+    await manager.check_file(str(source))
+    result = await manager.check_file(str(source), clear_cache=True)
+
+    assert result.status == "complete"
+    assert result.restarted is True
+    assert client.opened == [(source.resolve(), 1), (source.resolve(), 1)]
+    assert client.changed == []
+
+
+@pytest.mark.asyncio
+async def test_check_file_dune_build_failure_does_not_open_document(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    manager = FakeManager(
+        client,
+        notifications,
+        tmp_path,
+        dune_build_result=DuneBuildResult(message="dune failed"),
+    )
+
+    result = await manager.check_file(str(source))
+
+    assert result.status == "failed"
+    assert result.message == "dune failed"
+    assert result.workspace == str(tmp_path)
+    assert client.opened == []
+    assert client.changed == []
+    assert client.get_document_requests == []
+
+
+@pytest.mark.asyncio
+async def test_check_file_dune_build_restarts_only_when_build_output_exists(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    manager = FakeDuneCommandManager(
+        client,
+        notifications,
+        tmp_path,
+        results=[
+            (0, "workspace", ""),
+            (0, "-topfile Demo.v", ""),
+            (0, "-topfile Demo.v", ""),
+            (0, "-topfile Demo.v", ""),
+            (0, "-topfile Demo.v", "        rocq theories/Base.{glob,vo}\n"),
+        ],
+    )
+
+    first = await manager.check_file(str(source))
+    second = await manager.check_file(str(source))
+    third = await manager.check_file(str(source))
+
+    assert first.status == "complete"
+    assert first.restarted is False
+    assert second.status == "complete"
+    assert second.restarted is False
+    assert third.status == "complete"
+    assert third.restarted is True
+    assert client.opened == [(source.resolve(), 1), (source.resolve(), 1)]
+    assert client.changed == [(source.resolve(), 2)]
+    assert manager.dune_commands == [
+        (tmp_path, ("dune", "describe", "workspace")),
+        (
+            tmp_path,
+            (
+                "dune",
+                "rocq",
+                "top",
+                "--no-build",
+                "--toplevel",
+                "echo",
+                "Demo.v",
+            ),
+        ),
+        (
+            tmp_path,
+            (
+                "dune",
+                "rocq",
+                "top",
+                "Demo.v",
+                "--toplevel",
+                "echo",
+                "--display=short",
+            ),
+        ),
+        (
+            tmp_path,
+            (
+                "dune",
+                "rocq",
+                "top",
+                "Demo.v",
+                "--toplevel",
+                "echo",
+                "--display=short",
+            ),
+        ),
+        (
+            tmp_path,
+            (
+                "dune",
+                "rocq",
+                "top",
+                "Demo.v",
+                "--toplevel",
+                "echo",
+                "--display=short",
+            ),
+        ),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_check_file_dune_detection_caches_coq_fallback(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    manager = FakeDuneCommandManager(
+        client,
+        notifications,
+        tmp_path,
+        results=[
+            (0, "workspace", ""),
+            (1, "", "unknown command rocq"),
+            (0, "-topfile Demo.v", ""),
+            (0, "-topfile Demo.v", ""),
+            (0, "-topfile Demo.v", ""),
+        ],
+    )
+
+    first = await manager.check_file(str(source))
+    second = await manager.check_file(str(source))
+
+    assert first.status == "complete"
+    assert second.status == "complete"
+    assert manager.dune_commands == [
+        (tmp_path, ("dune", "describe", "workspace")),
+        (
+            tmp_path,
+            (
+                "dune",
+                "rocq",
+                "top",
+                "--no-build",
+                "--toplevel",
+                "echo",
+                "Demo.v",
+            ),
+        ),
+        (
+            tmp_path,
+            (
+                "dune",
+                "coq",
+                "top",
+                "--no-build",
+                "--toplevel",
+                "echo",
+                "Demo.v",
+            ),
+        ),
+        (
+            tmp_path,
+            (
+                "dune",
+                "coq",
+                "top",
+                "Demo.v",
+                "--toplevel",
+                "echo",
+                "--display=short",
+            ),
+        ),
+        (
+            tmp_path,
+            (
+                "dune",
+                "coq",
+                "top",
+                "Demo.v",
+                "--toplevel",
+                "echo",
+                "--display=short",
+            ),
+        ),
+    ]
 
 
 @pytest.mark.asyncio

@@ -27,6 +27,8 @@ class RocqLspConfig:
     message_limit: int = DEFAULT_MESSAGE_LIMIT
     use_opam: bool = True
     idle_ttl_seconds: float = 1800.0
+    dune_build: bool = True
+    dune_timeout_seconds: float = DEFAULT_OVERALL_TIMEOUT_SECONDS
 
 
 def _float_env(name: str, default: str) -> float:
@@ -85,6 +87,10 @@ def load_config() -> RocqLspConfig:
         ),
         use_opam=_bool_env("ROCQ_LSP_USE_OPAM", "1"),
         idle_ttl_seconds=_float_env("ROCQ_LSP_IDLE_TTL_SECONDS", "1800"),
+        dune_build=_bool_env("ROCQ_LSP_DUNE_BUILD", "1"),
+        dune_timeout_seconds=bounded_overall_timeout_seconds(
+            _float_env("ROCQ_LSP_DUNE_TIMEOUT", str(DEFAULT_OVERALL_TIMEOUT_SECONDS))
+        ),
     )
 
 

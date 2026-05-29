@@ -4,8 +4,9 @@ import asyncio
 import json
 import time
 from contextlib import suppress
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from .config import RocqLspConfig, bounded_overall_timeout_seconds, load_config
 from .models import (
@@ -26,6 +27,21 @@ from .rocq_client import (
 from .session import RocqLspSession
 
 
+@dataclass(frozen=True)
+class DuneBuildResult:
+    applied: bool = False
+    message: str | None = None
+
+    @property
+    def failed(self) -> bool:
+        return self.message is not None
+
+
+@dataclass(frozen=True)
+class DuneDetection:
+    toplevel: Literal["rocq", "coq"] | None = None
+
+
 class RocqLspManager:
     def __init__(self, config: RocqLspConfig | None = None) -> None:
         self.config = config or load_config()
@@ -33,6 +49,7 @@ class RocqLspManager:
         # starts coq-lsp with the inferred workspace as cwd/root.
         self._sessions: dict[Path, RocqLspSession] = {}
         self._sessions_lock = asyncio.Lock()
+        self._dune_detection_cache: dict[Path, DuneDetection] = {}
         self._cleanup_task: asyncio.Task[None] | None = None
 
     def start_idle_cleanup(self) -> None:
@@ -83,6 +100,18 @@ class RocqLspManager:
 
         workspace = self._infer_workspace(path)
         session_key = self._session_key(path)
+        dune_build = await self._maybe_build_dune_dependencies(path)
+        if dune_build.failed:
+            return CheckResult.from_diagnostics(
+                status="failed",
+                file=str(path),
+                uri=path.as_uri(),
+                workspace=str(workspace),
+                version=None,
+                completed=None,
+                diagnostics=[],
+                message=dune_build.message,
+            )
         try:
             session, created = await self._checkout_session(session_key, workspace)
         except RocqLspUnavailableError as exc:
@@ -97,12 +126,15 @@ class RocqLspManager:
                 message=str(exc),
             )
         try:
-            if clear_cache and not created:
+            should_restart = clear_cache or dune_build.applied
+            restarted = False
+            if should_restart and not created:
                 session = await self._restart_checked_out_session(
                     session_key,
                     workspace,
                     session,
                 )
+                restarted = True
             result = await self._check_with_session(
                 session,
                 session_key,
@@ -111,7 +143,7 @@ class RocqLspManager:
                 overall_timeout,
                 long_running_threshold,
             )
-            if clear_cache and not created:
+            if restarted:
                 result = result.model_copy(update={"restarted": True})
             return result
         finally:
@@ -606,6 +638,112 @@ class RocqLspManager:
         session = RocqLspSession(workspace=workspace, config=self.config)
         await session.start()
         return session
+
+    async def _maybe_build_dune_dependencies(self, path: Path) -> DuneBuildResult:
+        if not self.config.dune_build:
+            return DuneBuildResult()
+        detection = await self._detect_dune(path)
+        if detection.toplevel is None:
+            return DuneBuildResult()
+
+        command = (
+            "dune",
+            detection.toplevel,
+            "top",
+            path.name,
+            "--toplevel",
+            "echo",
+            "--display=short",
+        )
+        result = await self._run_dune_command(path.parent, command)
+        if result is None:
+            return DuneBuildResult()
+        returncode, stdout, stderr = result
+        if returncode == 0:
+            # The echo toplevel always prints arguments to stdout. With
+            # --display=short, dune reports actual build actions on stderr.
+            return DuneBuildResult(applied=bool(stderr.strip()))
+        output = "\n".join(part for part in (stderr.strip(), stdout.strip()) if part)
+        return DuneBuildResult(
+            message=output or f"dune dependency build failed for {path.name}"
+        )
+
+    async def _detect_dune(self, path: Path) -> DuneDetection:
+        cached = self._dune_detection_cache.get(path)
+        if cached is not None:
+            return cached
+
+        if not await self._dune_command_succeeds(
+            path.parent,
+            ("dune", "describe", "workspace"),
+        ):
+            detection = DuneDetection()
+            self._dune_detection_cache[path] = detection
+            return detection
+
+        toplevel = await self._dune_toplevel(path)
+        detection = DuneDetection(toplevel=toplevel)
+        self._dune_detection_cache[path] = detection
+        return detection
+
+    async def _dune_toplevel(self, path: Path) -> str | None:
+        for toplevel in ("rocq", "coq"):
+            command = (
+                "dune",
+                toplevel,
+                "top",
+                "--no-build",
+                "--toplevel",
+                "echo",
+                path.name,
+            )
+            if await self._dune_command_succeeds(path.parent, command):
+                return toplevel
+        return None
+
+    async def _dune_command_succeeds(
+        self,
+        cwd: Path,
+        command: tuple[str, ...],
+    ) -> bool:
+        result = await self._run_dune_command(cwd, command)
+        return result is not None and result[0] == 0
+
+    async def _run_dune_command(
+        self,
+        cwd: Path,
+        command: tuple[str, ...],
+    ) -> tuple[int, str, str] | None:
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                cwd=cwd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except FileNotFoundError:
+            return None
+
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(),
+                timeout=self.config.dune_timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            process.kill()
+            with suppress(ProcessLookupError):
+                await process.wait()
+            return (
+                1,
+                "",
+                f"dune dependency build timed out after "
+                f"{self.config.dune_timeout_seconds:g} seconds",
+            )
+        return (
+            process.returncode or 0,
+            stdout.decode("utf-8", errors="replace"),
+            stderr.decode("utf-8", errors="replace"),
+        )
 
     async def _release_session(self, session: RocqLspSession) -> None:
         async with self._sessions_lock:

@@ -33,6 +33,8 @@ def test_load_config_reads_opam_and_idle_ttl(monkeypatch) -> None:
         "ROCQ_LSP_MESSAGE_LIMIT",
         "ROCQ_LSP_MAX_ERRORS",
         "ROCQ_LSP_WORKSPACE",
+        "ROCQ_LSP_DUNE_BUILD",
+        "ROCQ_LSP_DUNE_TIMEOUT",
     ):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("ROCQ_LSP_USE_OPAM", "0")
@@ -44,6 +46,7 @@ def test_load_config_reads_opam_and_idle_ttl(monkeypatch) -> None:
     assert config.idle_ttl_seconds == 12.5
     assert config.timeout_policy.command_seconds == DEFAULT_COMMAND_TIMEOUT_SECONDS
     assert config.message_limit == DEFAULT_MESSAGE_LIMIT
+    assert config.dune_build is True
 
 
 def test_load_config_reads_command_timeout(monkeypatch) -> None:
@@ -76,6 +79,16 @@ def test_load_config_disables_non_positive_command_timeout(monkeypatch) -> None:
     config = load_config()
 
     assert config.timeout_policy.command_seconds is None
+
+
+def test_load_config_reads_dune_build_settings(monkeypatch) -> None:
+    monkeypatch.setenv("ROCQ_LSP_DUNE_BUILD", "0")
+    monkeypatch.setenv("ROCQ_LSP_DUNE_TIMEOUT", "2.5")
+
+    config = load_config()
+
+    assert config.dune_build is False
+    assert config.dune_timeout_seconds == 2.5
 
 
 def test_rocq_lsp_settings_enable_execution_and_performance_information() -> None:

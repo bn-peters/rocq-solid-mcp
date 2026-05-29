@@ -60,9 +60,10 @@ async def rocq_check_file(
     errors as well. The list of errors may be truncated. The tool also reports
     Rocq sentences running for long time.
 
-    This tool is efficient due to per-file caching. It creates no build artifacts,
-    and does not recompile upstream dependencies itself. Use `clear_cache =
-    true` when upstream dependencies or project files have changed.
+    This tool is efficient due to per-file caching. For dune-based Rocq projects,
+    it attempts to rebuild dependencies before checking and restarts the cached
+    coq-lsp process when that applies. Use `clear_cache = true` when project
+    files have changed or dependencies were rebuilt outside dune.
 
     Timeouts are handled gracefully, and partial diagnostics are returned when
     possible. Repeated checks after timeouts use the cache.
