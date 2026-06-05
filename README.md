@@ -193,6 +193,10 @@ are ignored so an up-to-date build does not restart the session on every call.
 If a check call has `clear_cache=True`, the
 same restart happens even outside dune projects, so changed `_RocqProject` or
 `_CoqProject` files are picked up.
+Dune detection and dependency-build subprocesses are serialized within one MCP
+server process, so parallel `rocq_check_file` calls from one client do not race
+each other for dune's build directory lock. Separate MCP server processes or
+manual dune invocations are still outside this in-process lock.
 
 When the soft `coq/getDocument` deadline fires, the response status is
 `timeout` and the rendered result includes `timeout_context`. `checked_until`

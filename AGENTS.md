@@ -124,7 +124,11 @@ check and an edit-then-recheck from restarting the session and discarding the
 incremental cache. Missing `dune`, non-dune projects, files
 not recognized by dune, and successful dune top commands with no build actions
 are skipped; a recognized dune file whose dependency build fails returns
-`status: "failed"` with dune output. The `check` CLI subcommand has no flags
+`status: "failed"` with dune output. All dune detection and dependency-build
+commands are serialized inside one MCP server process so parallel
+`rocq_check_file` calls from one client do not race for dune's build directory
+lock; separate MCP server processes and manual dune invocations are not covered
+by this in-process lock. The `check` CLI subcommand has no flags
 and deliberately ignores the
 MCP-oriented timeout and message-limit defaults: it disables the request
 timeout, per-sentence command timeout, diagnostic truncation, and

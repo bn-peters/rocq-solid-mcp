@@ -81,6 +81,7 @@ class RocqLspManager:
         # starts coq-lsp with the inferred workspace as cwd/root.
         self._sessions: dict[Path, RocqLspSession] = {}
         self._sessions_lock = asyncio.Lock()
+        self._dune_lock = asyncio.Lock()
         self._dune_detection_cache: dict[Path, DuneDetection] = {}
         self._cleanup_task: asyncio.Task[None] | None = None
 
@@ -770,6 +771,14 @@ class RocqLspManager:
         return result is not None and result[0] == 0
 
     async def _run_dune_command(
+        self,
+        cwd: Path,
+        command: tuple[str, ...],
+    ) -> tuple[int, str, str] | None:
+        async with self._dune_lock:
+            return await self._run_dune_command_unlocked(cwd, command)
+
+    async def _run_dune_command_unlocked(
         self,
         cwd: Path,
         command: tuple[str, ...],
