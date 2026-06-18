@@ -55,13 +55,19 @@ class Diagnostic(BaseModel):
     severity: int | None = None
     code: str | int | None = None
     source: str | None = None
+    sentence: str | None = None
     data: Any | None = None
     proof_name: str | None = None
     proof_state: Any | None = None
     raw: dict[str, Any] = Field(default_factory=dict)
 
     @classmethod
-    def from_lsp(cls, diagnostic: Any, proof_state: Any | None = None) -> "Diagnostic":
+    def from_lsp(
+        cls,
+        diagnostic: Any,
+        proof_state: Any | None = None,
+        sentence: str | None = None,
+    ) -> "Diagnostic":
         raw = lsp_to_jsonable(diagnostic)
         data = raw.get("data")
         proof_name = data.get("proofName") if isinstance(data, dict) else None
@@ -73,6 +79,7 @@ class Diagnostic(BaseModel):
             severity=raw.get("severity"),
             code=raw.get("code"),
             source=raw.get("source"),
+            sentence=sentence if sentence else None,
             data=data,
             proof_name=proof_name if isinstance(proof_name, str) else None,
             proof_state=proof_state if not is_empty_value(proof_state) else None,
@@ -88,6 +95,7 @@ class Diagnostic(BaseModel):
                 "location": location_string(self.range, options.location_format),
                 "code": self.code,
                 "source": self.source,
+                "sentence": self.sentence,
                 "proof_name": self.proof_name,
                 "proof_state": (
                     self.proof_state if options.include_proof_state else None
@@ -549,7 +557,7 @@ def long_running_commands_from_perf_data(
             continue
         if float(time_seconds) < threshold_seconds:
             continue
-        text = _source_text_for_range(content, range_)
+        text = source_text_for_range(content, range_)
         if not text:
             continue
         commands.append(
@@ -660,7 +668,7 @@ def _source_preview_for_range(
     return _next_unchecked_preview(content, range_start(range_))
 
 
-def _source_text_for_range(content: str, range_: dict[str, Any]) -> str | None:
+def source_text_for_range(content: str, range_: dict[str, Any]) -> str | None:
     start = range_start(range_)
     end = range_end(range_)
     if start is None or end is None:

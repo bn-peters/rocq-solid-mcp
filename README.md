@@ -84,8 +84,11 @@ feel like deleting it, but I'm not convinced it's useful :)**
 Prototype MCP server that checks Rocq files and runs one-off Rocq commands
 through persistent file-scoped `coq-lsp` sessions. Check diagnostics report
 errors only and expose a human-facing `level`, `location`, message, optional
-`proof_name`, and compact proof-state context when available. Recompile the
-file with Rocq, for example `rocq c path/to/file.v`, when warnings are needed.
+`sentence`, optional `proof_name`, and compact proof-state context when
+available. The `sentence` field is sliced from `coq-lsp`'s sentence range when
+available, so tactic errors include the tactic sentence such as
+`idtac "3"; fail.`. Recompile the file with Rocq, for example
+`rocq c path/to/file.v`, when warnings are needed.
 `run_at` results expose compact feedback output for the provided commands
 string, including warning feedback when `coq-lsp` returns it. Check results may
 include `long_running_commands` entries with source text and location for
@@ -134,8 +137,9 @@ compiled dependencies are picked up.
 - `notifications.py` stores diagnostics, latest file-progress notifications,
   file performance data, and sentence execution notifications published by
   `coq-lsp`.
-- `pipeline.py` converts raw diagnostics plus proof-state data into internal
-  `Diagnostic` models without deciding what the MCP response should include.
+- `pipeline.py` converts raw diagnostics plus source sentence and proof-state
+  data into internal `Diagnostic` models without deciding what the MCP response
+  should include.
 - `models.py` holds internal result models, `TimeoutContext`, and the
   `RenderOptions`-driven render step that applies agent-facing filtering,
   error-only check rendering, message limits, location formatting, timeout

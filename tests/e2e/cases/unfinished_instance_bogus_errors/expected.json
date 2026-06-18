@@ -14,6 +14,7 @@
           "level": "error",
           "message": " (in proof token_world_le_preorder): Attempt to save an incomplete proof\n(there are remaining open goals).",
           "location": "8:1 to 8:5",
+          "sentence": "Qed.",
           "proof_name": "token_world_le_preorder",
           "proof_state": {
             "goals": [

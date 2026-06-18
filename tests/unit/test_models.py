@@ -26,12 +26,14 @@ def test_diagnostic_renders_agent_facing_fields() -> None:
             "data": {"proofName": "foo"},
         },
         proof_state={"goals": [{"conclusion": "True"}]},
+        sentence='idtac "3"; fail.',
     )
 
     assert diagnostic.render() == {
         "level": "error",
         "message": "Tactic failure.",
         "location": "1:3 to 1:8",
+        "sentence": 'idtac "3"; fail.',
         "proof_name": "foo",
         "proof_state": {"goals": [{"conclusion": "True"}]},
     }

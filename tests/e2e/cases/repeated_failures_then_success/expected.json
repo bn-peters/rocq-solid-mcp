@@ -14,6 +14,7 @@
           "level": "error",
           "message": "Tactic failure.",
           "location": "3:3 to 3:8",
+          "sentence": "fail.",
           "proof_name": "foo",
           "proof_state": {
             "goals": [

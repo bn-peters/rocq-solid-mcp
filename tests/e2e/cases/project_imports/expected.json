@@ -36,7 +36,8 @@
         {
           "level": "error",
           "message": "The reference missing_project_import_name was not found in the current\nenvironment.",
-          "location": "8:7 to 8:34"
+          "location": "8:7 to 8:34",
+          "sentence": "Check missing_project_import_name."
         }
       ]
     }

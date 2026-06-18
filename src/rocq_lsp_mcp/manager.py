@@ -252,6 +252,7 @@ class RocqLspManager:
             diagnostics = build_diagnostics(
                 raw_diagnostics,
                 completed_doc,
+                content=content,
                 supplemental_proof_states=supplemental_proof_states,
             )
             long_running_commands = (
@@ -304,7 +305,7 @@ class RocqLspManager:
             raw_diagnostics = await session.notifications.wait_for_diagnostics(
                 uri, version
             )
-            diagnostics = build_diagnostics(raw_diagnostics, None)
+            diagnostics = build_diagnostics(raw_diagnostics, None, content=content)
             timeout_context = TimeoutContext.from_manager_state(
                 content=content,
                 document=None,
@@ -335,7 +336,7 @@ class RocqLspManager:
             raw_diagnostics = await session.notifications.wait_for_diagnostics(
                 uri, version
             )
-            diagnostics = build_diagnostics(raw_diagnostics, None)
+            diagnostics = build_diagnostics(raw_diagnostics, None, content=content)
             return CheckResult.from_diagnostics(
                 status="failed",
                 file=str(path),
@@ -350,7 +351,7 @@ class RocqLspManager:
             raw_diagnostics = await session.notifications.wait_for_diagnostics(
                 uri, version
             )
-            diagnostics = build_diagnostics(raw_diagnostics, None)
+            diagnostics = build_diagnostics(raw_diagnostics, None, content=content)
             return CheckResult.from_diagnostics(
                 status="failed",
                 file=str(path),

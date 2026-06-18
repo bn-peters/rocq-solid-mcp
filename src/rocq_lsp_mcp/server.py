@@ -54,7 +54,8 @@ async def rocq_check_file(
     """Check a Rocq file and report diagnostics.
 
     Use this to check files for errors. (To find warnings, recompile the file
-    manually.) Error diagnostics include the proof state at error positions.
+    manually.) Error diagnostics include the source sentence and the proof state
+    at error positions.
 
     The first error in a file is always reported, and many forms of later
     errors as well. The list of errors may be truncated. The tool also reports

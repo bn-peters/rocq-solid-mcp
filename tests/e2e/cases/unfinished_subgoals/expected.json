@@ -14,6 +14,7 @@
           "level": "error",
           "message": "[Focus] Wrong bullet -: Current bullet - is not finished.",
           "location": "6:3 to 6:4",
+          "sentence": "- easy.",
           "proof_name": "foo",
           "proof_state": {
             "goals": [
@@ -45,6 +46,7 @@
           "level": "error",
           "message": " (in proof foo): Attempt to save an incomplete proof\n(there are remaining open goals).",
           "location": "7:1 to 7:5",
+          "sentence": "Qed.",
           "proof_name": "foo",
           "proof_state": {
             "goals": [
@@ -76,6 +78,7 @@
           "level": "error",
           "message": " (in proof foo): Attempt to save an incomplete proof\n(there are remaining open goals).",
           "location": "7:1 to 7:5",
+          "sentence": "Qed.",
           "proof_name": "foo",
           "proof_state": {
             "goals": [

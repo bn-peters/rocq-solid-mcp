@@ -4,9 +4,10 @@ It is the duty of the agent to keep AGENTS.md and README.md up to date.
 
 This package is a Python MCP prototype for checking Rocq files and running
 one-off Rocq commands through persistent file-scoped `coq-lsp` sessions.
-Checking returns compact structured diagnostics and, when available,
-proof-state context for the sentence that produced an error. `run_at` execution
-returns compact feedback output for the requested commands string.
+Checking returns compact structured diagnostics and, when available, the source
+sentence plus proof-state context for the sentence that produced an error.
+`run_at` execution returns compact feedback output for the requested commands
+string.
 
 ## Package Layout
 
@@ -41,9 +42,10 @@ returns compact feedback output for the requested commands string.
   lets callers wait briefly for diagnostics, performance data, or execution
   changes for a requested document version.
 - `src/rocq_lsp_mcp/pipeline.py` normalizes raw diagnostics into compact
-  internal `Diagnostic` models. It attaches proof states by matching
-  sentence ranges, merges supplemental `proof/goals` results for incomplete
-  proof saves, and leaves response filtering and truncation to the render step.
+  internal `Diagnostic` models. It attaches the source sentence and proof
+  states by matching sentence ranges, merges supplemental `proof/goals` results
+  for incomplete proof saves, and leaves response filtering and truncation to
+  the render step.
 - `src/rocq_lsp_mcp/rocq_client.py` is the manual stdio JSON-RPC client for
   `coq-lsp`. It handles `Content-Length` framing, `initialize`, server
   requests, `coq/getDocument`, `proof/goals`, `petanque/run_at_point`,
@@ -56,8 +58,8 @@ returns compact feedback output for the requested commands string.
   hypotheses are rendered as strings like `H : True` or `n := 0 : nat`.
 - `src/rocq_lsp_mcp/models.py` contains the internal Pydantic result models,
   `TimeoutContext`, and `RenderOptions`. Internal models keep normalized raw
-  ranges, document metadata, diagnostics, proof states, long-running command
-  data, and timeout state.
+  ranges, document metadata, diagnostics, source sentences, proof states,
+  long-running command data, and timeout state.
   Their `render(options)` methods are the only place that decides the compact
   MCP output shape: file display, severity labels, location format, proof-state
   inclusion, duplicate proof-error filtering, error-only check rendering,
@@ -136,16 +138,17 @@ Checking is driven by `coq/getDocument` with `goals="Str"`. This asks
 `coq-lsp` for the checked document and proof-state data around spans. The
 `NotificationStore` collects diagnostics from
 `textDocument/publishDiagnostics`. `pipeline.py` normalizes those diagnostics
-and attaches proof states without applying agent-facing filtering. The
+and attaches source sentences plus proof states without applying agent-facing
+filtering. The
 `CheckResult.render(RenderOptions(...))` step converts raw LSP ranges to
-1-based locations, severity numbers to `error`, `warning`, or `info`, removes
-empty fields, filters duplicate proof errors by default, omits non-error
-diagnostics from default check output, suppresses later global errors after the
-first error without `proof_name`, and applies diagnostic limits. Counts include
-only nonzero diagnostic buckets after filtering and are omitted when no
-diagnostics remain after filtering. When diagnostics are omitted because of
-`message_limit`, the response includes `omitted_counts` and the effective
-`message_limit`.
+1-based locations, includes the normalized source sentence when available,
+converts severity numbers to `error`, `warning`, or `info`, removes empty
+fields, filters duplicate proof errors by default, omits non-error diagnostics
+from default check output, suppresses later global errors after the first error
+without `proof_name`, and applies diagnostic limits. Counts include only
+nonzero diagnostic buckets after filtering and are omitted when no diagnostics
+remain after filtering. When diagnostics are omitted because of `message_limit`,
+the response includes `omitted_counts` and the effective `message_limit`.
 
 When enabled, long-running command reporting observes `$/coq/filePerfData`,
 filters out entries below the alert threshold, filters out entries with

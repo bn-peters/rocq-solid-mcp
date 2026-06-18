@@ -37,6 +37,7 @@
           "level": "error",
           "message": "Unable to unify \"1\" with \"Modes.mode_rank Modes.Shared\".",
           "location": "26:8 to 26:19",
+          "sentence": "reflexivity.",
           "proof_name": "shared_rank_wrong",
           "proof_state": {
             "goals": [
@@ -50,6 +51,7 @@
           "level": "error",
           "message": "Unable to unify \"true\" with \"Modes.can_promote Modes.Capsule\".",
           "location": "29:8 to 29:19",
+          "sentence": "reflexivity.",
           "proof_name": "capsule_can_promote_wrong",
           "proof_state": {
             "goals": [
