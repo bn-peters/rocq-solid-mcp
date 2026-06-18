@@ -3,26 +3,34 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .models import Diagnostic, is_empty_value
+from .models import Diagnostic, is_empty_value, source_text_for_range
 from .pretty import normalize_proof_state
 
 
 def build_diagnostics(
     raw: list[dict[str, Any]],
     document: dict[str, Any] | None,
+    *,
+    content: str | None = None,
     supplemental_proof_states: dict[str, Any] | None = None,
 ) -> list[Diagnostic]:
     proof_states = _proof_states_by_range(document)
     _merge_supplemental_proof_states(proof_states, supplemental_proof_states)
-    return [
-        Diagnostic.from_lsp(
-            diagnostic,
-            proof_state=proof_states.get(
-                _range_key(_diagnostic_sentence_range(diagnostic))
-            ),
+    diagnostics: list[Diagnostic] = []
+    for diagnostic in raw:
+        sentence_range = _diagnostic_sentence_range(diagnostic)
+        diagnostics.append(
+            Diagnostic.from_lsp(
+                diagnostic,
+                proof_state=proof_states.get(_range_key(sentence_range)),
+                sentence=(
+                    source_text_for_range(content, sentence_range)
+                    if content is not None
+                    else None
+                ),
+            )
         )
-        for diagnostic in raw
-    ]
+    return diagnostics
 
 
 def _proof_states_by_range(document: dict[str, Any] | None) -> dict[str, Any]:

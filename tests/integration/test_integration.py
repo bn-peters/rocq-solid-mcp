@@ -263,6 +263,7 @@ def _expected_tactic_failure() -> dict[str, object]:
         "level": "error",
         "message": "Tactic failure.",
         "location": "1:20 to 1:25",
+        "sentence": "fail.",
         "proof_name": "Unnamed_thm",
         "proof_state": {"goals": [{"conclusion": "0 = 0"}]},
     }

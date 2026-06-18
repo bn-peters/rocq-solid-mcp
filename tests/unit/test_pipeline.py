@@ -7,7 +7,7 @@ from rocq_lsp_mcp.pipeline import build_diagnostics
 
 
 def test_build_diagnostics_attaches_proof_state_by_sentence_range() -> None:
-    range_ = _range(0, 5)
+    range_ = _range(11, 28)
     diagnostics = [
         {
             "range": _range(2, 3),
@@ -35,16 +35,21 @@ def test_build_diagnostics_attaches_proof_state_by_sentence_range() -> None:
         ]
     }
 
-    result = build_diagnostics(diagnostics, document)
+    result = build_diagnostics(
+        diagnostics,
+        document,
+        content='Goal True. idtac "3"; fail. Qed.',
+    )
 
     assert result[0].proof_name == "foo"
+    assert result[0].sentence == 'idtac "3"; fail.'
     assert result[0].proof_state == {
         "goals": [{"hypotheses": ["H : True"], "conclusion": "True"}]
     }
 
 
 def test_build_diagnostics_falls_back_to_diagnostic_range() -> None:
-    range_ = _range(4, 8)
+    range_ = _range(4, 9)
     diagnostics = [{"range": range_, "message": "bad", "severity": 1}]
     document = {
         "spans": [
@@ -59,8 +64,13 @@ def test_build_diagnostics_falls_back_to_diagnostic_range() -> None:
         ]
     }
 
-    result = build_diagnostics(diagnostics, document)
+    result = build_diagnostics(
+        diagnostics,
+        document,
+        content='    exact I.',
+    )
 
+    assert result[0].sentence == "exact"
     assert result[0].proof_state == {"goals": [{"conclusion": "Foo"}]}
 
 

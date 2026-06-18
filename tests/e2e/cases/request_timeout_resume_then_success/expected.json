@@ -13,7 +13,8 @@
         {
           "level": "error",
           "message": "The term \"I\" has type \"True\" while it is expected to have type \"False\".",
-          "location": "10:27 to 10:28"
+          "location": "10:27 to 10:28",
+          "sentence": "Definition bad : False := I."
         }
       ],
       "timed_out": true,
@@ -45,7 +46,8 @@
         {
           "level": "error",
           "message": "The term \"I\" has type \"True\" while it is expected to have type \"False\".",
-          "location": "10:27 to 10:28"
+          "location": "10:27 to 10:28",
+          "sentence": "Definition bad : False := I."
         }
       ]
     }

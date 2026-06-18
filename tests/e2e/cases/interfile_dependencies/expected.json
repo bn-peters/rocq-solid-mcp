@@ -33,6 +33,7 @@
           "level": "error",
           "message": "Unable to unify \"40\" with \"imported_value\".",
           "location": "9:8 to 9:19",
+          "sentence": "reflexivity.",
           "proof_name": "imported_value_wrong",
           "proof_state": {
             "goals": [

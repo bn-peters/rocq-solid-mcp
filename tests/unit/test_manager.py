@@ -1060,16 +1060,28 @@ async def test_check_file_skips_goal_request_for_regular_proof_error(
 ) -> None:
     source = tmp_path / "Demo.v"
     source.write_text("Goal 0 = 0. Proof. fail. Qed.\n", encoding="utf-8")
+    range_ = {
+        "start": {"line": 0, "character": 19},
+        "end": {"line": 0, "character": 24},
+    }
     notifications = SpyNotificationStore()
     client = FakeClient(
         notifications,
-        [diagnostic("Tactic failure.", 1, proof_name="foo", line=0)],
+        [
+            {
+                "range": range_,
+                "message": "Tactic failure.",
+                "severity": 1,
+                "data": {"sentenceRange": range_, "proofName": "foo"},
+            }
+        ],
     )
     manager = FakeManager(client, notifications, tmp_path)
 
     result = await manager.check_file(str(source))
 
     assert result.error_count == 1
+    assert result.diagnostics[0].sentence == "fail."
     assert client.goal_requests == []
 
 

@@ -14,6 +14,7 @@
           "level": "error",
           "message": " (in proof foo_obligation_2): Attempt to save an incomplete proof\n(there are remaining open goals).",
           "location": "12:1 to 12:5",
+          "sentence": "Qed.",
           "proof_name": "foo_obligation_2",
           "proof_state": {
             "goals": [
