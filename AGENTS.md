@@ -268,12 +268,16 @@ make clean
 `pytest-xdist`. Select narrower suites by directory via `make unit`,
 `make integration`, or `make e2e`; do not use environment variables to select
 test classes. Override parallelism with a Make variable such as
-`make test PYTEST_WORKERS=4`. Tests that need a real `coq-lsp` skip themselves
-if `opam` or `coq-lsp` is unavailable. E2e scenarios with compiled dependencies
-also skip themselves if `rocq` is unavailable. `make promote` refreshes promoted
-e2e transcripts and runs serially because it rewrites golden files. `make clean`
-removes pytest caches, Python bytecode caches, and egg-info directories while
-preserving `.venv/`.
+`make test PYTEST_WORKERS=4`. The Makefile exports `OPAMSWITCH` from
+`opam switch show` unless it is already set, so nested `opam exec -- coq-lsp`
+calls from temporary test workspaces use the same switch as the top-level test
+command; override it with a Make variable such as
+`make test OPAMSWITCH=my-switch` when needed. Tests that need a real `coq-lsp`
+skip themselves if `opam` or `coq-lsp` is unavailable. E2e scenarios with
+compiled dependencies also skip themselves if `rocq` is unavailable.
+`make promote` refreshes promoted e2e transcripts and runs serially because it
+rewrites golden files. `make clean` removes pytest caches, Python bytecode
+caches, and egg-info directories while preserving `.venv/`.
 
 The local virtual environment is expected at `.venv/`. Use
 `opam exec -- .venv/bin/python -m pytest ...` for focused test runs.

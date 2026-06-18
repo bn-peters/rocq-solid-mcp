@@ -1,4 +1,8 @@
 PYTHON := .venv/bin/python
+OPAMSWITCH ?= $(shell opam switch show 2>/dev/null)
+ifneq ($(strip $(OPAMSWITCH)),)
+export OPAMSWITCH
+endif
 OPAM_EXEC := opam exec --
 PYTEST := $(OPAM_EXEC) $(PYTHON) -m pytest
 PYTEST_WORKERS ?= auto

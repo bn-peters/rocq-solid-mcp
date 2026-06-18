@@ -309,6 +309,10 @@ make e2e
 These targets run tests under `opam exec` and in parallel with `pytest-xdist` by
 default. Override the worker count with a Make variable, for example
 `make test PYTEST_WORKERS=4`.
+The Makefile exports `OPAMSWITCH` from `opam switch show` unless it is already
+set, so `coq-lsp` processes launched by tests from temporary workspaces use the
+same opam switch as the top-level test command. Override it with a Make variable
+when needed, for example `make test OPAMSWITCH=my-switch`.
 
 Integration and e2e tests skip themselves when `opam` or `coq-lsp` is
 unavailable. E2e scenarios with compiled dependencies also skip when `rocq` is
