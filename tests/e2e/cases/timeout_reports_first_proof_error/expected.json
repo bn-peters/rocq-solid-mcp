@@ -1,0 +1,36 @@
+[
+  {
+    "step": "timeout reports the first proof error not a later one",
+    "action": "check",
+    "file": "src/first_error.v",
+    "result": {
+      "status": "timeout",
+      "file": "first_error.v",
+      "counts": {
+        "errors": 1
+      },
+      "diagnostics": [
+        {
+          "level": "error",
+          "message": "Tactic failure: FIRST_ERROR.",
+          "location": "10:3 to 10:22",
+          "sentence": "fail \"FIRST_ERROR\".",
+          "proof_name": "bug"
+        }
+      ],
+      "timed_out": true,
+      "timeout_context": {
+        "operation": "coq/getDocument",
+        "timeout_kind": "request",
+        "request_timeout_seconds": 5.0,
+        "cancel_grace_seconds": 2,
+        "checked_until": "12:11",
+        "latest_processing_range": "12:11 to 16:1",
+        "next_unchecked": {
+          "location": "13:3",
+          "line": "sleep 100."
+        }
+      }
+    }
+  }
+]

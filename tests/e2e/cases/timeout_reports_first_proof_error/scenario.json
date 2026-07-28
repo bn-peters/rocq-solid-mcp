@@ -1,0 +1,15 @@
+{
+  "timeout_policy": {
+    "request_seconds": 5,
+    "cancel_grace_seconds": 2
+  },
+  "steps": [
+    {
+      "label": "timeout reports the first proof error not a later one",
+      "action": "check",
+      "file": "src/first_error.v",
+      "min_seconds": 3,
+      "long_running_seconds": 0
+    }
+  ]
+}

@@ -498,6 +498,51 @@ def test_check_result_render_deduplicates_proof_errors(tmp_path: Path) -> None:
     assert result.error_count == 2
 
 
+def test_check_result_render_keeps_source_first_error_out_of_order(
+    tmp_path: Path,
+) -> None:
+    # coq-lsp can publish a timed-out proof's partial diagnostics out of source
+    # order. Deduplication must keep the source-first error of each group, not
+    # whichever diagnostic happens to arrive first in the list.
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+
+    def error(message: str, line: int, proof_name: str | None) -> Diagnostic:
+        return Diagnostic.from_lsp(
+            {
+                "range": {
+                    "start": {"line": line, "character": 2},
+                    "end": {"line": line, "character": 8},
+                },
+                "message": message,
+                "severity": 1,
+            },
+            proof_state=None,
+        ).model_copy(update={"proof_name": proof_name})
+
+    result = CheckResult.from_diagnostics(
+        status="timeout",
+        file=str(source),
+        uri=source.as_uri(),
+        workspace=str(tmp_path),
+        version=1,
+        completed=None,
+        diagnostics=[
+            error("later subgoal", line=6, proof_name="bug"),
+            error("first subgoal", line=5, proof_name="bug"),
+            error("later global", line=9, proof_name=None),
+            error("first global", line=8, proof_name=None),
+        ],
+        timed_out=True,
+    )
+
+    assert [item["message"] for item in result.render()["diagnostics"]] == [
+        "first subgoal",
+        "first global",
+    ]
+    assert result.error_count == 4
+
+
 def test_check_result_render_suppresses_later_global_errors(
     tmp_path: Path,
 ) -> None:

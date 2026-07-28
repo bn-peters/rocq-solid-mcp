@@ -610,23 +610,40 @@ def _render_diagnostics(
     if not options.deduplicate_proof_errors:
         return diagnostics
 
-    seen_error_proofs: set[str] = set()
-    # A failed top-level sentence can make later proof commands surface as
-    # proof_name-less errors; keep only the first such error in rendered output.
-    seen_global_error = False
+    # Keep a single error per proof, choosing the source-earliest one rather
+    # than the first to arrive. coq-lsp can publish a timed-out document's
+    # partial diagnostics out of source order, so picking by list position would
+    # let a later subgoal's error mask the real first error of the proof. All
+    # proof_name-less errors form one group, so a failed top-level sentence
+    # still collapses its downstream cascade to its earliest error.
+    kept_error_index: dict[str | None, int] = {}
+    for index, diagnostic in enumerate(diagnostics):
+        if diagnostic.severity != 1:
+            continue
+        group = diagnostic.proof_name
+        incumbent = kept_error_index.get(group)
+        if incumbent is None or _diagnostic_position_key(
+            diagnostic
+        ) < _diagnostic_position_key(diagnostics[incumbent]):
+            kept_error_index[group] = index
+
     filtered: list[Diagnostic] = []
-    for diagnostic in diagnostics:
-        if diagnostic.severity == 1:
-            if diagnostic.proof_name is None:
-                if seen_global_error:
-                    continue
-                seen_global_error = True
-            elif diagnostic.proof_name in seen_error_proofs:
-                continue
-            else:
-                seen_error_proofs.add(diagnostic.proof_name)
+    for index, diagnostic in enumerate(diagnostics):
+        if (
+            diagnostic.severity == 1
+            and kept_error_index.get(diagnostic.proof_name) != index
+        ):
+            continue
         filtered.append(diagnostic)
     return filtered
+
+
+def _diagnostic_position_key(diagnostic: Diagnostic) -> tuple[int, int, int]:
+    start = range_start(diagnostic.range)
+    if start is None:
+        # Range-less diagnostics rank after positioned ones.
+        return (1, 0, 0)
+    return (0, start["line"], start["character"])
 
 
 def diagnostic_matches_severity(

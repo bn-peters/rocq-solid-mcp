@@ -1,0 +1,3 @@
+(rocq.theory
+ (name TimeoutFirstError)
+ (generate_project_file))
