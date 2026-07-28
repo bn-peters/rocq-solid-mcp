@@ -199,11 +199,14 @@ the start of one Rocq sentence and resets the command deadline. If that sentence
 exceeds the deadline, the client sends `$/cancelRequest` and the manager returns
 `status: "timeout"` with `timeout_kind: "command"`, `command_timeout_seconds`,
 the timed-out sentence range, and a source preview. This is per Rocq sentence,
-not per internal Ltac substep. The `ROCQ_LSP_TIMEOUT` request deadline remains
-the outer server-side partial-result deadline for check and `run_at`
-calls. MCP host cancellation is a harder outer abort: the server
-sends `$/cancelRequest` to `coq-lsp` and may reset the file session, but
-the client may already have abandoned the result.
+not per internal Ltac substep. The last sentence in a file is governed by the
+outer request timeout rather than the per-command watchdog because
+`$/coq/executionInformation` reports sentence starts, not sentence completion;
+otherwise end-of-file finalization can be incorrectly attributed to the last
+sentence. The `ROCQ_LSP_TIMEOUT` request deadline remains the outer server-side
+partial-result deadline for check and `run_at` calls. MCP host cancellation is a
+harder outer abort: the server sends `$/cancelRequest` to `coq-lsp` and may reset
+the file session, but the client may already have abandoned the result.
 
 For `Attempt to save an incomplete proof` diagnostics, the `Qed.` sentence can
 carry only the save error while the open goal is attached to the previous proof

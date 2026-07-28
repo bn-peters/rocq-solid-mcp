@@ -85,6 +85,7 @@ class FakeClient:
         hard_timeout_grace: float,
         command_timeout: float | None = None,
         goals: str | None = None,
+        content: str | None = None,
     ) -> GetDocumentResult:
         self.events.append(f"get_document:{version}")
         self.get_document_requests.append(
@@ -95,6 +96,7 @@ class FakeClient:
                 "hard_timeout_grace": hard_timeout_grace,
                 "command_timeout": command_timeout,
                 "goals": goals,
+                "content": content,
             }
         )
         if self.file_progress is not None:

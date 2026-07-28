@@ -58,6 +58,29 @@ def language_id_for_path(path: Path) -> str:
     return "rocq"
 
 
+def _range_reaches_end_of_content(
+    content: str | None, range_: dict[str, Any] | None
+) -> bool:
+    if content is None or range_ is None:
+        return False
+
+    end = range_.get("end")
+    if not isinstance(end, dict):
+        return False
+
+    line = end.get("line")
+    character = end.get("character")
+    if not isinstance(line, int) or not isinstance(character, int):
+        return False
+
+    lines = content.splitlines(keepends=True)
+    if line < 0 or line >= len(lines):
+        return False
+
+    suffix = "".join([lines[line][character:], *lines[line + 1 :]])
+    return suffix.strip() == ""
+
+
 class RocqLspClient:
     def __init__(
         self,
@@ -210,6 +233,7 @@ class RocqLspClient:
         hard_timeout_grace: float,
         command_timeout: float | None = None,
         goals: str | None = None,
+        content: str | None = None,
     ) -> GetDocumentResult:
         request_id = self._reserve_request()
         future = self._pending[request_id]
@@ -238,6 +262,7 @@ class RocqLspClient:
                     request_id=request_id,
                     command_timeout=command_timeout,
                     command_state=command_state,
+                    content=content,
                 )
             )
 
@@ -276,24 +301,33 @@ class RocqLspClient:
                     timed_out_range=None,
                 )
 
-            if watchdog in done:
-                await watchdog
-                return await self._wait_for_cancelled_get_document(
-                    request_id=request_id,
-                    future=future,
-                    hard_timeout_grace=hard_timeout_grace,
-                    timeout_kind="command",
-                    timeout_seconds=command_timeout or 0,
-                    timed_out_range=command_state["range"],
-                )
+            if future in done or future.done():
+                raw = future.result()
+                self._pending.pop(request_id, None)
+                if command_state["timed_out"] and "error" in raw:
+                    return self._get_document_timeout_result(
+                        raw, command_state["range"]
+                    )
+                return GetDocumentResult(document=self._result_or_raise(raw))
 
-            raw = future.result()
-            self._pending.pop(request_id, None)
-            if command_state["timed_out"]:
-                return self._get_document_timeout_result(
-                    raw, command_state["range"]
-                )
-            return GetDocumentResult(document=self._result_or_raise(raw))
+            await watchdog
+            if future.done():
+                raw = future.result()
+                self._pending.pop(request_id, None)
+                if "error" in raw:
+                    return self._get_document_timeout_result(
+                        raw, command_state["range"]
+                    )
+                return GetDocumentResult(document=self._result_or_raise(raw))
+            return await self._wait_for_cancelled_get_document(
+                request_id=request_id,
+                future=future,
+                hard_timeout_grace=hard_timeout_grace,
+                timeout_kind="command",
+                timeout_seconds=command_timeout or 0,
+                timed_out_range=command_state["range"],
+            )
+
         except asyncio.CancelledError:
             await self._cancel_lsp_request_after_external_cancellation(
                 request_id=request_id,
@@ -315,15 +349,21 @@ class RocqLspClient:
         request_id: int,
         command_timeout: float,
         command_state: dict[str, Any],
+        content: str | None,
     ) -> None:
         after_sequence = self.notifications.latest_execution_sequence(uri, version)
         active_range: dict[str, Any] | None = None
         while True:
+            is_final_sentence = _range_reaches_end_of_content(content, active_range)
             update = await self.notifications.wait_for_execution_info(
                 uri,
                 version,
                 after_sequence=after_sequence,
-                timeout=command_timeout if active_range is not None else None,
+                timeout=(
+                    command_timeout
+                    if active_range is not None and not is_final_sentence
+                    else None
+                ),
             )
             if update is None:
                 command_state["timed_out"] = True
