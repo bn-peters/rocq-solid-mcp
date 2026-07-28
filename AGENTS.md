@@ -105,17 +105,22 @@ commands that actually ran during check and took at least 80% of
 the configured request timeout. `clear_cache=True` kills and replaces the
 cached `coq-lsp` process for the requested file before sending `didOpen`, so
 the new process rereads `_RocqProject` or `_CoqProject` and reloads imports
-from external `.vo` files. When `ROCQ_LSP_DUNE_BUILD=1`, check calls first try
+from external `.vo` files. When `ROCQ_LSP_DUNE_BUILD=1`, both `rocq_check_file`
+and `rocq_run_at` calls first try
 to detect dune-based Rocq projects with `dune describe workspace` and
 `dune rocq top --no-build --toplevel echo file.v`, falling back to
 `dune coq top --no-build --toplevel echo file.v`. If dune recognizes the file,
 the manager runs `dune rocq top file.v --toplevel echo --display=short` or the
-corresponding `dune coq top` command to build dependencies. If that step
-emits short-display build output for an already cached file session, the manager
+corresponding `dune coq top` command to build dependencies without recompiling
+the requested file itself. If that step reports actual build actions on stderr
+for an already cached file session, the manager
 restarts the session as if `clear_cache=True` had been set so rebuilt
-dependencies are reloaded. Missing `dune`, non-dune projects, files not
-recognized by dune, and successful dune top commands with no build output are
-skipped; a recognized dune file whose dependency build fails returns
+dependencies are reloaded. Dune's `Entering directory`/`Leaving directory`
+navigation lines, which it prints whenever it runs from a theory subdirectory,
+are ignored when deciding whether a rebuild happened, so an up-to-date build no
+longer forces a restart on every call. Missing `dune`, non-dune projects, files
+not recognized by dune, and successful dune top commands with no build actions
+are skipped; a recognized dune file whose dependency build fails returns
 `status: "failed"` with dune output. The `check` CLI subcommand has no flags
 and deliberately ignores the
 MCP-oriented timeout and message-limit defaults: it disables the request
@@ -126,7 +131,9 @@ one or more complete commands ending in `.`, and a 1-based line/character
 position; it is useful for one-off tasks such as `Check`, `Search`, `Require`,
 `Locate`, and notation experiments. On each call, the manager resolves the
 file, infers a workspace by walking upward to the nearest `_RocqProject` or
-`_CoqProject`, then delegates to the cached `RocqLspSession` for that resolved
+`_CoqProject`, builds dune dependencies the same way `rocq_check_file` does so
+`Require`s resolve against freshly compiled `.vo` files, then delegates to the
+cached `RocqLspSession` for that resolved
 file path. If no project file is found, the file's parent directory is used.
 The session sends either `textDocument/didOpen` or `textDocument/didChange`
 through its client. The document version increments on every call.
@@ -282,6 +289,20 @@ caches, and egg-info directories while preserving `.venv/`.
 The local virtual environment is expected at `.venv/`. Use
 `opam exec -- .venv/bin/python -m pytest ...` for focused test runs.
 
+The Rocq toolchain (`rocq`, `dune`, `coq-lsp`) lives in a local opam switch
+(for example `my-rocq-lsp`) that is not selected automatically outside its own
+directory. Running `opam exec -- dune`, `opam exec -- rocq`, or
+`opam exec -- coq-lsp` from an unrelated directory such as a temporary test
+workspace or the system temp dir resolves the wrong switch or none, so `rocq`
+and `coqc` appear to be missing. Pin the switch with `OPAMSWITCH` (the Makefile
+exports it from `opam switch show`) whenever invoking these tools from outside
+the project directory. This switch provides `rocq` but not the legacy `coqc`,
+so dune-based Rocq fixtures must use the new Rocq build language: `(lang dune
+3.21)` or newer with `(using rocq 0.11)` and `(rocq.theory ...)` stanzas, which
+invoke `rocq` and generate `_RocqProject`. The deprecated `(using coq ...)` /
+`(coq.theory ...)` build language shells out to `coqc` and therefore fails in
+this switch.
+
 ## GitLab CI
 
 The GitLab pipeline lives entirely in `.gitlab-ci.yml`; do not move CI setup
@@ -304,7 +325,10 @@ still depends on the GitLab runner having the local cache available.
 - `tests/unit/test_manager.py` uses fakes to cover manager behavior, versioning,
   workspace inference, per-file session separation, `run_at` execution,
   idle cleanup, language IDs, timeout context construction, and hard-timeout
-  reset logic.
+  reset logic. It also covers the dune dependency-build integration: the
+  `applied` heuristic ignoring `Entering directory`/`Leaving directory` stderr
+  noise, and `run_at` triggering the dune build (including its failure and
+  cache-restart paths) the same way `check` does.
 - `tests/unit/test_config.py` covers command construction and environment
   configuration.
 - `tests/unit/test_notifications.py` covers diagnostic notification storage,
@@ -362,6 +386,13 @@ still depends on the GitLab runner having the local cache available.
   `lemma_header_cascade_error` covers malformed lemma headers that should report
   only the originating lemma diagnostic instead of downstream proof-mode
   cascade errors.
+- `tests/e2e/test_dune.py` builds real multi-theory dune Rocq projects (theories
+  in subdirectories, using the new `(using rocq 0.11)` / `(rocq.theory ...)`
+  build language so it works in switches that ship `rocq` but not `coqc`) and
+  covers the dune dependency-build integration end to end: rechecking an
+  unchanged file does not restart the session (both by the `restarted` flag and
+  by timing a cached recheck against a slow proof), and `run_at` builds a
+  missing dependency so its `Require` resolves.
 
 When changing output shape, update exact-output tests rather than weakening
 assertions. The MCP output should be useful to agents and humans; raw Rocq
