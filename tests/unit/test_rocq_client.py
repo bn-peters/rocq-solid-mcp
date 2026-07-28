@@ -184,6 +184,101 @@ async def test_request_get_document_cancels_when_command_timeout_expires(
 
 
 @pytest.mark.asyncio
+async def test_request_get_document_prefers_completed_result_over_watchdog_race(
+    tmp_path: Path,
+) -> None:
+    store = NotificationStore()
+    client = client_with_store(tmp_path, store)
+    sent: list[dict[str, Any]] = []
+    uri = "file:///Demo.v"
+    version = 1
+
+    async def fake_send(message: dict[str, Any]) -> None:
+        sent.append(message)
+        method = message.get("method")
+        if method == "coq/getDocument":
+            async def publish_execution_info() -> None:
+                await asyncio.sleep(0)
+                store.handle(
+                    "$/coq/executionInformation",
+                    execution_info(uri, version, 3),
+                )
+
+            asyncio.create_task(publish_execution_info())
+        if method == "$/cancelRequest":
+            request_id = message["params"]["id"]
+            client._pending[request_id].set_result(
+                {"jsonrpc": "2.0", "id": request_id, "result": completed_document()}
+            )
+
+    client._send = fake_send  # type: ignore[method-assign]
+
+    result = await client.request_get_document(
+        uri=uri,
+        version=version,
+        timeout=1,
+        hard_timeout_grace=0.1,
+        command_timeout=0.01,
+    )
+
+    assert result.document == completed_document()
+    assert result.timed_out is False
+    assert any(message.get("method") == "$/cancelRequest" for message in sent)
+
+
+@pytest.mark.asyncio
+async def test_request_get_document_does_not_command_timeout_final_sentence(
+    tmp_path: Path,
+) -> None:
+    store = NotificationStore()
+    client = client_with_store(tmp_path, store)
+    sent: list[dict[str, Any]] = []
+    uri = "file:///Demo.v"
+    version = 1
+    content = "End acc.\nCheck id.\n"
+
+    async def fake_send(message: dict[str, Any]) -> None:
+        sent.append(message)
+        if message.get("method") != "coq/getDocument":
+            return
+        request_id = message["id"]
+
+        async def finish() -> None:
+            await asyncio.sleep(0)
+            store.handle(
+                "$/coq/executionInformation",
+                {
+                    "textDocument": {"uri": uri, "version": version},
+                    "range": {
+                        "start": {"line": 1, "character": 0},
+                        "end": {"line": 1, "character": 9},
+                    },
+                },
+            )
+            await asyncio.sleep(0.03)
+            client._pending[request_id].set_result(
+                {"jsonrpc": "2.0", "id": request_id, "result": completed_document()}
+            )
+
+        asyncio.create_task(finish())
+
+    client._send = fake_send  # type: ignore[method-assign]
+
+    result = await client.request_get_document(
+        uri=uri,
+        version=version,
+        timeout=1,
+        hard_timeout_grace=0.1,
+        command_timeout=0.01,
+        content=content,
+    )
+
+    assert result.document == completed_document()
+    assert result.timed_out is False
+    assert not any(message.get("method") == "$/cancelRequest" for message in sent)
+
+
+@pytest.mark.asyncio
 async def test_request_get_document_hard_timeout_preserves_command_context(
     tmp_path: Path,
 ) -> None:

@@ -193,6 +193,10 @@ are ignored so an up-to-date build does not restart the session on every call.
 If a check call has `clear_cache=True`, the
 same restart happens even outside dune projects, so changed `_RocqProject` or
 `_CoqProject` files are picked up.
+Dune detection and dependency-build subprocesses are serialized within one MCP
+server process, so parallel `rocq_check_file` calls from one client do not race
+each other for dune's build directory lock. Separate MCP server processes or
+manual dune invocations are still outside this in-process lock.
 
 When the soft `coq/getDocument` deadline fires, the response status is
 `timeout` and the rendered result includes `timeout_context`. `checked_until`
@@ -209,9 +213,13 @@ deadline. If the current sentence exceeds the configured limit, the client sends
 `timeout_context.timeout_kind: "command"`, the timed-out sentence range, and a
 source preview. The `ROCQ_LSP_TIMEOUT` request deadline remains the outer
 server-side partial-result deadline for parsing stalls, missing execution
-notifications, or non-interruptible work. MCP host cancellation is a harder
-outer abort: the server sends `$/cancelRequest` to `coq-lsp` and may reset the
-file session, but the client may already have abandoned the result.
+notifications, non-interruptible work, and final-sentence/end-of-file work. The
+last sentence in a file is not subject to the per-command watchdog because
+`$/coq/executionInformation` marks sentence starts, not sentence completion, so
+otherwise end-of-file finalization could be misreported as a timeout in the last
+sentence. MCP host cancellation is a harder outer abort: the server sends
+`$/cancelRequest` to `coq-lsp` and may reset the file session, but the client may
+already have abandoned the result.
 
 `coq-lsp` performance data is enabled with `send_perf_data`. After successful
 `coq/getDocument` calls, the manager waits briefly for `$/coq/filePerfData` and

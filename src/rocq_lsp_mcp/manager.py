@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import signal
 import time
 from contextlib import suppress
 from dataclasses import dataclass
@@ -81,6 +83,7 @@ class RocqLspManager:
         # starts coq-lsp with the inferred workspace as cwd/root.
         self._sessions: dict[Path, RocqLspSession] = {}
         self._sessions_lock = asyncio.Lock()
+        self._dune_lock = asyncio.Lock()
         self._dune_detection_cache: dict[Path, DuneDetection] = {}
         self._cleanup_task: asyncio.Task[None] | None = None
 
@@ -329,6 +332,7 @@ class RocqLspManager:
                 hard_timeout_grace=self.config.timeout_policy.cancel_grace_seconds,
                 command_timeout=command_timeout,
                 goals="Str",
+                content=content,
             )
             completed_doc = get_document_result.document
             request_timed_out = get_document_result.timed_out
@@ -774,12 +778,21 @@ class RocqLspManager:
         cwd: Path,
         command: tuple[str, ...],
     ) -> tuple[int, str, str] | None:
+        async with self._dune_lock:
+            return await self._run_dune_command_unlocked(cwd, command)
+
+    async def _run_dune_command_unlocked(
+        self,
+        cwd: Path,
+        command: tuple[str, ...],
+    ) -> tuple[int, str, str] | None:
         try:
             process = await asyncio.create_subprocess_exec(
                 *command,
                 cwd=cwd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                start_new_session=True,
             )
         except FileNotFoundError:
             return None
@@ -790,20 +803,32 @@ class RocqLspManager:
                 timeout=self.config.dune_timeout_seconds,
             )
         except asyncio.TimeoutError:
-            process.kill()
-            with suppress(ProcessLookupError):
-                await process.wait()
+            await self._kill_dune_process_group(process)
             return (
                 1,
                 "",
                 f"dune dependency build timed out after "
                 f"{self.config.dune_timeout_seconds:g} seconds",
             )
+        except asyncio.CancelledError:
+            await self._kill_dune_process_group(process)
+            raise
         return (
             process.returncode or 0,
             stdout.decode("utf-8", errors="replace"),
             stderr.decode("utf-8", errors="replace"),
         )
+
+    async def _kill_dune_process_group(
+        self, process: asyncio.subprocess.Process
+    ) -> None:
+        if process.returncode is None:
+            with suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGKILL)
+            with suppress(ProcessLookupError):
+                process.kill()
+        with suppress(ProcessLookupError):
+            await process.wait()
 
     async def _release_session(self, session: RocqLspSession) -> None:
         async with self._sessions_lock:

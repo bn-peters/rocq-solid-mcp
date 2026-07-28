@@ -85,6 +85,7 @@ class FakeClient:
         hard_timeout_grace: float,
         command_timeout: float | None = None,
         goals: str | None = None,
+        content: str | None = None,
     ) -> GetDocumentResult:
         self.events.append(f"get_document:{version}")
         self.get_document_requests.append(
@@ -95,6 +96,7 @@ class FakeClient:
                 "hard_timeout_grace": hard_timeout_grace,
                 "command_timeout": command_timeout,
                 "goals": goals,
+                "content": content,
             }
         )
         if self.file_progress is not None:
@@ -267,13 +269,42 @@ class FakeDuneCommandManager(FakeManager):
     async def _maybe_build_dune_dependencies(self, path: Path) -> DuneBuildResult:
         return await RocqLspManager._maybe_build_dune_dependencies(self, path)
 
-    async def _run_dune_command(
+    async def _run_dune_command_unlocked(
         self,
         cwd: Path,
         command: tuple[str, ...],
     ) -> tuple[int, str, str] | None:
         self.dune_commands.append((cwd, command))
         return self.results.pop(0)
+
+
+class SlowDuneCommandManager(RocqLspManager):
+    def __init__(self, workspace: Path) -> None:
+        config = RocqLspConfig(
+            binary="coq-lsp",
+            timeout_policy=TimeoutPolicy(
+                request_seconds=1,
+                cancel_grace_seconds=0.01,
+            ),
+            max_errors=1000000,
+            workspace=workspace,
+        )
+        super().__init__(config=config)
+        self.active_commands = 0
+        self.max_active_commands = 0
+
+    async def _run_dune_command_unlocked(
+        self,
+        cwd: Path,
+        command: tuple[str, ...],
+    ) -> tuple[int, str, str] | None:
+        self.active_commands += 1
+        self.max_active_commands = max(self.max_active_commands, self.active_commands)
+        try:
+            await asyncio.sleep(0.01)
+            return (0, "", "")
+        finally:
+            self.active_commands -= 1
 
 
 class UnavailableManager(RocqLspManager):
@@ -588,6 +619,18 @@ async def test_check_file_dune_build_failure_does_not_open_document(
     assert client.opened == []
     assert client.changed == []
     assert client.get_document_requests == []
+
+
+@pytest.mark.asyncio
+async def test_dune_commands_are_serialized(tmp_path: Path) -> None:
+    manager = SlowDuneCommandManager(tmp_path)
+
+    await asyncio.gather(
+        manager._run_dune_command(tmp_path, ("dune", "describe", "workspace")),
+        manager._run_dune_command(tmp_path, ("dune", "describe", "workspace")),
+    )
+
+    assert manager.max_active_commands == 1
 
 
 @pytest.mark.asyncio
