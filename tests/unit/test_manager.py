@@ -12,7 +12,11 @@ from rocq_lsp_mcp.config import (
     RocqLspConfig,
     TimeoutPolicy,
 )
-from rocq_lsp_mcp.manager import DuneBuildResult, RocqLspManager
+from rocq_lsp_mcp.manager import (
+    DuneBuildResult,
+    RocqLspManager,
+    _dune_reported_build_actions,
+)
 from rocq_lsp_mcp.models import RenderOptions
 from rocq_lsp_mcp.notifications import NotificationStore
 from rocq_lsp_mcp.rocq_client import (
@@ -670,6 +674,120 @@ async def test_check_file_dune_build_restarts_only_when_build_output_exists(
             ),
         ),
     ]
+
+
+def test_dune_reported_build_actions_ignores_directory_navigation() -> None:
+    noise = (
+        "Entering directory '/home/user/project'\n"
+        "Leaving directory '/home/user/project'\n"
+    )
+    assert _dune_reported_build_actions(noise) is False
+    assert _dune_reported_build_actions("") is False
+    assert _dune_reported_build_actions("   \n") is False
+    assert (
+        _dune_reported_build_actions(
+            noise + "        rocq theories/Base.{glob,vo}\n"
+        )
+        is True
+    )
+    assert _dune_reported_build_actions("        rocq theories/Base.vo\n") is True
+
+
+@pytest.mark.asyncio
+async def test_check_file_dune_build_ignores_directory_navigation_noise(
+    tmp_path: Path,
+) -> None:
+    # An up-to-date dependency build still prints "Entering directory"/"Leaving
+    # directory" to stderr when dune runs from a theory subdirectory. That noise
+    # must not be read as a rebuild, otherwise every recheck restarts the
+    # session and discards the incremental cache.
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    noise = "Entering directory '/root'\nLeaving directory '/root'\n"
+    manager = FakeDuneCommandManager(
+        client,
+        notifications,
+        tmp_path,
+        results=[
+            (0, "workspace", ""),
+            (0, "-topfile Demo.v", ""),
+            (0, "-topfile Demo.v", noise),
+            (0, "-topfile Demo.v", noise),
+        ],
+    )
+
+    first = await manager.check_file(str(source))
+    second = await manager.check_file(str(source))
+
+    assert first.status == "complete"
+    assert first.restarted is False
+    assert second.status == "complete"
+    assert second.restarted is False
+    assert client.killed is False
+    assert client.opened == [(source.resolve(), 1)]
+    assert client.changed == [(source.resolve(), 2)]
+
+
+@pytest.mark.asyncio
+async def test_run_at_triggers_dune_build(tmp_path: Path) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    manager = FakeManager(client, notifications, tmp_path)
+
+    result = await manager.run_at(str(source), "Check nat.", 1)
+
+    assert result.status == "complete"
+    assert manager.dune_build_paths == [source.resolve()]
+
+
+@pytest.mark.asyncio
+async def test_run_at_dune_build_failure_returns_failed(tmp_path: Path) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    manager = FakeManager(
+        client,
+        notifications,
+        tmp_path,
+        dune_build_result=DuneBuildResult(message="dune failed"),
+    )
+
+    result = await manager.run_at(str(source), "Check nat.", 1)
+
+    assert result.status == "failed"
+    assert result.message == "dune failed"
+    assert result.workspace == str(tmp_path)
+    assert client.run_at_requests == []
+    assert client.opened == []
+
+
+@pytest.mark.asyncio
+async def test_run_at_dune_build_restarts_existing_process(tmp_path: Path) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    manager = FakeManager(
+        client,
+        notifications,
+        tmp_path,
+        dune_build_result=DuneBuildResult(applied=True),
+    )
+
+    first = await manager.run_at(str(source), "Check nat.", 1)
+    second = await manager.run_at(str(source), "Check nat.", 1)
+
+    assert first.status == "complete"
+    assert first.restarted is False
+    assert second.status == "complete"
+    assert second.restarted is True
+    assert manager.dune_build_paths == [source.resolve(), source.resolve()]
+    assert client.killed is True
 
 
 @pytest.mark.asyncio

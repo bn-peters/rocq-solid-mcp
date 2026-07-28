@@ -42,6 +42,28 @@ class DuneDetection:
     toplevel: Literal["rocq", "coq"] | None = None
 
 
+def _dune_reported_build_actions(stderr: str) -> bool:
+    """Whether dune's short-display stderr shows a real dependency rebuild.
+
+    With ``--display=short`` dune reports build actions on stderr, but it also
+    prints ``Entering directory``/``Leaving directory`` there for any invocation
+    from a subdirectory of the workspace root, even when nothing was rebuilt.
+    Reading that navigation noise as a rebuild makes every check restart the
+    session and discard the incremental cache, so it is ignored here; any other
+    non-empty line means a dependency was recompiled.
+    """
+    for line in stderr.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("Entering directory ") or stripped.startswith(
+            "Leaving directory "
+        ):
+            continue
+        return True
+    return False
+
+
 class RocqLspManager:
     def __init__(self, config: RocqLspConfig | None = None) -> None:
         self.config = config or load_config()
@@ -201,8 +223,22 @@ class RocqLspManager:
                 message=validation_error,
             )
 
+        dune_build = await self._maybe_build_dune_dependencies(path)
+        if dune_build.failed:
+            return RunAtResult.from_feedback(
+                status="failed",
+                file=str(path),
+                commands=stripped_commands,
+                location=location,
+                uri=path.as_uri(),
+                workspace=str(workspace),
+                version=None,
+                feedback=[],
+                message=dune_build.message,
+            )
+
         try:
-            session, _created = await self._checkout_session(session_key, workspace)
+            session, created = await self._checkout_session(session_key, workspace)
         except RocqLspUnavailableError as exc:
             return RunAtResult.from_feedback(
                 status="failed",
@@ -216,7 +252,15 @@ class RocqLspManager:
                 message=str(exc),
             )
         try:
-            return await self._run_at_with_session(
+            restarted = False
+            if dune_build.applied and not created:
+                session = await self._restart_checked_out_session(
+                    session_key,
+                    workspace,
+                    session,
+                )
+                restarted = True
+            result = await self._run_at_with_session(
                 session,
                 session_key,
                 path,
@@ -225,6 +269,9 @@ class RocqLspManager:
                 character,
                 overall_timeout,
             )
+            if restarted:
+                result = result.model_copy(update={"restarted": True})
+            return result
         finally:
             session.lock.release()
             await self._release_session(session)
@@ -662,8 +709,10 @@ class RocqLspManager:
         returncode, stdout, stderr = result
         if returncode == 0:
             # The echo toplevel always prints arguments to stdout. With
-            # --display=short, dune reports actual build actions on stderr.
-            return DuneBuildResult(applied=bool(stderr.strip()))
+            # --display=short, dune reports actual build actions on stderr,
+            # alongside "Entering directory"/"Leaving directory" navigation
+            # noise that must not be mistaken for a rebuild.
+            return DuneBuildResult(applied=_dune_reported_build_actions(stderr))
         output = "\n".join(part for part in (stderr.strip(), stdout.strip()) if part)
         return DuneBuildResult(
             message=output or f"dune dependency build failed for {path.name}"
