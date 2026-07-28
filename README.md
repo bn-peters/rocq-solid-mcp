@@ -9,8 +9,8 @@ can find at ~/.codex/sessions/.
 The MCP exposes two tools:
 1. `check`, which generates diagnostics for a given file. It can return errors
    from multiple proofs at once. Proof states are cached.
-    For dune-based Rocq projects, `check` attempts to
-    rebuild dependencies with dune before asking `coq-lsp` to check the file.
+   For dune-based Rocq projects, `check` and `run_at` attempt to
+   rebuild dependencies with dune before checking the file.
 2. `run_at`, which runs one-off commands at a given position in a file. This is
    intended to be used for queries like `Search` and `Check`, and for one-off
    debugging commands.
@@ -127,9 +127,10 @@ prototype talks to `coq-lsp` directly over stdio JSON-RPC.
 Check calls can pass `clear_cache=True` to restart the requested file's
 `coq-lsp` process before checking, so changed project files or externally
 compiled dependencies are picked up. For dune-based Rocq projects, the manager
-also attempts a dune dependency build before checking; when that step applies,
-and dune reports build actions, it restarts an existing `coq-lsp` process as if
-`clear_cache=True` had been set.
+also attempts a dune dependency build before checking or running commands; when
+that step reports real build actions (dune's `Entering directory`/`Leaving
+directory` navigation lines are ignored), it restarts an existing `coq-lsp`
+process as if `clear_cache=True` had been set.
 
 ## Architecture
 
@@ -176,14 +177,20 @@ its own cached `coq-lsp` process, while the process still starts as
 `opam exec -- coq-lsp` with `cwd` set to the inferred workspace so local opam
 switches select the matching Rocq and `coq-lsp` versions.
 
-Before a check call, the manager tries to detect dune-based Rocq projects. If
+Before a check or `run_at` call, the manager tries to detect dune-based Rocq
+projects. If
 `dune describe workspace` succeeds and `dune rocq top --no-build --toplevel
 echo file.v` or `dune coq top --no-build --toplevel echo file.v` identifies the
 file, the manager runs `dune rocq top file.v --toplevel echo --display=short` or
-the corresponding `dune coq top` command to build dependencies. When this dune
-step succeeds and emits short-display build output, an existing cached
+the corresponding `dune coq top` command to build dependencies (the `echo`
+toplevel loads the file's dependencies without recompiling the file itself).
+When this dune
+step reports real build actions on stderr, an existing cached
 `coq-lsp` process for that file is killed and replaced before checking so
-rebuilt dependencies are loaded. If a check call has `clear_cache=True`, the
+rebuilt dependencies are loaded. Dune prints `Entering directory`/`Leaving
+directory` lines to stderr whenever it runs from a theory subdirectory; those
+are ignored so an up-to-date build does not restart the session on every call.
+If a check call has `clear_cache=True`, the
 same restart happens even outside dune projects, so changed `_RocqProject` or
 `_CoqProject` files are picked up.
 
