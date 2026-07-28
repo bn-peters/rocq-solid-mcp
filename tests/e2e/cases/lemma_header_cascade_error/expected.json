@@ -5,7 +5,7 @@
     "file": "src/lemma_header_cascade.v",
     "result": {
       "status": "complete",
-      "file": "src/lemma_header_cascade.v",
+      "file": "lemma_header_cascade.v",
       "counts": {
         "errors": 1
       },

@@ -1,0 +1,3 @@
+(rocq.theory
+ (name repeated_check_error_cached)
+ (generate_project_file))

@@ -1,0 +1,3 @@
+(rocq.theory
+ (name dune_recheck_no_restart)
+ (generate_project_file))

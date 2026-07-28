@@ -1,0 +1,20 @@
+[
+  {
+    "step": "run_at builds the missing dependency",
+    "action": "run_at",
+    "file": "clients/UseDep.v",
+    "commands": "Check dep_value.",
+    "result": {
+      "status": "complete",
+      "file": "UseDep.v",
+      "location": "2:1",
+      "commands": "Check dep_value.",
+      "output": [
+        {
+          "level": "info",
+          "text": "dep_value\n     : nat"
+        }
+      ]
+    }
+  }
+]

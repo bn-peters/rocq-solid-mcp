@@ -5,7 +5,7 @@
     "file": "src/CacheCommand.v",
     "result": {
       "status": "complete",
-      "file": "src/CacheCommand.v"
+      "file": "CacheCommand.v"
     }
   },
   {
@@ -15,7 +15,7 @@
     "commands": "Search (_ + 0 = _).",
     "result": {
       "status": "complete",
-      "file": "src/CacheCommand.v",
+      "file": "CacheCommand.v",
       "location": "10:5",
       "commands": "Search (_ + 0 = _).",
       "output": [

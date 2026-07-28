@@ -1,16 +1,11 @@
 [
   {
-    "step": "check dependency before lsp",
-    "action": "rocq c",
-    "file": "theories/Base.v"
-  },
-  {
     "step": "check dependent client",
     "action": "check",
     "file": "clients/UseBase.v",
     "result": {
       "status": "complete",
-      "file": "clients/UseBase.v"
+      "file": "UseBase.v"
     }
   },
   {
@@ -24,7 +19,7 @@
     "file": "clients/UseBase.v",
     "result": {
       "status": "complete",
-      "file": "clients/UseBase.v",
+      "file": "UseBase.v",
       "counts": {
         "errors": 1
       },

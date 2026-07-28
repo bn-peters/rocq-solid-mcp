@@ -5,7 +5,7 @@
     "file": "src/timeout.v",
     "result": {
       "status": "timeout",
-      "file": "src/timeout.v",
+      "file": "timeout.v",
       "timed_out": true,
       "timeout_context": {
         "operation": "coq/getDocument",
@@ -32,7 +32,7 @@
     "file": "src/timeout.v",
     "result": {
       "status": "complete",
-      "file": "src/timeout.v"
+      "file": "timeout.v"
     }
   }
 ]

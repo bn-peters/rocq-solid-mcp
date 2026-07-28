@@ -1,0 +1,4 @@
+(rocq.theory
+ (name project_imports_clients)
+ (generate_project_file)
+ (theories Stdlib))

@@ -1,0 +1,4 @@
+(include_subdirs qualified)
+(rocq.theory
+ (name multifile_demo)
+ (generate_project_file))

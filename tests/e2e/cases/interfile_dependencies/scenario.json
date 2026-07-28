@@ -1,16 +1,4 @@
 {
-  "setup": [
-    {
-      "label": "check dependency before lsp",
-      "action": "rocq c",
-      "file": "theories/Base.v",
-      "args": [
-        "-Q",
-        "theories",
-        "dependency_demo"
-      ]
-    }
-  ],
   "steps": [
     {
       "label": "check dependent client",

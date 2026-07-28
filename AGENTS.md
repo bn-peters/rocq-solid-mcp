@@ -115,10 +115,13 @@ corresponding `dune coq top` command to build dependencies without recompiling
 the requested file itself. If that step reports actual build actions on stderr
 for an already cached file session, the manager
 restarts the session as if `clear_cache=True` had been set so rebuilt
-dependencies are reloaded. Dune's `Entering directory`/`Leaving directory`
-navigation lines, which it prints whenever it runs from a theory subdirectory,
-are ignored when deciding whether a rebuild happened, so an up-to-date build no
-longer forces a restart on every call. Missing `dune`, non-dune projects, files
+dependencies are reloaded. Two kinds of stderr line are not treated as a
+rebuild: Dune's `Entering directory`/`Leaving directory` navigation lines
+(printed whenever it runs from a theory subdirectory), and coqdep
+`.theory.d` regeneration (which dune re-runs when the edited target file itself
+changes, without recompiling any dependency). Ignoring them keeps an up-to-date
+check and an edit-then-recheck from restarting the session and discarding the
+incremental cache. Missing `dune`, non-dune projects, files
 not recognized by dune, and successful dune top commands with no build actions
 are skipped; a recognized dune file whose dependency build fails returns
 `status: "failed"` with dune output. The `check` CLI subcommand has no flags
@@ -327,8 +330,8 @@ still depends on the GitLab runner having the local cache available.
   idle cleanup, language IDs, timeout context construction, and hard-timeout
   reset logic. It also covers the dune dependency-build integration: the
   `applied` heuristic ignoring `Entering directory`/`Leaving directory` stderr
-  noise, and `run_at` triggering the dune build (including its failure and
-  cache-restart paths) the same way `check` does.
+  noise and coqdep `.theory.d` regeneration, and `run_at` triggering the dune
+  build (including its failure and cache-restart paths) the same way `check` does.
 - `tests/unit/test_config.py` covers command construction and environment
   configuration.
 - `tests/unit/test_notifications.py` covers diagnostic notification storage,
@@ -343,10 +346,20 @@ still depends on the GitLab runner having the local cache available.
   file-change behavior where a failing proof `Goal 0 = 0. Proof. fail. Qed.`
   reports proof state, then rechecks cleanly after changing `fail` to
   `reflexivity`.
-- `tests/e2e/test_scenarios.py` runs promoted scenario fixtures that copy whole
-  Rocq projects, check files or run `run_at` through one cached manager, edit
-  files, and check concise agent-facing transcripts. Scenario files may define a
-  top-level `timeout_policy` for timeout-specific coverage. Scenario check and
+- `tests/e2e/test_scenarios.py` runs promoted scenario fixtures. Each fixture is
+  a full Rocq project the harness copies and **builds before driving coq-lsp**.
+  The backend is detected from the fixture and overridable with a scenario
+  `build` key (`dune` | `make` | `none`): a `dune-project` selects dune (the
+  default) and a bare `_CoqProject` selects CoqMakefile. The dune build runs
+  `dune build <dir>/_RocqProject` for each theory, which writes the
+  `_RocqProject` coq-lsp reads and compiles **no** `.vo` — so it never compiles
+  an intentionally broken or slow step-target; the manager compiles each step's
+  dependencies on demand during the run. The make build runs
+  `rocq makefile -f _CoqProject -o Makefile` then `make`. Fixtures then check
+  files or run `run_at` through one cached manager, edit files, and check concise
+  agent-facing transcripts. Under dune, `_infer_workspace` resolves to the theory
+  subdirectory, so the transcript `file` field is a basename. Scenario files may
+  define a top-level `timeout_policy` for timeout-specific coverage. Scenario check and
   `run_at` steps may include `min_seconds` or `max_seconds` timing assertions
   for cache-sensitive behavior; timings are asserted by the harness but omitted
   from promoted transcripts. Scenario check steps may also include
@@ -386,13 +399,15 @@ still depends on the GitLab runner having the local cache available.
   `lemma_header_cascade_error` covers malformed lemma headers that should report
   only the originating lemma diagnostic instead of downstream proof-mode
   cascade errors.
-- `tests/e2e/test_dune.py` builds real multi-theory dune Rocq projects (theories
-  in subdirectories, using the new `(using rocq 0.11)` / `(rocq.theory ...)`
-  build language so it works in switches that ship `rocq` but not `coqc`) and
-  covers the dune dependency-build integration end to end: rechecking an
-  unchanged file does not restart the session (both by the `restarted` flag and
-  by timing a cached recheck against a slow proof), and `run_at` builds a
-  missing dependency so its `Require` resolves.
+  `dune_recheck_no_restart` is a dune project whose slow proof is checked twice
+  unchanged; the promoted transcript shows no `restarted` on the second check and
+  the `max_seconds` window enforces the cache hit, covering the dune
+  dependency-build integration end to end (no spurious restart on recheck).
+  `dune_run_at_builds_dep` is a dune project whose dependency `.vo` is left
+  uncompiled by the setup build; `run_at` must build it so the client's `Require`
+  resolves. `make_check_sanity` and `make_run_at_sanity` exercise the CoqMakefile
+  backend (`rocq makefile` + `make`): a make-built dependency loads for `check`,
+  and `run_at` works on a `_CoqProject` project.
 
 When changing output shape, update exact-output tests rather than weakening
 assertions. The MCP output should be useful to agents and humans; raw Rocq

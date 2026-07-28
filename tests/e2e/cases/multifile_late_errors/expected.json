@@ -5,7 +5,7 @@
     "file": "src/base.v",
     "result": {
       "status": "complete",
-      "file": "src/base.v"
+      "file": "base.v"
     }
   },
   {
@@ -14,7 +14,7 @@
     "file": "src/lang/modes.v",
     "result": {
       "status": "complete",
-      "file": "src/lang/modes.v"
+      "file": "lang/modes.v"
     }
   },
   {
@@ -28,7 +28,7 @@
     "file": "src/lang/modes.v",
     "result": {
       "status": "complete",
-      "file": "src/lang/modes.v",
+      "file": "lang/modes.v",
       "counts": {
         "errors": 2
       },

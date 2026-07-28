@@ -5,7 +5,7 @@
     "file": "theories/Core.v",
     "result": {
       "status": "complete",
-      "file": "theories/Core.v"
+      "file": "Core.v"
     }
   },
   {
@@ -14,7 +14,7 @@
     "file": "clients/UseCore.v",
     "result": {
       "status": "complete",
-      "file": "clients/UseCore.v"
+      "file": "UseCore.v"
     }
   },
   {
@@ -28,7 +28,7 @@
     "file": "clients/UseCore.v",
     "result": {
       "status": "complete",
-      "file": "clients/UseCore.v",
+      "file": "UseCore.v",
       "counts": {
         "errors": 1
       },

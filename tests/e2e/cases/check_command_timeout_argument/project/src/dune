@@ -1,0 +1,3 @@
+(rocq.theory
+ (name CheckCommandTimeoutArgument)
+ (generate_project_file))

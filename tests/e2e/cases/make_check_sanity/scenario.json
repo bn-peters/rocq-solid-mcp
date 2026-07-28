@@ -1,0 +1,10 @@
+{
+  "steps": [
+    {
+      "label": "check make-built client",
+      "action": "check",
+      "file": "src/UseBase.v",
+      "long_running_seconds": 0
+    }
+  ]
+}

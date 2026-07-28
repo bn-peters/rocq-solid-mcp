@@ -1,0 +1,11 @@
+{
+  "steps": [
+    {
+      "label": "run_at builds the missing dependency",
+      "action": "run_at",
+      "file": "clients/UseDep.v",
+      "commands": "Check dep_value.",
+      "line": 2
+    }
+  ]
+}

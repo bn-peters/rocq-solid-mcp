@@ -45,12 +45,20 @@ class DuneDetection:
 def _dune_reported_build_actions(stderr: str) -> bool:
     """Whether dune's short-display stderr shows a real dependency rebuild.
 
-    With ``--display=short`` dune reports build actions on stderr, but it also
-    prints ``Entering directory``/``Leaving directory`` there for any invocation
-    from a subdirectory of the workspace root, even when nothing was rebuilt.
-    Reading that navigation noise as a rebuild makes every check restart the
-    session and discard the incremental cache, so it is ignored here; any other
-    non-empty line means a dependency was recompiled.
+    With ``--display=short`` dune reports build actions on stderr, but two kinds
+    of line do not mean a dependency ``.vo`` was recompiled and must not force a
+    session restart:
+
+    - ``Entering directory``/``Leaving directory``, printed for any invocation
+      from a subdirectory of the workspace root even when nothing was rebuilt.
+    - coqdep dependency-graph regeneration (``rocq <dir>/.<name>.theory.d``),
+      which dune re-runs whenever the *edited target file itself* changes. Since
+      ``dune <top> top --toplevel echo`` never compiles the target, this is
+      bookkeeping, not a dependency rebuild; treating it as one would restart the
+      session on every edit-then-recheck and discard the incremental cache.
+
+    Any other non-empty line (notably a ``.vo``/``.glob`` compile) means a
+    dependency was recompiled and the cached session must be refreshed.
     """
     for line in stderr.splitlines():
         stripped = line.strip()
@@ -59,6 +67,8 @@ def _dune_reported_build_actions(stderr: str) -> bool:
         if stripped.startswith("Entering directory ") or stripped.startswith(
             "Leaving directory "
         ):
+            continue
+        if stripped.endswith(".theory.d"):
             continue
         return True
     return False

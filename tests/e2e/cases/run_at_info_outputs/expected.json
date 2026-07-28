@@ -6,7 +6,7 @@
     "commands": "Search (_ + 0 = _).",
     "result": {
       "status": "complete",
-      "file": "src/Commands.v",
+      "file": "Commands.v",
       "location": "1:43",
       "commands": "Search (_ + 0 = _).",
       "output": [
@@ -24,7 +24,7 @@
     "commands": "Check Nat.add.",
     "result": {
       "status": "complete",
-      "file": "src/Commands.v",
+      "file": "Commands.v",
       "location": "1:43",
       "commands": "Check Nat.add.",
       "output": [
@@ -42,7 +42,7 @@
     "commands": "Compute 2 + 2.",
     "result": {
       "status": "complete",
-      "file": "src/Commands.v",
+      "file": "Commands.v",
       "location": "1:43",
       "commands": "Compute 2 + 2.",
       "output": [

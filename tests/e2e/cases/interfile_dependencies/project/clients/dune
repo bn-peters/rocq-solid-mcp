@@ -1,0 +1,4 @@
+(rocq.theory
+ (name dependency_demo_clients)
+ (generate_project_file)
+ (theories dependency_demo))

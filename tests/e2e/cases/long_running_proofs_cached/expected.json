@@ -5,7 +5,7 @@
     "file": "src/cache.v",
     "result": {
       "status": "complete",
-      "file": "src/cache.v",
+      "file": "cache.v",
       "counts": {
         "errors": 1
       },
@@ -44,7 +44,7 @@
     "file": "src/cache.v",
     "result": {
       "status": "complete",
-      "file": "src/cache.v"
+      "file": "cache.v"
     }
   }
 ]

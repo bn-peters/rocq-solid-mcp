@@ -5,7 +5,7 @@
     "file": "src/repeated_failures.v",
     "result": {
       "status": "complete",
-      "file": "src/repeated_failures.v",
+      "file": "repeated_failures.v",
       "counts": {
         "errors": 1
       },

@@ -1,0 +1,3 @@
+(rocq.theory
+ (name proof_demo)
+ (generate_project_file))

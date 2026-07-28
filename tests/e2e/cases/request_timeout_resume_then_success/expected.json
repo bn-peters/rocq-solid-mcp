@@ -5,7 +5,7 @@
     "file": "src/resume_then_success.v",
     "result": {
       "status": "timeout",
-      "file": "src/resume_then_success.v",
+      "file": "resume_then_success.v",
       "counts": {
         "errors": 1
       },
@@ -38,7 +38,7 @@
     "file": "src/resume_then_success.v",
     "result": {
       "status": "complete",
-      "file": "src/resume_then_success.v",
+      "file": "resume_then_success.v",
       "counts": {
         "errors": 1
       },

@@ -5,7 +5,7 @@
     "file": "src/many_failures.v",
     "result": {
       "status": "complete",
-      "file": "src/many_failures.v",
+      "file": "many_failures.v",
       "counts": {
         "errors": 20
       },

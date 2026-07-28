@@ -26,8 +26,24 @@ def scenario_cases() -> list[Path]:
 async def run_case(case_dir: Path, tmp_path: Path, *, promote: bool) -> None:
     scenario = _read_json(case_dir / "scenario.json")
     project_root = tmp_path / "project"
-    shutil.copytree(case_dir / "project", project_root)
-    transcript = _run_setup(project_root, scenario.get("setup", []))
+    shutil.copytree(
+        case_dir / "project",
+        project_root,
+        ignore=shutil.ignore_patterns(
+            "_build",
+            "*.vo",
+            "*.vos",
+            "*.vok",
+            "*.glob",
+            "*.diags",
+            "Makefile",
+            "Makefile.conf",
+            ".Makefile.d",
+            ".*.aux",
+        ),
+    )
+    _build_project(project_root, scenario)
+    transcript: list[dict[str, Any]] = []
 
     manager = RocqLspManager(
         RocqLspConfig(
@@ -45,36 +61,106 @@ async def run_case(case_dir: Path, tmp_path: Path, *, promote: bool) -> None:
     _check_or_promote(case_dir / "expected.json", transcript, promote=promote)
 
 
-def _run_setup(project_root: Path, steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    transcript: list[dict[str, Any]] = []
-    for step in steps:
-        action = step["action"]
-        if action == "rocq c":
-            _run_rocq_c(project_root, step)
-            transcript.append(_step_record(step))
-            continue
+def _build_project(project_root: Path, scenario: dict[str, Any]) -> None:
+    """Compile the whole project so coq-lsp can resolve imports.
 
-        raise AssertionError(f"unknown e2e setup action: {action}")
-    return transcript
+    The backend is auto-detected from the copied project and can be overridden
+    with the scenario's ``build`` key:
+
+    - ``dune`` (default when a ``dune-project`` is present): generate every
+      theory's ``_RocqProject`` via ``dune build <dir>/_RocqProject``. This
+      writes the project files coq-lsp reads and compiles no ``.vo`` — so it
+      never compiles a step-target file (many are intentionally broken or slow).
+      The manager compiles each step's dependencies on demand during the run.
+    - ``make`` (default when a ``_CoqProject`` but no ``dune-project`` is
+      present): ``rocq makefile`` + ``make``. Only for all-valid sanity fixtures.
+    - ``none`` (default for a legacy committed ``_RocqProject``): no build.
+    """
+    mode = scenario.get("build") or _detect_build_backend(project_root)
+    if mode == "none":
+        return
+    if mode == "dune":
+        _dune_build(project_root)
+    elif mode == "make":
+        _make_build(project_root)
+    else:
+        raise AssertionError(f"unknown e2e build mode: {mode}")
 
 
-def _run_rocq_c(project_root: Path, step: dict[str, Any]) -> None:
+def _detect_build_backend(project_root: Path) -> str:
+    if (project_root / "dune-project").is_file():
+        return "dune"
+    if (project_root / "_CoqProject").is_file():
+        return "make"
+    if (project_root / "_RocqProject").is_file():
+        return "none"
+    raise AssertionError(
+        "e2e project has no dune-project, _CoqProject, or _RocqProject: "
+        f"{project_root}"
+    )
+
+
+def _dune_build(project_root: Path) -> None:
+    dune = shutil.which("dune")
+    if dune is None or not _dune_supports_rocq_lang(dune):
+        pytest.skip("install dune>=3.21 to run dune-based e2e scenarios")
+
+    targets = [
+        str(dune_file.parent.relative_to(project_root) / "_RocqProject")
+        for dune_file in sorted(project_root.glob("**/dune"))
+        if "_build" not in dune_file.parts
+    ]
+    if not targets:
+        raise AssertionError(f"dune project has no theory dune files: {project_root}")
+
+    result = subprocess.run(
+        [dune, "build", *targets],
+        cwd=project_root,
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        output = "\n".join(part for part in (result.stdout, result.stderr) if part)
+        raise AssertionError(f"dune build failed in {project_root}\n{output}")
+
+
+def _make_build(project_root: Path) -> None:
     rocq = shutil.which("rocq")
-    if rocq is None:
-        pytest.skip("install rocq to run e2e scenarios with compiled dependencies")
+    make = shutil.which("make")
+    if rocq is None or make is None:
+        pytest.skip("install rocq and make to run CoqMakefile e2e scenarios")
 
-    file = step["file"]
+    generate = subprocess.run(
+        [rocq, "makefile", "-f", "_CoqProject", "-o", "Makefile"],
+        cwd=project_root,
+        text=True,
+        capture_output=True,
+    )
+    if generate.returncode != 0:
+        output = "\n".join(part for part in (generate.stdout, generate.stderr) if part)
+        raise AssertionError(f"rocq makefile failed in {project_root}\n{output}")
+
+    build = subprocess.run(
+        [make], cwd=project_root, text=True, capture_output=True
+    )
+    if build.returncode != 0:
+        output = "\n".join(part for part in (build.stdout, build.stderr) if part)
+        raise AssertionError(f"make failed in {project_root}\n{output}")
+
+
+def _dune_supports_rocq_lang(dune: str) -> bool:
     try:
-        subprocess.run(
-            [rocq, "c", *step.get("args", []), file],
-            cwd=project_root,
-            check=True,
-            text=True,
-            capture_output=True,
-        )
-    except subprocess.CalledProcessError as exc:
-        output = "\n".join(part for part in (exc.stdout, exc.stderr) if part)
-        raise AssertionError(f"rocq c failed for {file}\n{output}") from exc
+        version = subprocess.run(
+            [dune, "--version"], check=True, text=True, capture_output=True
+        ).stdout.strip()
+    except (subprocess.CalledProcessError, OSError):
+        return False
+    parts = version.split(".")
+    try:
+        major, minor = int(parts[0]), int(parts[1])
+    except (IndexError, ValueError):
+        return False
+    return (major, minor) >= (3, 21)
 
 
 def _timeout_policy(scenario: dict[str, Any]) -> TimeoutPolicy:

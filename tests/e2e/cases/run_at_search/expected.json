@@ -6,7 +6,7 @@
     "commands": "Search (_ + 0 = _).",
     "result": {
       "status": "complete",
-      "file": "src/Search.v",
+      "file": "Search.v",
       "location": "1:43",
       "commands": "Search (_ + 0 = _).",
       "output": [

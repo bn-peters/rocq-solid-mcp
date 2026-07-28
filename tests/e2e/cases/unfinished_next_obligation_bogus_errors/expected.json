@@ -5,7 +5,7 @@
     "file": "src/unfinished_next_obligation.v",
     "result": {
       "status": "complete",
-      "file": "src/unfinished_next_obligation.v",
+      "file": "unfinished_next_obligation.v",
       "counts": {
         "errors": 1
       },

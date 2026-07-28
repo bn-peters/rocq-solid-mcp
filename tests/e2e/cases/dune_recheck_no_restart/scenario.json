@@ -1,0 +1,18 @@
+{
+  "steps": [
+    {
+      "label": "first check slow proof",
+      "action": "check",
+      "file": "src/cache.v",
+      "min_seconds": 3,
+      "long_running_seconds": 0
+    },
+    {
+      "label": "recheck unchanged stays cached and does not restart",
+      "action": "check",
+      "file": "src/cache.v",
+      "max_seconds": 4,
+      "long_running_seconds": 0
+    }
+  ]
+}

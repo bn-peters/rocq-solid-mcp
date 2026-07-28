@@ -1,0 +1,3 @@
+(rocq.theory
+ (name dune_dep)
+ (generate_project_file))

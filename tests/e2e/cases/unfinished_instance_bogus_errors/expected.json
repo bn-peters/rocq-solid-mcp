@@ -5,7 +5,7 @@
     "file": "src/unfinished_instance.v",
     "result": {
       "status": "complete",
-      "file": "src/unfinished_instance.v",
+      "file": "unfinished_instance.v",
       "counts": {
         "errors": 1
       },

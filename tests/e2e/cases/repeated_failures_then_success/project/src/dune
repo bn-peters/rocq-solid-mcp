@@ -1,0 +1,3 @@
+(rocq.theory
+ (name repeated_failures_then_success)
+ (generate_project_file))

@@ -1,0 +1,20 @@
+[
+  {
+    "step": "first check slow proof",
+    "action": "check",
+    "file": "src/cache.v",
+    "result": {
+      "status": "complete",
+      "file": "cache.v"
+    }
+  },
+  {
+    "step": "recheck unchanged stays cached and does not restart",
+    "action": "check",
+    "file": "src/cache.v",
+    "result": {
+      "status": "complete",
+      "file": "cache.v"
+    }
+  }
+]

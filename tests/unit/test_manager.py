@@ -693,6 +693,18 @@ def test_dune_reported_build_actions_ignores_directory_navigation() -> None:
     assert _dune_reported_build_actions("        rocq theories/Base.vo\n") is True
 
 
+def test_dune_reported_build_actions_ignores_coqdep_theory_d() -> None:
+    # Editing the target file makes dune regenerate the theory's coqdep graph
+    # (``.theory.d``) without recompiling any dependency ``.vo``. That must not
+    # count as a rebuild, else every edit-then-recheck restarts the session.
+    noise = "Entering directory '/p'\nLeaving directory '/p'\n"
+    only_coqdep = noise + "        rocq clients/.demo_clients.theory.d\n"
+    assert _dune_reported_build_actions(only_coqdep) is False
+    # A real dependency compile alongside the coqdep line still counts.
+    with_vo = only_coqdep + "        rocq theories/Base.{glob,vo}\n"
+    assert _dune_reported_build_actions(with_vo) is True
+
+
 @pytest.mark.asyncio
 async def test_check_file_dune_build_ignores_directory_navigation_noise(
     tmp_path: Path,

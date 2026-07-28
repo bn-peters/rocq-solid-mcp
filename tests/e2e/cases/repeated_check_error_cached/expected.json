@@ -5,7 +5,7 @@
     "file": "src/error_cached.v",
     "result": {
       "status": "complete",
-      "file": "src/error_cached.v",
+      "file": "error_cached.v",
       "counts": {
         "errors": 1
       },
@@ -25,7 +25,7 @@
     "file": "src/error_cached.v",
     "result": {
       "status": "complete",
-      "file": "src/error_cached.v",
+      "file": "error_cached.v",
       "counts": {
         "errors": 1
       },

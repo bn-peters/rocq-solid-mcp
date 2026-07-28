@@ -1,0 +1,3 @@
+(rocq.theory
+ (name diagnostic_message_limit)
+ (generate_project_file))

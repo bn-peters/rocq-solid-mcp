@@ -1,0 +1,3 @@
+(rocq.theory
+ (name CommandTimeout)
+ (generate_project_file))

@@ -1,0 +1,20 @@
+[
+  {
+    "step": "run_at check on make project",
+    "action": "run_at",
+    "file": "src/Query.v",
+    "commands": "Check query_value.",
+    "result": {
+      "status": "complete",
+      "file": "src/Query.v",
+      "location": "2:1",
+      "commands": "Check query_value.",
+      "output": [
+        {
+          "level": "info",
+          "text": "query_value\n     : nat"
+        }
+      ]
+    }
+  }
+]
