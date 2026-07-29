@@ -363,8 +363,10 @@ still depends on the GitLab runner having the local cache available.
   an intentionally broken or slow step-target; the manager compiles each step's
   dependencies on demand during the run. The make build runs
   `rocq makefile -f _CoqProject -o Makefile` then `make`. Fixtures then check
-  files or run `run_at` through one cached manager, edit files, and check concise
-  agent-facing transcripts. Under dune, `_infer_workspace` resolves to the theory
+  files or run `run_at` through one cached manager, create or edit files, and
+  check concise agent-facing transcripts. A step's `action` is one of `create`
+  (write a brand-new file that must not already exist), `append`, `replace`,
+  `check`, or `run_at`. Under dune, `_infer_workspace` resolves to the theory
   subdirectory, so the transcript `file` field is a basename. Scenario files may
   define a top-level `timeout_policy` for timeout-specific coverage. Scenario check and
   `run_at` steps may include `min_seconds` or `max_seconds` timing assertions
@@ -412,7 +414,21 @@ still depends on the GitLab runner having the local cache available.
   dependency-build integration end to end (no spurious restart on recheck).
   `dune_run_at_builds_dep` is a dune project whose dependency `.vo` is left
   uncompiled by the setup build; `run_at` must build it so the client's `Require`
-  resolves. `make_check_sanity` and `make_run_at_sanity` exercise the CoqMakefile
+  resolves.
+  `dune_check_created_dependency` creates two brand-new files at run time in a
+  dune theory — `a.v` with a definition and `b.v` that `Require`s `a` — and then
+  checks `b.v`. The setup build compiles no `.vo`, so the check succeeds only if
+  the manager's dune dependency build compiles the freshly created `a.v`; a
+  committed placeholder keeps the theory non-empty at setup so its generated
+  `_RocqProject` is representative (an empty theory is emitted with `-noinit`).
+  `dune_check_created_subdir_dependency` is the same idea one directory deeper: a
+  dune theory with `(include_subdirs qualified)` ships only `a.v` at setup, then
+  creates a nested `b/c.v` and `b/d.v` (with `d.v` requiring `newfiles.b.c`) at
+  run time and checks `b/d.v`. The subdirectory does not exist when the setup
+  build generates `_RocqProject`, so the check succeeds only if the manager's
+  dune build discovers the new subdirectory and compiles `b/c.v`; the workspace
+  resolves to `src/`, so the transcript `file` is the nested `b/d.v`.
+  `make_check_sanity` and `make_run_at_sanity` exercise the CoqMakefile
   backend (`rocq makefile` + `make`): a make-built dependency loads for `check`,
   and `run_at` works on a `_CoqProject` project.
 

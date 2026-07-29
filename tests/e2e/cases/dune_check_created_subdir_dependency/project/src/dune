@@ -1,0 +1,4 @@
+(include_subdirs qualified)
+(rocq.theory
+ (name newfiles)
+ (generate_project_file))

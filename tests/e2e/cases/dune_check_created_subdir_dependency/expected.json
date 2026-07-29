@@ -1,0 +1,21 @@
+[
+  {
+    "step": "create nested dependency file b/c.v",
+    "action": "create",
+    "file": "src/b/c.v"
+  },
+  {
+    "step": "create nested dependent file b/d.v",
+    "action": "create",
+    "file": "src/b/d.v"
+  },
+  {
+    "step": "check nested dependent file builds the new dependency",
+    "action": "check",
+    "file": "src/b/d.v",
+    "result": {
+      "status": "complete",
+      "file": "b/d.v"
+    }
+  }
+]

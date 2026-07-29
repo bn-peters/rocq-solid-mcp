@@ -1,0 +1,22 @@
+{
+  "steps": [
+    {
+      "label": "create nested dependency file b/c.v",
+      "action": "create",
+      "file": "src/b/c.v",
+      "text": "Definition c_value : nat := 41.\n"
+    },
+    {
+      "label": "create nested dependent file b/d.v",
+      "action": "create",
+      "file": "src/b/d.v",
+      "text": "From newfiles Require Import b.c.\n\nDefinition d_value : nat := c_value + 1.\n"
+    },
+    {
+      "label": "check nested dependent file builds the new dependency",
+      "action": "check",
+      "file": "src/b/d.v",
+      "long_running_seconds": 0
+    }
+  ]
+}

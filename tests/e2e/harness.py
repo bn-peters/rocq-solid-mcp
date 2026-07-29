@@ -183,6 +183,14 @@ async def _run_steps(
         file = step["file"]
         path = project_root / file
 
+        if action == "create":
+            if path.exists():
+                raise AssertionError(f"create target already exists: {file}")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(step["text"], encoding="utf-8")
+            transcript.append(_step_record(step))
+            continue
+
         if action == "append":
             path.write_text(
                 path.read_text(encoding="utf-8") + step["text"],

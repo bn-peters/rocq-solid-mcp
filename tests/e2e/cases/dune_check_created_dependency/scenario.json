@@ -1,0 +1,22 @@
+{
+  "steps": [
+    {
+      "label": "create dependency file a.v",
+      "action": "create",
+      "file": "src/a.v",
+      "text": "Definition a_value : nat := 7.\n"
+    },
+    {
+      "label": "create dependent file b.v",
+      "action": "create",
+      "file": "src/b.v",
+      "text": "From newfiles Require Import a.\n\nDefinition b_value : nat := a_value + 1.\n"
+    },
+    {
+      "label": "check dependent file builds the new dependency",
+      "action": "check",
+      "file": "src/b.v",
+      "long_running_seconds": 0
+    }
+  ]
+}
