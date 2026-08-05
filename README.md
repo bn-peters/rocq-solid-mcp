@@ -87,7 +87,7 @@ All optional; defaults in parentheses.
 - `ROCQ_LSP_USE_OPAM` (`1`): run via `opam exec --`; `0` runs the binary
   directly
 - `ROCQ_LSP_WORKSPACE` (unset): override the inferred workspace root
-- `ROCQ_LSP_TIMEOUT` (`60`, max `3600`): deadline per call; set slightly below
+- `ROCQ_LSP_TIMEOUT` (`55`, max `3600`): deadline per call; set slightly below
   the MCP tool timeout
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE` (`5`): extra wait after cancellation before the
   session is killed
@@ -100,7 +100,7 @@ All optional; defaults in parentheses.
   stopped
 - `ROCQ_LSP_DUNE_BUILD` (`1`): build dune dependencies before checks; `0`
   disables
-- `ROCQ_LSP_DUNE_TIMEOUT` (`60`, max `3600`): limit per dune detection or build
+- `ROCQ_LSP_DUNE_TIMEOUT` (`55`, max `3600`): limit per dune detection or build
   command
 
 
@@ -140,7 +140,7 @@ a compact `timeout_context` that reports the request operation, timeout
 kind and settings, the latest checked position, the latest processing range,
 and a small preview of the next unchecked source line when available. The soft
 coq-lsp partial-result deadline is configured with `ROCQ_LSP_TIMEOUT`; the
-default is 60 seconds and the maximum is 3600 seconds. Set it slightly lower
+default is 55 seconds and the maximum is 3600 seconds. Set it slightly lower
 than the host-level MCP tool timeout so the server can return partial
 diagnostics before the host cancels the whole tool call, leaving room for
 `ROCQ_LSP_HARD_TIMEOUT_GRACE`. Optional per-command timeouts use
@@ -183,7 +183,8 @@ process as if `clear_cache=True` had been set.
 For `Attempt to save an incomplete proof` diagnostics, the `Qed.` span may only
 contain the save error. The manager asks `proof/goals` with `mode: "Prev"` at
 that diagnostic position and merges the returned compact goals and bullet state
-into the diagnostic proof state.
+into the diagnostic proof state. Timed-out checks skip these supplemental
+requests so the exit stays bounded.
 
 `run_at` execution uses `petanque/run_at_point`, because `proof/goals` with the
 `command` parameter does not return feedback from commands such as `Search` or
@@ -301,7 +302,7 @@ diagnostics.
 check and `run_at` calls. If it fires before the MCP host's own tool-call
 timeout or cancellation, the server cancels the underlying `coq-lsp` request
 and returns partial diagnostics, progress context, or partial `run_at` output
-when available. It defaults to 60 seconds and may be at most 3600 seconds. Set
+when available. It defaults to 55 seconds and may be at most 3600 seconds. Set
 it slightly lower than the MCP host tool timeout, leaving room for
 `ROCQ_LSP_HARD_TIMEOUT_GRACE`, if callers should receive these partial timeout
 results.
@@ -330,7 +331,7 @@ The tool returns one rendered result for the full commands string.
 - `ROCQ_LSP_BINARY` defaults to `coq-lsp`
 - `ROCQ_LSP_USE_OPAM` defaults to `1`; set to `0` to run the binary directly
 - `ROCQ_LSP_TIMEOUT` is the default soft partial-result deadline; it defaults
-  to `60`, is capped at `3600`, and should be set slightly lower than the
+  to `55`, is capped at `3600`, and should be set slightly lower than the
   overall MCP tool timeout
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE` defaults to `5`
 - `ROCQ_LSP_COMMAND_TIMEOUT` defaults to `5`; set `0` to disable per-sentence
@@ -345,7 +346,7 @@ The tool returns one rendered result for the full commands string.
 - `ROCQ_LSP_IDLE_TTL_SECONDS` defaults to `1800`
 - `ROCQ_LSP_DUNE_BUILD` defaults to `1`; set to `0` to disable automatic dune
   dependency builds before `check`
-- `ROCQ_LSP_DUNE_TIMEOUT` defaults to `60`, is capped at `3600`, and limits each
+- `ROCQ_LSP_DUNE_TIMEOUT` defaults to `55`, is capped at `3600`, and limits each
   dune command used for dependency-build detection or execution
 
 Idle sessions older than `ROCQ_LSP_IDLE_TTL_SECONDS` are cleaned up by the MCP

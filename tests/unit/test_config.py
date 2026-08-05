@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
 from rocq_lsp_mcp.config import (
     DEFAULT_COMMAND_TIMEOUT_SECONDS,
     DEFAULT_MESSAGE_LIMIT,
+    DEFAULT_OVERALL_TIMEOUT_SECONDS,
     DEFAULT_TIMEOUT_AFTER_ERROR_SECONDS,
     MAX_MESSAGE_LIMIT,
     MAX_OVERALL_TIMEOUT_SECONDS,
@@ -137,6 +140,31 @@ def test_load_config_treats_empty_timeout_after_error_as_default(
         config.timeout_policy.request_seconds_after_error
         == DEFAULT_TIMEOUT_AFTER_ERROR_SECONDS
     )
+
+
+def test_load_config_disables_non_finite_optional_timeouts(monkeypatch) -> None:
+    monkeypatch.setenv("ROCQ_LSP_TIMEOUT_AFTER_ERROR", "nan")
+    monkeypatch.setenv("ROCQ_LSP_COMMAND_TIMEOUT", "inf")
+
+    config = load_config()
+
+    assert config.timeout_policy.request_seconds_after_error is None
+    assert config.timeout_policy.command_seconds is None
+
+
+def test_load_config_replaces_non_finite_required_timeouts(monkeypatch) -> None:
+    monkeypatch.setenv("ROCQ_LSP_TIMEOUT", "nan")
+
+    config = load_config()
+
+    assert config.timeout_policy.request_seconds == DEFAULT_OVERALL_TIMEOUT_SECONDS
+
+
+def test_load_config_warns_about_renamed_after_error_variable(monkeypatch) -> None:
+    monkeypatch.setenv("ROCQ_LSP_COMMAND_TIMEOUT_AFTER_ERROR", "0")
+
+    with pytest.warns(UserWarning, match="ROCQ_LSP_TIMEOUT_AFTER_ERROR"):
+        load_config()
 
 
 def test_load_config_reads_dune_build_settings(monkeypatch) -> None:

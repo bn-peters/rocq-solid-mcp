@@ -10,6 +10,7 @@ from rocq_lsp_mcp.notifications import NotificationStore
 from rocq_lsp_mcp.rocq_client import (
     RocqLspClient,
     RocqLspHardTimeout,
+    RocqLspProcessExited,
     RocqLspUnavailableError,
 )
 
@@ -32,6 +33,23 @@ def execution_info(uri: str, version: int, line: int) -> dict[str, Any]:
             "start": {"line": line, "character": 2},
             "end": {"line": line, "character": 10},
         },
+    }
+
+
+def error_diagnostics(uri: str, version: int) -> dict[str, Any]:
+    return {
+        "uri": uri,
+        "version": version,
+        "diagnostics": [
+            {
+                "message": "bad",
+                "severity": 1,
+                "range": {
+                    "start": {"line": 0, "character": 0},
+                    "end": {"line": 0, "character": 4},
+                },
+            }
+        ],
     }
 
 
@@ -276,6 +294,210 @@ async def test_request_get_document_does_not_command_timeout_final_sentence(
     assert result.document == completed_document()
     assert result.timed_out is False
     assert not any(message.get("method") == "$/cancelRequest" for message in sent)
+
+
+@pytest.mark.asyncio
+async def test_request_get_document_after_error_deadline_cancels(
+    tmp_path: Path,
+) -> None:
+    store = NotificationStore()
+    client = client_with_store(tmp_path, store)
+    sent: list[dict[str, Any]] = []
+    uri = "file:///Demo.v"
+    version = 1
+
+    async def fake_send(message: dict[str, Any]) -> None:
+        sent.append(message)
+        method = message.get("method")
+        if method == "coq/getDocument":
+            async def publish() -> None:
+                await asyncio.sleep(0)
+                store.handle(
+                    "$/coq/executionInformation",
+                    execution_info(uri, version, 5),
+                )
+                store.handle(
+                    "textDocument/publishDiagnostics",
+                    error_diagnostics(uri, version),
+                )
+
+            asyncio.create_task(publish())
+        if method == "$/cancelRequest":
+            request_id = message["params"]["id"]
+            client._pending[request_id].set_result(
+                {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {"code": -32800, "message": "Cancelled by client"},
+                }
+            )
+
+    client._send = fake_send  # type: ignore[method-assign]
+
+    result = await client.request_get_document(
+        uri=uri,
+        version=version,
+        timeout=1,
+        hard_timeout_grace=0.1,
+        timeout_after_error=0.02,
+    )
+
+    assert result.timed_out is True
+    assert result.timeout_kind == "after_error"
+    assert result.timed_out_range == execution_info(uri, version, 5)["range"]
+
+
+@pytest.mark.asyncio
+async def test_request_get_document_per_sentence_timeout_still_applies_after_error(
+    tmp_path: Path,
+) -> None:
+    store = NotificationStore()
+    client = client_with_store(tmp_path, store)
+    sent: list[dict[str, Any]] = []
+    uri = "file:///Demo.v"
+    version = 1
+
+    async def fake_send(message: dict[str, Any]) -> None:
+        sent.append(message)
+        method = message.get("method")
+        if method == "coq/getDocument":
+            async def publish() -> None:
+                await asyncio.sleep(0)
+                store.handle(
+                    "textDocument/publishDiagnostics",
+                    error_diagnostics(uri, version),
+                )
+                store.handle(
+                    "$/coq/executionInformation",
+                    execution_info(uri, version, 3),
+                )
+
+            asyncio.create_task(publish())
+        if method == "$/cancelRequest":
+            request_id = message["params"]["id"]
+            client._pending[request_id].set_result(
+                {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {"code": -32800, "message": "Cancelled by client"},
+                }
+            )
+
+    client._send = fake_send  # type: ignore[method-assign]
+
+    # The post-error sentence exceeds the per-sentence watchdog long before
+    # the distant after-error deadline: the cancel must be a "command" one.
+    result = await client.request_get_document(
+        uri=uri,
+        version=version,
+        timeout=1,
+        hard_timeout_grace=0.1,
+        command_timeout=0.02,
+        timeout_after_error=10,
+    )
+
+    assert result.timed_out is True
+    assert result.timeout_kind == "command"
+    assert result.timed_out_range == execution_info(uri, version, 3)["range"]
+
+
+@pytest.mark.asyncio
+async def test_request_get_document_error_wake_does_not_restart_sentence_timer(
+    tmp_path: Path,
+) -> None:
+    store = NotificationStore()
+    client = client_with_store(tmp_path, store)
+    uri = "file:///Demo.v"
+    version = 1
+    command_timeout = 0.4
+    error_delay = 0.3
+
+    async def fake_send(message: dict[str, Any]) -> None:
+        method = message.get("method")
+        if method == "coq/getDocument":
+            async def publish() -> None:
+                await asyncio.sleep(0)
+                store.handle(
+                    "$/coq/executionInformation",
+                    execution_info(uri, version, 3),
+                )
+                await asyncio.sleep(error_delay)
+                store.handle(
+                    "textDocument/publishDiagnostics",
+                    error_diagnostics(uri, version),
+                )
+
+            asyncio.create_task(publish())
+        if method == "$/cancelRequest":
+            request_id = message["params"]["id"]
+            client._pending[request_id].set_result(
+                {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {"code": -32800, "message": "Cancelled by client"},
+                }
+            )
+
+    client._send = fake_send  # type: ignore[method-assign]
+
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    result = await client.request_get_document(
+        uri=uri,
+        version=version,
+        timeout=2,
+        hard_timeout_grace=0.1,
+        command_timeout=command_timeout,
+        timeout_after_error=10,
+    )
+    elapsed = loop.time() - started
+
+    # The per-sentence deadline is anchored to the sentence start; the error
+    # wake mid-sentence must not grant the sentence a fresh window, so the
+    # cancel lands at ~command_timeout, not ~error_delay + command_timeout.
+    assert result.timed_out is True
+    assert result.timeout_kind == "command"
+    assert elapsed < error_delay + command_timeout - 0.1
+
+
+@pytest.mark.asyncio
+async def test_request_get_document_contains_watchdog_send_failure(
+    tmp_path: Path,
+) -> None:
+    store = NotificationStore()
+    client = client_with_store(tmp_path, store)
+    uri = "file:///Demo.v"
+    version = 1
+
+    async def fake_send(message: dict[str, Any]) -> None:
+        method = message.get("method")
+        if method == "coq/getDocument":
+            async def publish() -> None:
+                await asyncio.sleep(0)
+                store.handle(
+                    "textDocument/publishDiagnostics",
+                    error_diagnostics(uri, version),
+                )
+
+            asyncio.create_task(publish())
+        if method == "$/cancelRequest":
+            raise RocqLspProcessExited("coq-lsp is not running")
+
+    client._send = fake_send  # type: ignore[method-assign]
+
+    # The watchdog publishes its outcome before sending the cancel and
+    # contains the send failure, so the classified timeout survives as a
+    # hard timeout instead of the send error clobbering the result.
+    with pytest.raises(RocqLspHardTimeout) as exc_info:
+        await client.request_get_document(
+            uri=uri,
+            version=version,
+            timeout=1,
+            hard_timeout_grace=0.05,
+            timeout_after_error=0.02,
+        )
+
+    assert exc_info.value.timeout_kind == "after_error"
 
 
 @pytest.mark.asyncio

@@ -22,6 +22,7 @@ from rocq_lsp_mcp.notifications import NotificationStore
 from rocq_lsp_mcp.rocq_client import (
     GetDocumentResult,
     RocqLspHardTimeout,
+    RocqLspProcessExited,
     RocqLspResponseError,
     RocqLspUnavailableError,
     language_id_for_path,
@@ -1232,6 +1233,43 @@ async def test_check_file_enriches_incomplete_proof_save_error(
 
 
 @pytest.mark.asyncio
+async def test_check_file_skips_goal_requests_on_timeout(tmp_path: Path) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Goal Foo.\nProof.\nQed.\n", encoding="utf-8")
+    range_ = {
+        "start": {"line": 2, "character": 0},
+        "end": {"line": 2, "character": 4},
+    }
+    notifications = SpyNotificationStore()
+    client = FakeClient(
+        notifications,
+        [
+            {
+                "range": range_,
+                "message": " (in proof foo): Attempt to save an incomplete proof\n"
+                "(there are remaining open goals).",
+                "severity": 1,
+                "data": {"sentenceRange": range_, "proofName": "foo"},
+            }
+        ],
+        document={},
+        request_timed_out=True,
+        timeout_kind="after_error",
+    )
+    manager = FakeManager(
+        client, notifications, tmp_path, request_seconds_after_error=2
+    )
+
+    result = await manager.check_file(str(source))
+
+    # The timeout just promised a bounded exit; supplemental goals requests
+    # (each waiting up to the request deadline) must not stretch it.
+    assert result.status == "timeout"
+    assert result.error_count == 1
+    assert client.goal_requests == []
+
+
+@pytest.mark.asyncio
 async def test_check_file_skips_goal_request_for_regular_proof_error(
     tmp_path: Path,
 ) -> None:
@@ -1693,6 +1731,51 @@ async def test_hard_timeout_resets_session(tmp_path: Path) -> None:
         "next_unchecked": {"location": "3:3", "line": "sleep 5."},
     }
     assert notifications.cleared == [(source.as_uri(), 1)]
+    assert client.pending_cleared is True
+    assert client.killed is True
+    assert source.resolve() not in manager._sessions
+
+
+@pytest.mark.asyncio
+async def test_check_file_resets_session_when_process_exits(tmp_path: Path) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    manager = FakeManager(client, notifications, tmp_path)
+
+    async def dead_get_document(**kwargs: Any) -> GetDocumentResult:
+        raise RocqLspProcessExited("coq-lsp stdout closed")
+
+    client.request_get_document = dead_get_document  # type: ignore[method-assign]
+
+    result = await manager.check_file(str(source))
+
+    assert result.status == "failed"
+    assert result.restarted is True
+    assert "coq-lsp stdout closed" in (result.message or "")
+    assert client.pending_cleared is True
+    assert client.killed is True
+    assert source.resolve() not in manager._sessions
+
+
+@pytest.mark.asyncio
+async def test_run_at_resets_session_when_process_exits(tmp_path: Path) -> None:
+    source = tmp_path / "Demo.v"
+    source.write_text("Check nat.\n", encoding="utf-8")
+    notifications = SpyNotificationStore()
+    client = FakeClient(notifications)
+    manager = FakeManager(client, notifications, tmp_path)
+
+    async def dead_run_at(**kwargs: Any) -> tuple[dict[str, Any], bool]:
+        raise ConnectionResetError("broken pipe")
+
+    client.request_run_at_point = dead_run_at  # type: ignore[method-assign]
+
+    result = await manager.run_at(str(source), "Check nat.", 1, 1)
+
+    assert result.status == "failed"
+    assert result.restarted is True
     assert client.pending_cleared is True
     assert client.killed is True
     assert source.resolve() not in manager._sessions

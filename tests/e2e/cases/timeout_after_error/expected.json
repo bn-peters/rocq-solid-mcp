@@ -7,13 +7,20 @@
       "status": "timeout",
       "file": "after_error.v",
       "counts": {
-        "errors": 1
+        "errors": 2
       },
       "diagnostics": [
         {
           "level": "error",
+          "message": "Tactic failure: SECOND.",
+          "location": "17:3 to 17:17",
+          "sentence": "fail \"SECOND\".",
+          "proof_name": "also_broken"
+        },
+        {
+          "level": "error",
           "message": "Tactic failure: FIRST.",
-          "location": "10:3 to 10:16",
+          "location": "12:3 to 12:16",
           "sentence": "fail \"FIRST\".",
           "proof_name": "broken"
         }
@@ -24,23 +31,28 @@
         "timeout_kind": "after_error",
         "request_timeout_seconds": 60.0,
         "cancel_grace_seconds": 2,
-        "checked_until": "15:11",
-        "latest_processing_range": "15:11 to 22:1",
+        "checked_until": "21:7",
+        "latest_processing_range": "21:7 to 26:1",
         "next_unchecked": {
-          "location": "16:3",
-          "line": "sleep 3."
+          "location": "22:3",
+          "line": "sleep 10."
         },
-        "timeout_after_error_seconds": 5,
-        "timed_out_range": "16:3 to 16:11",
+        "timeout_after_error_seconds": 6,
+        "timed_out_range": "22:3 to 22:12",
         "timed_out_command": {
-          "location": "16:3",
-          "line": "sleep 3."
+          "location": "22:3",
+          "line": "sleep 10."
         }
       }
     }
   },
   {
-    "step": "fix the error",
+    "step": "fix the first error",
+    "action": "replace",
+    "file": "src/after_error.v"
+  },
+  {
+    "step": "fix the second error",
     "action": "replace",
     "file": "src/after_error.v"
   },

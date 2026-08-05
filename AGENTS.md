@@ -137,9 +137,9 @@ lock; separate MCP server processes and manual dune invocations are not covered
 by this in-process lock. The `check` CLI subcommand has no flags
 and deliberately ignores the
 MCP-oriented timeout and message-limit defaults: it disables the request
-timeout, per-sentence command timeout, diagnostic truncation, and
-timeout-derived long-running command reporting for a single formatted JSON
-result. The `run_at` MCP tool receives a Rocq file path, one string containing
+timeout, per-sentence command timeout, after-error deadline, diagnostic
+truncation, and timeout-derived long-running command reporting for a single
+formatted JSON result. The `run_at` MCP tool receives a Rocq file path, one string containing
 one or more complete commands ending in `.`, and a 1-based line/character
 position; it is useful for one-off tasks such as `Check`, `Search`, `Require`,
 `Locate`, and notation experiments. On each call, the manager resolves the
@@ -239,7 +239,9 @@ For `Attempt to save an incomplete proof` diagnostics, the `Qed.` sentence can
 carry only the save error while the open goal is attached to the previous proof
 span. The manager issues a best-effort `proof/goals` request with `mode="Prev"`
 at the diagnostic position and `pipeline.py` merges the returned compact goals
-and bullet state into the existing proof-state payload.
+and bullet state into the existing proof-state payload. Timed-out checks skip
+these supplemental requests: each may wait up to the request deadline, which
+would stretch the bounded exit the timeout just promised.
 
 `run_at` execution is driven by `petanque/run_at_point`, because
 `proof/goals` with the `command` parameter does not surface feedback from
@@ -259,7 +261,7 @@ queued for a check are not stopped.
 Timeout and cancellation handling has three layers:
 
 - `ROCQ_LSP_TIMEOUT` is the soft `coq/getDocument` or
-  `petanque/run_at_point` partial-result deadline; it defaults to 60 seconds,
+  `petanque/run_at_point` partial-result deadline; it defaults to 55 seconds,
   is capped at 3600 seconds, and should be set slightly lower than the overall
   MCP tool timeout.
 - `ROCQ_LSP_COMMAND_TIMEOUT` is an optional per-sentence watchdog during
@@ -273,7 +275,10 @@ Timeout and cancellation handling has three layers:
 If the hard timeout is hit, the manager kills and drops that file session
 so the next call starts with a fresh `coq-lsp`. Hard-timeout responses still
 include timeout context built from any latest progress notification observed
-before the session reset.
+before the session reset. If the `coq-lsp` process dies mid-request (a broken
+pipe or closed stdout), the manager likewise resets the session and returns
+`status: "failed"` with `restarted` set, so the next call starts fresh instead
+of reusing the dead process.
 
 ## Configuration
 
@@ -281,7 +286,7 @@ The prototype reads these environment variables:
 
 - `ROCQ_LSP_BINARY`, default `coq-lsp`
 - `ROCQ_LSP_USE_OPAM`, default `1`; set to `0` to run the binary directly
-- `ROCQ_LSP_TIMEOUT`, default soft partial-result deadline `60`, capped at
+- `ROCQ_LSP_TIMEOUT`, default soft partial-result deadline `55`, capped at
   `3600`, and should be set slightly lower than the overall MCP tool timeout
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE`, default `5`
 - `ROCQ_LSP_COMMAND_TIMEOUT`, default `5`; set `0` to disable per-sentence
@@ -296,7 +301,7 @@ The prototype reads these environment variables:
 - `ROCQ_LSP_IDLE_TTL_SECONDS`, default `1800`
 - `ROCQ_LSP_DUNE_BUILD`, default `1`; set to `0` to disable automatic dune
   dependency builds before check calls
-- `ROCQ_LSP_DUNE_TIMEOUT`, default `60`, capped at `3600`; limits each dune
+- `ROCQ_LSP_DUNE_TIMEOUT`, default `55`, capped at `3600`; limits each dune
   detection or dependency-build command
 
 The prototype is intentionally not security-hardened. Do not add path sandboxing
@@ -374,10 +379,13 @@ still depends on the GitLab runner having the local cache available.
   noise and coqdep `.theory.d` regeneration, and `run_at` triggering the dune
   build (including its failure and cache-restart paths) the same way `check` does.
   It also covers threading the after-error deadline to the client
-  (non-positive policy values and per-call overrides disabling it) and the
-  `after_error` timeout context.
+  (non-positive policy values and per-call overrides disabling it), the
+  `after_error` timeout context, skipping supplemental goals requests on
+  timed-out checks, and resetting the session when the `coq-lsp` process dies
+  mid-request.
 - `tests/unit/test_config.py` covers command construction and environment
-  configuration.
+  configuration, including non-finite timeout values being rejected and the
+  warning for the renamed `ROCQ_LSP_COMMAND_TIMEOUT_AFTER_ERROR` variable.
 - `tests/unit/test_notifications.py` covers diagnostic notification storage,
   file-progress storage for timeout context, execution-info storage for command
   timeout, error-diagnostic observation for the after-error deadline,
@@ -412,9 +420,9 @@ still depends on the GitLab runner having the local cache available.
   `run_at` steps may include `min_seconds` or `max_seconds` timing assertions
   for cache-sensitive behavior; timings are asserted by the harness but omitted
   from promoted transcripts. Scenario check steps may also include
-  `command_timeout_seconds` to cover per-call check timeout overrides,
-  and manager-level `long_running_seconds` to exercise long-running command
-  reporting.
+  `command_timeout_seconds` or `timeout_after_error_seconds` to cover
+  per-call check timeout overrides, and manager-level `long_running_seconds`
+  to exercise long-running command reporting.
   `diagnostic_message_limit` covers the default error diagnostic limit.
   `diagnostic_errors_only` covers error-only check rendering when the file
   also produces a warning. `run_at_info_outputs` covers promoted `Search`,
@@ -430,9 +438,10 @@ still depends on the GitLab runner having the local cache available.
   `command_timeout` uses the same local `sleep` tactic with a long global
   timeout and short command timeout to cover per-sentence cancellation.
   `timeout_after_error` covers the overall after-error deadline: after an
-  early error, a chain of sentences that each pass the normal per-sentence
-  watchdog is stopped at most the deadline after the first error
-  (`timeout_kind: "after_error"`), and once the error is fixed the deadline
+  early error, a second fast error is still reported within the window, a
+  chain of sentences that each pass the normal per-sentence watchdog is
+  stopped at most the deadline after the first error
+  (`timeout_kind: "after_error"`), and once the errors are fixed the deadline
   never arms even though a remaining sentence exceeds it.
   `timeout_after_error_zero` covers the disable semantics: a zero after-error
   deadline leaves the post-error slow proof running until the request

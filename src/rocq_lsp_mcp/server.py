@@ -68,9 +68,9 @@ async def rocq_check_file(
     manually.) Error diagnostics include the source sentence and the proof state
     at error positions.
 
-    The first error in a file is always reported, and many forms of later
-    errors as well. The list of errors may be truncated. The tool also reports
-    Rocq sentences running for long time.
+    The first error in a file is always reported, along with later errors
+    reached within the after-error deadline. The list of errors may be
+    truncated. The tool also reports Rocq sentences running for long time.
 
     This tool is efficient due to per-file caching. For dune-based Rocq projects,
     it attempts to rebuild dependencies before checking and restarts the cached

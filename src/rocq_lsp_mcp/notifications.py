@@ -125,7 +125,7 @@ class NotificationStore:
 
     def has_error_diagnostic(self, uri: str, version: int) -> bool:
         # Exact-version lookup only: stale errors from a previous document
-        # version must not trigger the after-error command timeout.
+        # version must not arm the after-error deadline.
         diagnostics = self._diagnostics.get((uri, version), [])
         return any(
             isinstance(diagnostic, dict) and diagnostic.get("severity") == 1

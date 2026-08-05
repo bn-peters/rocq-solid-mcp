@@ -23,6 +23,7 @@ from .pipeline import build_diagnostics
 from .rocq_client import (
     RocqLspClient,
     RocqLspHardTimeout,
+    RocqLspProcessExited,
     RocqLspResponseError,
     RocqLspUnavailableError,
 )
@@ -116,13 +117,16 @@ class RocqLspManager:
         long_running_seconds: float | None = DEFAULT_LONG_RUNNING_SECONDS,
         clear_cache: bool = False,
     ) -> CheckResult:
-        command_timeout = self._effective_command_timeout(command_timeout_seconds)
-        timeout_after_error = self._effective_timeout_after_error(
-            timeout_after_error_seconds
+        command_timeout = self._effective_optional_seconds(
+            command_timeout_seconds, self.config.timeout_policy.command_seconds
+        )
+        timeout_after_error = self._effective_optional_seconds(
+            timeout_after_error_seconds,
+            self.config.timeout_policy.request_seconds_after_error,
         )
         overall_timeout = self._effective_overall_timeout(overall_timeout_seconds)
-        long_running_threshold = self._effective_long_running_threshold(
-            long_running_seconds
+        long_running_threshold = self._effective_optional_seconds(
+            long_running_seconds, DEFAULT_LONG_RUNNING_SECONDS
         )
         path = self._resolve_file(file)
         if not path.is_file():
@@ -346,8 +350,16 @@ class RocqLspManager:
             raw_diagnostics, perf_data = await self._check_notifications(
                 session, uri, version, long_running_threshold, request_timed_out
             )
-            supplemental_proof_states = await self._incomplete_proof_goal_states(
-                client, uri, version, raw_diagnostics, overall_timeout
+            # Timed-out checks skip the supplemental goals requests: each one
+            # may wait up to the request deadline, which would stretch the
+            # bounded exit the timeout (notably the after-error deadline)
+            # just promised.
+            supplemental_proof_states = (
+                {}
+                if request_timed_out
+                else await self._incomplete_proof_goal_states(
+                    client, uri, version, raw_diagnostics, overall_timeout
+                )
             )
             diagnostics = build_diagnostics(
                 raw_diagnostics,
@@ -442,6 +454,26 @@ class RocqLspManager:
                 completed=None,
                 diagnostics=diagnostics,
                 message=str(exc.error),
+            )
+        except (RocqLspProcessExited, ConnectionError) as exc:
+            # The coq-lsp process died mid-check. Reset the session so the
+            # next call starts a fresh process instead of reusing the dead
+            # one until the idle reaper runs.
+            raw_diagnostics = await session.notifications.wait_for_diagnostics(
+                uri, version
+            )
+            diagnostics = build_diagnostics(raw_diagnostics, None, content=content)
+            await self._reset_session(session_key)
+            return CheckResult.from_diagnostics(
+                status="failed",
+                file=str(path),
+                uri=uri,
+                workspace=workspace,
+                version=version,
+                completed=None,
+                diagnostics=diagnostics,
+                restarted=True,
+                message=str(exc),
             )
         except Exception as exc:
             raw_diagnostics = await session.notifications.wait_for_diagnostics(
@@ -547,6 +579,22 @@ class RocqLspManager:
                 feedback=self._response_error_feedback(exc.error),
                 message=self._response_error_message(exc.error),
             )
+        except (RocqLspProcessExited, ConnectionError) as exc:
+            # The coq-lsp process died mid-request; reset so the next call
+            # starts a fresh process.
+            await self._reset_session(session_key)
+            return RunAtResult.from_feedback(
+                status="failed",
+                file=str(path),
+                commands=commands,
+                location=location,
+                uri=uri,
+                workspace=workspace,
+                version=version,
+                feedback=[],
+                restarted=True,
+                message=str(exc),
+            )
         except Exception as exc:
             return RunAtResult.from_feedback(
                 status="failed",
@@ -614,24 +662,16 @@ class RocqLspManager:
         await session.stop(hard=True)
         return replacement
 
-    def _effective_command_timeout(self, override: float | None) -> float | None:
-        value = (
-            self.config.timeout_policy.command_seconds
-            if override is None
-            else override
-        )
-        if value is None or value <= 0:
-            return None
-        return value
-
-    def _effective_timeout_after_error(
-        self, override: float | None
+    @staticmethod
+    def _effective_optional_seconds(
+        override: float | None, default: float | None
     ) -> float | None:
-        value = (
-            self.config.timeout_policy.request_seconds_after_error
-            if override is None
-            else override
-        )
+        """Shared override convention for optional timeouts and thresholds.
+
+        ``None`` uses the default, non-positive values disable, and positive
+        values enable.
+        """
+        value = default if override is None else override
         if value is None or value <= 0:
             return None
         return value
@@ -674,13 +714,6 @@ class RocqLspManager:
             ),
             timed_out_range=timed_out_range,
         )
-
-    def _effective_long_running_threshold(self, override: float | None) -> float | None:
-        if override is None:
-            return DEFAULT_LONG_RUNNING_SECONDS
-        if override <= 0:
-            return None
-        return override
 
     async def _check_notifications(
         self,

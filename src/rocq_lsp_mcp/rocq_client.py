@@ -52,6 +52,15 @@ class GetDocumentResult:
     timed_out_range: dict[str, Any] | None = None
 
 
+@dataclass(frozen=True)
+class WatchdogTimeout:
+    """The single, immutable outcome a watchdog publishes when it cancels."""
+
+    kind: TimeoutKind
+    seconds: float
+    timed_out_range: dict[str, Any] | None
+
+
 def language_id_for_path(path: Path) -> str:
     name = path.name
     if name.endswith(".mv"):
@@ -61,27 +70,21 @@ def language_id_for_path(path: Path) -> str:
     return "rocq"
 
 
-def _range_reaches_end_of_content(
-    content: str | None, range_: dict[str, Any] | None
-) -> bool:
-    if content is None or range_ is None:
-        return False
+def _end_of_content_position(content: str | None) -> tuple[int, int] | None:
+    """0-based (line, character) just past the last non-whitespace character.
 
-    end = range_.get("end")
-    if not isinstance(end, dict):
-        return False
-
-    line = end.get("line")
-    character = end.get("character")
-    if not isinstance(line, int) or not isinstance(character, int):
-        return False
-
-    lines = content.splitlines(keepends=True)
-    if line < 0 or line >= len(lines):
-        return False
-
-    suffix = "".join([lines[line][character:], *lines[line + 1 :]])
-    return suffix.strip() == ""
+    A sentence whose range ends at or beyond this position is the document's
+    final sentence: only whitespace follows it. Precomputing it keeps the
+    watchdog's final-sentence check O(1) per sentence instead of re-splitting
+    the document content on every wake-up.
+    """
+    if content is None:
+        return None
+    stripped = content.rstrip()
+    if not stripped:
+        return (0, 0)
+    lines = stripped.splitlines()
+    return (len(lines) - 1, len(lines[-1]))
 
 
 class RocqLspClient:
@@ -246,12 +249,8 @@ class RocqLspClient:
         request_id = self._reserve_request()
         future = self._pending[request_id]
         self.restart_required_after_external_cancellation = False
-        command_state: dict[str, Any] = {
-            "timed_out": False,
-            "range": None,
-            "timeout_kind": None,
-        }
-        watchdog: asyncio.Task[None] | None = None
+        watchdog: _CommandTimeoutWatchdog | None = None
+        watchdog_task: asyncio.Task[None] | None = None
         params: dict[str, Any] = {"textDocument": {"uri": uri, "version": version}}
         if goals is not None:
             params["goals"] = goals
@@ -264,39 +263,28 @@ class RocqLspClient:
             }
         )
         if command_timeout is not None or timeout_after_error is not None:
-            watchdog = asyncio.create_task(
-                self._command_timeout_watchdog(
-                    uri=uri,
-                    version=version,
-                    request_id=request_id,
-                    command_timeout=command_timeout,
-                    timeout_after_error=timeout_after_error,
-                    command_state=command_state,
-                    content=content,
-                )
+            watchdog = _CommandTimeoutWatchdog(
+                client=self,
+                uri=uri,
+                version=version,
+                request_id=request_id,
+                command_timeout=command_timeout,
+                timeout_after_error=timeout_after_error,
+                content=content,
             )
+            watchdog_task = asyncio.create_task(watchdog.run())
 
         try:
-            if watchdog is None:
-                try:
-                    raw = await asyncio.wait_for(
-                        asyncio.shield(future), timeout=timeout
-                    )
-                except TimeoutError:
-                    await self.notify("$/cancelRequest", {"id": request_id})
-                    return await self._wait_for_cancelled_get_document(
-                        request_id=request_id,
-                        future=future,
-                        hard_timeout_grace=hard_timeout_grace,
-                        timeout_kind="request",
-                        timeout_seconds=timeout,
-                        timed_out_range=None,
-                    )
-                self._pending.pop(request_id, None)
-                return GetDocumentResult(document=self._result_or_raise(raw))
+            if watchdog is None or watchdog_task is None:
+                return await self._await_get_document(
+                    request_id=request_id,
+                    future=future,
+                    timeout=timeout,
+                    hard_timeout_grace=hard_timeout_grace,
+                )
 
             done, _ = await asyncio.wait(
-                {future, watchdog},
+                {future, watchdog_task},
                 timeout=timeout,
                 return_when=asyncio.FIRST_COMPLETED,
             )
@@ -314,27 +302,34 @@ class RocqLspClient:
             if future in done or future.done():
                 raw = future.result()
                 self._pending.pop(request_id, None)
-                if command_state["timed_out"] and "error" in raw:
-                    return self._get_document_timeout_result(raw, command_state)
+                if watchdog.timeout is not None and "error" in raw:
+                    return self._get_document_timeout_result(raw, watchdog.timeout)
                 return GetDocumentResult(document=self._result_or_raise(raw))
 
-            await watchdog
+            await watchdog_task
+            if watchdog.timeout is None:
+                # The watchdog stopped without cancelling anything (it is
+                # advisory and contains its own failures), so keep waiting
+                # for the document under the plain request deadline.
+                return await self._await_get_document(
+                    request_id=request_id,
+                    future=future,
+                    timeout=timeout,
+                    hard_timeout_grace=hard_timeout_grace,
+                )
             if future.done():
                 raw = future.result()
                 self._pending.pop(request_id, None)
                 if "error" in raw:
-                    return self._get_document_timeout_result(raw, command_state)
+                    return self._get_document_timeout_result(raw, watchdog.timeout)
                 return GetDocumentResult(document=self._result_or_raise(raw))
-            timeout_kind, timeout_seconds = self._command_timeout_details(
-                command_state, command_timeout, timeout_after_error
-            )
             return await self._wait_for_cancelled_get_document(
                 request_id=request_id,
                 future=future,
                 hard_timeout_grace=hard_timeout_grace,
-                timeout_kind=timeout_kind,
-                timeout_seconds=timeout_seconds,
-                timed_out_range=command_state["range"],
+                timeout_kind=watchdog.timeout.kind,
+                timeout_seconds=watchdog.timeout.seconds,
+                timed_out_range=watchdog.timeout.timed_out_range,
             )
 
         except asyncio.CancelledError:
@@ -345,134 +340,43 @@ class RocqLspClient:
             )
             raise
         finally:
-            if watchdog is not None:
-                watchdog.cancel()
+            if watchdog_task is not None:
+                watchdog_task.cancel()
                 with suppress(asyncio.CancelledError):
-                    await watchdog
+                    await watchdog_task
 
-    async def _command_timeout_watchdog(
+    async def _await_get_document(
         self,
         *,
-        uri: str,
-        version: int,
         request_id: int,
-        command_timeout: float | None,
-        timeout_after_error: float | None,
-        command_state: dict[str, Any],
-        content: str | None,
-    ) -> None:
-        notifications = self.notifications
-        loop = asyncio.get_running_loop()
-        after_sequence = notifications.latest_execution_sequence(uri, version)
-        active_range: dict[str, Any] | None = None
-        watch_errors = timeout_after_error is not None
-        # Absolute deadline for the whole call, armed when the first error
-        # diagnostic is observed. Unlike the per-sentence deadline it never
-        # resets, and it also covers the final sentence and end-of-file
-        # finalization, which the per-sentence watchdog exempts: after an
-        # error a bounded exit matters more than attributing that time
-        # precisely.
-        deadline: float | None = None
-        exec_task: asyncio.Task[tuple[int, dict[str, Any]] | None] | None = None
-        error_task: asyncio.Task[None] | None = None
-
-        async def cancel_request(
-            timed_out_range: dict[str, Any] | None, *, timeout_kind: TimeoutKind
-        ) -> None:
-            command_state["timed_out"] = True
-            command_state["range"] = timed_out_range
-            command_state["timeout_kind"] = timeout_kind
-            await self.notify("$/cancelRequest", {"id": request_id})
-
+        future: asyncio.Future[dict[str, Any]],
+        timeout: float | None,
+        hard_timeout_grace: float,
+    ) -> GetDocumentResult:
         try:
-            while True:
-                if watch_errors and deadline is None:
-                    if notifications.has_error_diagnostic(uri, version):
-                        deadline = loop.time() + (timeout_after_error or 0)
-
-                remaining = None if deadline is None else deadline - loop.time()
-                if remaining is not None and remaining <= 0:
-                    await cancel_request(active_range, timeout_kind="after_error")
-                    return
-
-                is_final_sentence = _range_reaches_end_of_content(
-                    content, active_range
-                )
-                per_sentence = (
-                    command_timeout
-                    if active_range is not None and not is_final_sentence
-                    else None
-                )
-                candidates = [
-                    value for value in (per_sentence, remaining) if value is not None
-                ]
-                wait_timeout = min(candidates) if candidates else None
-
-                if exec_task is None or exec_task.done():
-                    exec_task = asyncio.create_task(
-                        notifications.wait_for_execution_info(
-                            uri,
-                            version,
-                            after_sequence=after_sequence,
-                            timeout=None,
-                        )
-                    )
-                waiters: set[asyncio.Task[Any]] = {exec_task}
-                if watch_errors and deadline is None:
-                    if error_task is None or error_task.done():
-                        error_task = asyncio.create_task(
-                            notifications.wait_for_error_diagnostic(uri, version)
-                        )
-                    waiters.add(error_task)
-
-                done, _ = await asyncio.wait(
-                    waiters,
-                    timeout=wait_timeout,
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-                if not done:
-                    if deadline is not None and loop.time() >= deadline:
-                        await cancel_request(active_range, timeout_kind="after_error")
-                    else:
-                        await cancel_request(active_range, timeout_kind="command")
-                    return
-                if exec_task in done:
-                    update = exec_task.result()
-                    if update is not None:
-                        after_sequence, params = update
-                        range_ = (
-                            params.get("range") if isinstance(params, dict) else None
-                        )
-                        active_range = range_ if isinstance(range_, dict) else None
-                if error_task is not None and error_task in done and deadline is None:
-                    deadline = loop.time() + (timeout_after_error or 0)
-        finally:
-            for task in (exec_task, error_task):
-                if task is not None and not task.done():
-                    task.cancel()
-                    with suppress(asyncio.CancelledError):
-                        await task
-
-    @staticmethod
-    def _command_timeout_details(
-        command_state: dict[str, Any],
-        command_timeout: float | None,
-        timeout_after_error: float | None,
-    ) -> tuple[TimeoutKind, float]:
-        kind: TimeoutKind = command_state.get("timeout_kind") or "command"
-        if kind == "after_error":
-            return kind, timeout_after_error or 0
-        return kind, command_timeout or 0
+            raw = await asyncio.wait_for(asyncio.shield(future), timeout=timeout)
+        except TimeoutError:
+            await self.notify("$/cancelRequest", {"id": request_id})
+            return await self._wait_for_cancelled_get_document(
+                request_id=request_id,
+                future=future,
+                hard_timeout_grace=hard_timeout_grace,
+                timeout_kind="request",
+                timeout_seconds=timeout,
+                timed_out_range=None,
+            )
+        self._pending.pop(request_id, None)
+        return GetDocumentResult(document=self._result_or_raise(raw))
 
     def _get_document_timeout_result(
-        self, raw: dict[str, Any], command_state: dict[str, Any]
+        self, raw: dict[str, Any], watchdog_timeout: WatchdogTimeout
     ) -> GetDocumentResult:
         document = {} if "error" in raw else self._result_or_raise(raw)
         return GetDocumentResult(
             document=document,
             timed_out=True,
-            timeout_kind=command_state.get("timeout_kind") or "command",
-            timed_out_range=command_state["range"],
+            timeout_kind=watchdog_timeout.kind,
+            timed_out_range=watchdog_timeout.timed_out_range,
         )
 
     async def _wait_for_cancelled_get_document(
@@ -813,6 +717,202 @@ class RocqLspClient:
         if stderr_task is not None and not stderr_task.done():
             with suppress(Exception):
                 await asyncio.wait_for(asyncio.shield(stderr_task), timeout=0.2)
+
+
+class _CommandTimeoutWatchdog:
+    """Cancels one ``coq/getDocument`` request when a per-sentence or
+    after-error deadline expires.
+
+    The interface rules that keep the timing behavior easy to reason about:
+
+    - Every timer is an absolute event-loop instant. The per-sentence
+      deadline is anchored to the sentence's ``$/coq/executionInformation``
+      notification and the after-error deadline to the first observed error
+      diagnostic, so unrelated wake-ups can never restart a timer.
+    - The after-error deadline is armed in exactly one place, from the state
+      poll at the top of the loop; the error waiter task only wakes the loop.
+    - Which timeout fired is decided when the wait is armed — the earliest
+      deadline wins, and the after-error deadline wins ties — never
+      re-derived from the clock afterwards.
+    - The outcome is published exactly once, as the immutable
+      ``self.timeout``, before the cancel notification is sent.
+    - The watchdog is advisory and contains its own failures: if sending the
+      cancel fails (for example because coq-lsp died), the request future is
+      the authoritative error channel and surfaces the real failure itself.
+    """
+
+    def __init__(
+        self,
+        *,
+        client: RocqLspClient,
+        uri: str,
+        version: int,
+        request_id: int,
+        command_timeout: float | None,
+        timeout_after_error: float | None,
+        content: str | None,
+    ) -> None:
+        self._client = client
+        self._uri = uri
+        self._version = version
+        self._request_id = request_id
+        self._command_timeout = command_timeout
+        self._timeout_after_error = timeout_after_error
+        self._final_boundary = _end_of_content_position(content)
+        self.timeout: WatchdogTimeout | None = None
+
+    async def run(self) -> None:
+        try:
+            await self._watch()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            # Advisory task: any I/O failure it can hit (for example a dead
+            # coq-lsp process while sending the cancel) also fails the
+            # pending request future, which is the authoritative channel.
+            return
+
+    async def _watch(self) -> None:
+        loop = asyncio.get_running_loop()
+        notifications = self._client.notifications
+        uri = self._uri
+        version = self._version
+        after_sequence = notifications.latest_execution_sequence(uri, version)
+        active_range: dict[str, Any] | None = None
+        sentence_deadline: float | None = None
+        after_error_deadline: float | None = None
+        watch_errors = self._timeout_after_error is not None
+        exec_task: asyncio.Task[tuple[int, dict[str, Any]] | None] | None = None
+        error_task: asyncio.Task[None] | None = None
+
+        try:
+            while True:
+                if (
+                    watch_errors
+                    and after_error_deadline is None
+                    and notifications.has_error_diagnostic(uri, version)
+                ):
+                    # The only site that arms the after-error deadline. It
+                    # never resets, and it also covers the final sentence and
+                    # end-of-file finalization, which the per-sentence
+                    # deadline exempts: after an error a bounded exit matters
+                    # more than attributing that time precisely.
+                    after_error_deadline = loop.time() + self._timeout_after_error
+
+                expiring = self._earliest_deadline(
+                    sentence_deadline, after_error_deadline
+                )
+                if expiring is not None and expiring[0] <= loop.time():
+                    await self._cancel(expiring, active_range)
+                    return
+
+                if exec_task is None or exec_task.done():
+                    exec_task = asyncio.create_task(
+                        notifications.wait_for_execution_info(
+                            uri,
+                            version,
+                            after_sequence=after_sequence,
+                            timeout=None,
+                        )
+                    )
+                waiters: set[asyncio.Task[Any]] = {exec_task}
+                if watch_errors and after_error_deadline is None:
+                    if error_task is None or error_task.done():
+                        error_task = asyncio.create_task(
+                            notifications.wait_for_error_diagnostic(uri, version)
+                        )
+                    waiters.add(error_task)
+
+                done, _ = await asyncio.wait(
+                    waiters,
+                    timeout=(
+                        None if expiring is None else expiring[0] - loop.time()
+                    ),
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if not done and expiring is not None:
+                    await self._cancel(expiring, active_range)
+                    return
+                if exec_task in done:
+                    update = exec_task.result()
+                    if update is not None:
+                        after_sequence, params = update
+                        range_ = (
+                            params.get("range") if isinstance(params, dict) else None
+                        )
+                        active_range = range_ if isinstance(range_, dict) else None
+                        sentence_deadline = self._sentence_deadline_for(
+                            active_range, loop.time()
+                        )
+                # A completed error waiter only wakes the loop; the poll at
+                # the top of the next iteration arms the deadline.
+        finally:
+            for task in (exec_task, error_task):
+                if task is not None and not task.done():
+                    task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await task
+
+    def _earliest_deadline(
+        self,
+        sentence_deadline: float | None,
+        after_error_deadline: float | None,
+    ) -> tuple[float, TimeoutKind, float] | None:
+        """The next (deadline, kind, configured seconds) to enforce.
+
+        The after-error deadline wins ties so a bounded post-error exit is
+        reported as such.
+        """
+        expiring: tuple[float, TimeoutKind, float] | None = None
+        for deadline, kind, seconds in (
+            (after_error_deadline, "after_error", self._timeout_after_error),
+            (sentence_deadline, "command", self._command_timeout),
+        ):
+            if deadline is None:
+                continue
+            if expiring is None or deadline < expiring[0]:
+                expiring = (deadline, kind, seconds)
+        return expiring
+
+    def _sentence_deadline_for(
+        self, active_range: dict[str, Any] | None, now: float
+    ) -> float | None:
+        """Absolute deadline for the sentence that just started, if any.
+
+        The final sentence is exempt because execution notifications mark
+        sentence starts, not completion, so end-of-file finalization would
+        otherwise be attributed to it.
+        """
+        if (
+            self._command_timeout is None
+            or active_range is None
+            or self._is_final_sentence(active_range)
+        ):
+            return None
+        return now + self._command_timeout
+
+    def _is_final_sentence(self, range_: dict[str, Any]) -> bool:
+        if self._final_boundary is None:
+            return False
+        end = range_.get("end")
+        if not isinstance(end, dict):
+            return False
+        line = end.get("line")
+        character = end.get("character")
+        if not isinstance(line, int) or not isinstance(character, int):
+            return False
+        return (line, character) >= self._final_boundary
+
+    async def _cancel(
+        self,
+        expiring: tuple[float, TimeoutKind, float],
+        timed_out_range: dict[str, Any] | None,
+    ) -> None:
+        _, kind, seconds = expiring
+        self.timeout = WatchdogTimeout(
+            kind=kind, seconds=seconds, timed_out_range=timed_out_range
+        )
+        await self._client.notify("$/cancelRequest", {"id": self._request_id})
 
 
 def _looks_like_path(program: str) -> bool:

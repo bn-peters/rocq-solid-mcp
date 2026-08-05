@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import math
 import os
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -38,20 +40,26 @@ class RocqLspConfig:
 
 
 def _float_env(name: str, default: str) -> float:
-    return float(os.environ.get(name, default))
+    value = float(os.environ.get(name, default))
+    if not math.isfinite(value):
+        # nan/inf would poison timeout arithmetic and asyncio timers.
+        return float(default)
+    return value
 
 
 def _optional_positive_float_env(name: str, default: str = "0") -> float | None:
     """Read an optional float where non-positive values disable the setting.
 
     A set-but-empty variable falls back to the default, matching the unset
-    case, instead of failing to parse.
+    case, instead of failing to parse. Non-finite values (nan/inf) disable
+    the setting: they would poison timeout arithmetic and asyncio timers,
+    and "no limit" is exactly what disabling means.
     """
     raw = os.environ.get(name, default)
     if not raw.strip():
         raw = default
     value = float(raw)
-    if value <= 0:
+    if not math.isfinite(value) or value <= 0:
         return None
     return value
 
@@ -82,6 +90,13 @@ def _bool_env(name: str, default: str) -> bool:
 
 
 def load_config() -> RocqLspConfig:
+    if "ROCQ_LSP_COMMAND_TIMEOUT_AFTER_ERROR" in os.environ:
+        warnings.warn(
+            "ROCQ_LSP_COMMAND_TIMEOUT_AFTER_ERROR is no longer read; use "
+            "ROCQ_LSP_TIMEOUT_AFTER_ERROR, which bounds the rest of a check "
+            "after its first error (non-positive values disable it).",
+            stacklevel=2,
+        )
     workspace = os.environ.get("ROCQ_LSP_WORKSPACE")
     return RocqLspConfig(
         binary=os.environ.get("ROCQ_LSP_BINARY", "coq-lsp"),
