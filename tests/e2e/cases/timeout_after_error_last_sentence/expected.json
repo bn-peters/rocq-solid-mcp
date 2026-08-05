@@ -21,7 +21,7 @@
       "timed_out": true,
       "timeout_context": {
         "operation": "coq/getDocument",
-        "timeout_kind": "command_after_error",
+        "timeout_kind": "after_error",
         "request_timeout_seconds": 60.0,
         "cancel_grace_seconds": 2,
         "checked_until": "13:7",
@@ -30,7 +30,7 @@
           "location": "14:1",
           "line": "sleep 30."
         },
-        "command_timeout_after_error_seconds": 2,
+        "timeout_after_error_seconds": 2,
         "timed_out_range": "14:1 to 14:10",
         "timed_out_command": {
           "location": "14:1",

@@ -227,7 +227,7 @@ class TimeoutContext(BaseModel):
     latest_processing_range: dict[str, Any] | None = None
     next_unchecked: dict[str, Any] | None = None
     command_timeout_seconds: int | float | None = None
-    command_timeout_after_error_seconds: int | float | None = None
+    timeout_after_error_seconds: int | float | None = None
     timed_out_range: dict[str, Any] | None = None
     timed_out_command: dict[str, Any] | None = None
 
@@ -242,7 +242,7 @@ class TimeoutContext(BaseModel):
         cancel_grace_seconds: int | float,
         timeout_kind: str = "request",
         command_timeout_seconds: int | float | None = None,
-        command_timeout_after_error_seconds: int | float | None = None,
+        timeout_after_error_seconds: int | float | None = None,
         timed_out_range: dict[str, Any] | None = None,
     ) -> "TimeoutContext":
         completed = _completed_only(document) if document else None
@@ -266,7 +266,7 @@ class TimeoutContext(BaseModel):
             latest_processing_range=processing_range,
             next_unchecked=_next_unchecked_preview(content, checked_until),
             command_timeout_seconds=command_timeout_seconds,
-            command_timeout_after_error_seconds=command_timeout_after_error_seconds,
+            timeout_after_error_seconds=timeout_after_error_seconds,
             timed_out_range=timed_out_range,
             timed_out_command=(
                 _source_preview_for_range(content, timed_out_range)
@@ -290,9 +290,7 @@ class TimeoutContext(BaseModel):
                 ),
                 "next_unchecked": self.next_unchecked,
                 "command_timeout_seconds": self.command_timeout_seconds,
-                "command_timeout_after_error_seconds": (
-                    self.command_timeout_after_error_seconds
-                ),
+                "timeout_after_error_seconds": self.timeout_after_error_seconds,
                 "timed_out_range": location_string(
                     self.timed_out_range,
                     options.location_format,

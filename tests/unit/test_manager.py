@@ -84,7 +84,7 @@ class FakeClient:
         timeout: float | None,
         hard_timeout_grace: float,
         command_timeout: float | None = None,
-        command_timeout_after_error: float | None = None,
+        timeout_after_error: float | None = None,
         goals: str | None = None,
         content: str | None = None,
     ) -> GetDocumentResult:
@@ -96,7 +96,7 @@ class FakeClient:
                 "timeout": timeout,
                 "hard_timeout_grace": hard_timeout_grace,
                 "command_timeout": command_timeout,
-                "command_timeout_after_error": command_timeout_after_error,
+                "timeout_after_error": timeout_after_error,
                 "goals": goals,
                 "content": content,
             }
@@ -224,7 +224,7 @@ class FakeManager(RocqLspManager):
         workspace: Path | None,
         idle_ttl_seconds: float = 1800,
         command_seconds: float | None = None,
-        command_seconds_after_error: float | None = None,
+        request_seconds_after_error: float | None = None,
         dune_build_result: DuneBuildResult | None = None,
     ) -> None:
         config = RocqLspConfig(
@@ -233,7 +233,7 @@ class FakeManager(RocqLspManager):
                 request_seconds=1,
                 cancel_grace_seconds=0.01,
                 command_seconds=command_seconds,
-                command_seconds_after_error=command_seconds_after_error,
+                request_seconds_after_error=request_seconds_after_error,
             ),
             max_errors=1000000,
             workspace=workspace,
@@ -1539,7 +1539,7 @@ async def test_check_file_adds_command_timeout_context(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_check_file_passes_command_timeout_after_error_to_client(
+async def test_check_file_passes_timeout_after_error_to_client(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -1547,16 +1547,16 @@ async def test_check_file_passes_command_timeout_after_error_to_client(
     notifications = SpyNotificationStore()
     client = FakeClient(notifications)
     manager = FakeManager(
-        client, notifications, tmp_path, command_seconds_after_error=2.5
+        client, notifications, tmp_path, request_seconds_after_error=2.5
     )
 
     await manager.check_file(str(source))
 
-    assert client.get_document_requests[0]["command_timeout_after_error"] == 2.5
+    assert client.get_document_requests[0]["timeout_after_error"] == 2.5
 
 
 @pytest.mark.asyncio
-async def test_check_file_disables_non_positive_command_timeout_after_error(
+async def test_check_file_disables_non_positive_timeout_after_error(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -1565,16 +1565,16 @@ async def test_check_file_disables_non_positive_command_timeout_after_error(
         notifications = SpyNotificationStore()
         client = FakeClient(notifications)
         manager = FakeManager(
-            client, notifications, tmp_path, command_seconds_after_error=policy_value
+            client, notifications, tmp_path, request_seconds_after_error=policy_value
         )
 
         await manager.check_file(str(source))
 
-        assert client.get_document_requests[0]["command_timeout_after_error"] is None
+        assert client.get_document_requests[0]["timeout_after_error"] is None
 
 
 @pytest.mark.asyncio
-async def test_check_file_command_timeout_after_error_override(
+async def test_check_file_timeout_after_error_override(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Demo.v"
@@ -1582,14 +1582,14 @@ async def test_check_file_command_timeout_after_error_override(
     notifications = SpyNotificationStore()
     client = FakeClient(notifications)
     manager = FakeManager(
-        client, notifications, tmp_path, command_seconds_after_error=2
+        client, notifications, tmp_path, request_seconds_after_error=2
     )
 
-    await manager.check_file(str(source), command_timeout_after_error_seconds=1.5)
-    await manager.check_file(str(source), command_timeout_after_error_seconds=0)
+    await manager.check_file(str(source), timeout_after_error_seconds=1.5)
+    await manager.check_file(str(source), timeout_after_error_seconds=0)
 
-    assert client.get_document_requests[0]["command_timeout_after_error"] == 1.5
-    assert client.get_document_requests[1]["command_timeout_after_error"] is None
+    assert client.get_document_requests[0]["timeout_after_error"] == 1.5
+    assert client.get_document_requests[1]["timeout_after_error"] is None
 
 
 @pytest.mark.asyncio
@@ -1608,7 +1608,7 @@ async def test_check_file_disables_non_positive_policy_command_timeout(
 
 
 @pytest.mark.asyncio
-async def test_check_file_adds_command_timeout_after_error_context(
+async def test_check_file_adds_timeout_after_error_context(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "Slow.v"
@@ -1633,11 +1633,11 @@ async def test_check_file_adds_command_timeout_after_error_context(
             end_character=4,
         ),
         request_timed_out=True,
-        timeout_kind="command_after_error",
+        timeout_kind="after_error",
         timed_out_range=timed_out_range,
     )
     manager = FakeManager(
-        client, notifications, tmp_path, command_seconds_after_error=2
+        client, notifications, tmp_path, request_seconds_after_error=2
     )
 
     result = await manager.check_file(str(source))
@@ -1645,13 +1645,13 @@ async def test_check_file_adds_command_timeout_after_error_context(
     assert result.status == "timeout"
     assert result.render()["timeout_context"] == {
         "operation": "coq/getDocument",
-        "timeout_kind": "command_after_error",
+        "timeout_kind": "after_error",
         "request_timeout_seconds": 1.0,
         "cancel_grace_seconds": 0.01,
         "checked_until": "3:3",
         "latest_processing_range": "3:3 to 5:5",
         "next_unchecked": {"location": "3:3", "line": "sleep 5."},
-        "command_timeout_after_error_seconds": 2,
+        "timeout_after_error_seconds": 2,
         "timed_out_range": "3:3 to 3:11",
         "timed_out_command": {"location": "3:3", "line": "sleep 5."},
     }

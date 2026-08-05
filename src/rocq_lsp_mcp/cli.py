@@ -35,7 +35,7 @@ async def _check(file: str, output: TextIO) -> int:
         result = await manager.check_file(
             file,
             command_timeout_seconds=0,
-            command_timeout_after_error_seconds=0,
+            timeout_after_error_seconds=0,
             overall_timeout_seconds=0,
             long_running_seconds=0,
         )

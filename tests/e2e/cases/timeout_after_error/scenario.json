@@ -1,0 +1,40 @@
+{
+  "timeout_policy": {
+    "request_seconds": 60,
+    "cancel_grace_seconds": 2,
+    "command_seconds": 10,
+    "request_seconds_after_error": 5
+  },
+  "steps": [
+    {
+      "label": "check stops at most the after-error deadline after the first error",
+      "action": "check",
+      "file": "src/after_error.v",
+      "min_seconds": 5,
+      "max_seconds": 14,
+      "long_running_seconds": 0
+    },
+    {
+      "label": "fix the error",
+      "action": "replace",
+      "file": "src/after_error.v",
+      "old": "fail \"FIRST\"",
+      "new": "exact I"
+    },
+    {
+      "label": "shrink the slow chain",
+      "action": "replace",
+      "file": "src/after_error.v",
+      "old": "  sleep 3.\n  sleep 3.\n  sleep 3.\n  sleep 3.\n  sleep 3.",
+      "new": "  sleep 6."
+    },
+    {
+      "label": "without an error the deadline never arms",
+      "action": "check",
+      "file": "src/after_error.v",
+      "min_seconds": 6,
+      "max_seconds": 14,
+      "long_running_seconds": 0
+    }
+  ]
+}

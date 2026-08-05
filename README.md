@@ -79,6 +79,30 @@ you find yourself needing something else, please let me know! If possible,
 include an agent transcript where a task could've been completed more
 effectively with additional tools.
 
+## Environment Variables
+
+All optional; defaults in parentheses.
+
+- `ROCQ_LSP_BINARY` (`coq-lsp`): the `coq-lsp` executable
+- `ROCQ_LSP_USE_OPAM` (`1`): run via `opam exec --`; `0` runs the binary
+  directly
+- `ROCQ_LSP_WORKSPACE` (unset): override the inferred workspace root
+- `ROCQ_LSP_TIMEOUT` (`60`, max `3600`): deadline per call; set slightly below
+  the MCP tool timeout
+- `ROCQ_LSP_HARD_TIMEOUT_GRACE` (`5`): extra wait after cancellation before the
+  session is killed
+- `ROCQ_LSP_COMMAND_TIMEOUT` (`5`): default per-sentence timeout; `0` disables
+- `ROCQ_LSP_TIMEOUT_AFTER_ERROR` (`10`): overall deadline for the rest of a
+  check after its first error; `0` disables
+- `ROCQ_LSP_MESSAGE_LIMIT` (`10`, max `50`): max errors returned per check
+- `ROCQ_LSP_MAX_ERRORS` (`1000000`): max errors `coq-lsp` collects
+- `ROCQ_LSP_IDLE_TTL_SECONDS` (`1800`): idle time before cached sessions are
+  stopped
+- `ROCQ_LSP_DUNE_BUILD` (`1`): build dune dependencies before checks; `0`
+  disables
+- `ROCQ_LSP_DUNE_TIMEOUT` (`60`, max `3600`): limit per dune detection or build
+  command
+
 
 
 
@@ -221,26 +245,23 @@ sentence. MCP host cancellation is a harder outer abort: the server sends
 `$/cancelRequest` to `coq-lsp` and may reset the file session, but the client may
 already have abandoned the result.
 
-`ROCQ_LSP_COMMAND_TIMEOUT_AFTER_ERROR` configures a separate per-sentence
-timeout that takes over once the first error diagnostic has been reported for
-the current check. It provides a fast exit after errors while still reporting
-later errors in large files: sentences that finish within the after-error
-timeout keep checking (and keep reporting errors), while the first slower
-sentence is cancelled. After an error it replaces `ROCQ_LSP_COMMAND_TIMEOUT`
-entirely — it also applies when the normal watchdog is disabled and to the
-final sentence, which the normal watchdog exempts. Cancellations report
-`status: "timeout"` with `timeout_context.timeout_kind: "command_after_error"`
-and `command_timeout_after_error_seconds`. The variable defaults to `10`
-seconds; `0` or negative values disable the after-error timeout, and a
-set-but-empty value falls back to the default like the unset case. With the
-defaults (5-second normal command timeout, 10-second after-error timeout),
-sentences after the first error get more headroom than before it, while the
-exit stays bounded even at the otherwise-exempt final sentence.
-`command_timeout_after_error_seconds` overrides the variable for one check
-with the same convention as `command_timeout_seconds`: `None` uses the server
-default, `0` disables it, and positive values enable it for that call. The
-one-shot `bens-rocq-mcp check` subcommand disables it per call the same way
-it disables the other MCP-oriented timeouts.
+`ROCQ_LSP_TIMEOUT_AFTER_ERROR` configures an overall deadline for the rest of
+a check once the first error diagnostic has been reported: the whole call is
+stopped at most that many seconds after the first error, and the diagnostics
+collected so far are returned. It bounds how long a check with a known error
+can keep running while still reporting later errors found within the window.
+The deadline is absolute — unlike the per-sentence watchdog it never resets,
+and it also covers the final sentence and end-of-file finalization, which the
+per-sentence watchdog exempts. The normal `ROCQ_LSP_COMMAND_TIMEOUT` watchdog
+keeps applying per sentence before and after the error. Cancellations report
+`status: "timeout"` with `timeout_context.timeout_kind: "after_error"` and
+`timeout_after_error_seconds`. The variable defaults to `10` seconds; `0` or
+negative values disable it, and a set-but-empty value falls back to the
+default like the unset case. `timeout_after_error_seconds` overrides the
+variable for one check with the same convention as `command_timeout_seconds`:
+`None` uses the server default, `0` disables it, and positive values enable
+it for that call. The one-shot `bens-rocq-mcp check` subcommand disables it
+per call the same way it disables the other MCP-oriented timeouts.
 
 `coq-lsp` performance data is enabled with `send_perf_data`. After successful
 `coq/getDocument` calls, the manager waits briefly for `$/coq/filePerfData` and
@@ -264,7 +285,7 @@ The server exposes two MCP tools:
 
 - `rocq_check_file(file: str,
   command_timeout_seconds: float | None = None,
-  command_timeout_after_error_seconds: float | None = None,
+  timeout_after_error_seconds: float | None = None,
   clear_cache: bool = False)`
 - `rocq_run_at(file: str, commands: str, line: int, character: int = 1)`
 
@@ -314,10 +335,10 @@ The tool returns one rendered result for the full commands string.
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE` defaults to `5`
 - `ROCQ_LSP_COMMAND_TIMEOUT` defaults to `5`; set `0` to disable per-sentence
   command timeouts by default
-- `ROCQ_LSP_COMMAND_TIMEOUT_AFTER_ERROR` defaults to `10`; positive values
-  replace the per-sentence command timeout after the first error diagnostic
-  of a check, `0` or negative values disable it, and an empty value falls
-  back to the default
+- `ROCQ_LSP_TIMEOUT_AFTER_ERROR` defaults to `10`; positive values bound the
+  rest of a check to that many seconds after its first error diagnostic, `0`
+  or negative values disable it, and an empty value falls back to the
+  default
 - `ROCQ_LSP_MESSAGE_LIMIT` defaults to `10`; values above `50` are capped
 - `ROCQ_LSP_MAX_ERRORS` defaults to `1000000`
 - `ROCQ_LSP_WORKSPACE` optionally pins the workspace root
@@ -364,7 +385,7 @@ from promoted transcripts. Scenario `run_at` steps call `rocq_run_at`
 through the same cached manager. Scenarios may also define a top-level
 `timeout_policy` to override the harness defaults for timeout-specific coverage,
 including `command_seconds` for per-sentence timeout scenarios and
-`command_seconds_after_error` for the after-error per-sentence timeout.
+`request_seconds_after_error` for the overall after-error deadline.
 Individual check steps may pass `command_timeout_seconds` or the manager-level
 `long_running_seconds` threshold to exercise per-call check timeout overrides
 and long-running command reporting.
@@ -372,11 +393,11 @@ The e2e suite covers error-only check rendering and dense error limits,
 `run_at` output info levels for `Search`, `Check`, and `Compute`, `run_at`
 caching after slow proofs, soft partial-result timeout recovery, hard-timeout
 session reset, per-call check command timeout overrides, per-sentence command
-timeout behavior, after-error per-sentence timeouts (disabled at `0` with a
-per-call override re-enabling the fast exit, replacement of the normal
-timeout after the first error, completion of all-fast files with errors, and
-cancellation of the otherwise-exempt final
-sentence), soft deadlines resuming from cached progress while preserving
+timeout behavior, the overall after-error deadline (a post-error chain of
+individually fast sentences stopped at the deadline, disabled at `0` with a
+per-call override re-enabling it, completion of files whose errors are
+followed by only fast sentences, and cancellation of the otherwise-exempt
+final sentence), soft deadlines resuming from cached progress while preserving
 diagnostics, cached repeated check errors, long-running command reporting with
 cached rechecks ignored, and lemma-header errors that would otherwise cascade
 into proof-mode diagnostics.

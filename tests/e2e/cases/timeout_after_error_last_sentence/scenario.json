@@ -2,7 +2,7 @@
   "timeout_policy": {
     "request_seconds": 60,
     "cancel_grace_seconds": 2,
-    "command_seconds_after_error": 2
+    "request_seconds_after_error": 2
   },
   "steps": [
     {

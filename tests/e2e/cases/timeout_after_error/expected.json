@@ -1,0 +1,61 @@
+[
+  {
+    "step": "check stops at most the after-error deadline after the first error",
+    "action": "check",
+    "file": "src/after_error.v",
+    "result": {
+      "status": "timeout",
+      "file": "after_error.v",
+      "counts": {
+        "errors": 1
+      },
+      "diagnostics": [
+        {
+          "level": "error",
+          "message": "Tactic failure: FIRST.",
+          "location": "10:3 to 10:16",
+          "sentence": "fail \"FIRST\".",
+          "proof_name": "broken"
+        }
+      ],
+      "timed_out": true,
+      "timeout_context": {
+        "operation": "coq/getDocument",
+        "timeout_kind": "after_error",
+        "request_timeout_seconds": 60.0,
+        "cancel_grace_seconds": 2,
+        "checked_until": "15:11",
+        "latest_processing_range": "15:11 to 22:1",
+        "next_unchecked": {
+          "location": "16:3",
+          "line": "sleep 3."
+        },
+        "timeout_after_error_seconds": 5,
+        "timed_out_range": "16:3 to 16:11",
+        "timed_out_command": {
+          "location": "16:3",
+          "line": "sleep 3."
+        }
+      }
+    }
+  },
+  {
+    "step": "fix the error",
+    "action": "replace",
+    "file": "src/after_error.v"
+  },
+  {
+    "step": "shrink the slow chain",
+    "action": "replace",
+    "file": "src/after_error.v"
+  },
+  {
+    "step": "without an error the deadline never arms",
+    "action": "check",
+    "file": "src/after_error.v",
+    "result": {
+      "status": "complete",
+      "file": "after_error.v"
+    }
+  }
+]

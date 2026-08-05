@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from rocq_lsp_mcp.config import (
-    DEFAULT_COMMAND_TIMEOUT_AFTER_ERROR_SECONDS,
     DEFAULT_COMMAND_TIMEOUT_SECONDS,
     DEFAULT_MESSAGE_LIMIT,
+    DEFAULT_TIMEOUT_AFTER_ERROR_SECONDS,
     MAX_MESSAGE_LIMIT,
     MAX_OVERALL_TIMEOUT_SECONDS,
     load_config,
@@ -31,7 +31,7 @@ def test_load_config_reads_opam_and_idle_ttl(monkeypatch) -> None:
         "ROCQ_LSP_TIMEOUT",
         "ROCQ_LSP_HARD_TIMEOUT_GRACE",
         "ROCQ_LSP_COMMAND_TIMEOUT",
-        "ROCQ_LSP_COMMAND_TIMEOUT_AFTER_ERROR",
+        "ROCQ_LSP_TIMEOUT_AFTER_ERROR",
         "ROCQ_LSP_MESSAGE_LIMIT",
         "ROCQ_LSP_MAX_ERRORS",
         "ROCQ_LSP_WORKSPACE",
@@ -48,8 +48,8 @@ def test_load_config_reads_opam_and_idle_ttl(monkeypatch) -> None:
     assert config.idle_ttl_seconds == 12.5
     assert config.timeout_policy.command_seconds == DEFAULT_COMMAND_TIMEOUT_SECONDS
     assert (
-        config.timeout_policy.command_seconds_after_error
-        == DEFAULT_COMMAND_TIMEOUT_AFTER_ERROR_SECONDS
+        config.timeout_policy.request_seconds_after_error
+        == DEFAULT_TIMEOUT_AFTER_ERROR_SECONDS
     )
     assert config.message_limit == DEFAULT_MESSAGE_LIMIT
     assert config.dune_build is True
@@ -87,55 +87,55 @@ def test_load_config_disables_non_positive_command_timeout(monkeypatch) -> None:
     assert config.timeout_policy.command_seconds is None
 
 
-def test_load_config_defaults_command_timeout_after_error_to_ten_seconds(
+def test_load_config_defaults_timeout_after_error_to_ten_seconds(
     monkeypatch,
 ) -> None:
-    monkeypatch.delenv("ROCQ_LSP_COMMAND_TIMEOUT_AFTER_ERROR", raising=False)
+    monkeypatch.delenv("ROCQ_LSP_TIMEOUT_AFTER_ERROR", raising=False)
 
     config = load_config()
 
     assert (
-        config.timeout_policy.command_seconds_after_error
-        == DEFAULT_COMMAND_TIMEOUT_AFTER_ERROR_SECONDS
+        config.timeout_policy.request_seconds_after_error
+        == DEFAULT_TIMEOUT_AFTER_ERROR_SECONDS
     )
 
 
-def test_load_config_reads_command_timeout_after_error(monkeypatch) -> None:
-    monkeypatch.setenv("ROCQ_LSP_COMMAND_TIMEOUT_AFTER_ERROR", "2.5")
+def test_load_config_reads_timeout_after_error(monkeypatch) -> None:
+    monkeypatch.setenv("ROCQ_LSP_TIMEOUT_AFTER_ERROR", "2.5")
 
     config = load_config()
 
-    assert config.timeout_policy.command_seconds_after_error == 2.5
+    assert config.timeout_policy.request_seconds_after_error == 2.5
 
 
-def test_load_config_disables_zero_command_timeout_after_error(monkeypatch) -> None:
-    monkeypatch.setenv("ROCQ_LSP_COMMAND_TIMEOUT_AFTER_ERROR", "0")
+def test_load_config_disables_zero_timeout_after_error(monkeypatch) -> None:
+    monkeypatch.setenv("ROCQ_LSP_TIMEOUT_AFTER_ERROR", "0")
 
     config = load_config()
 
-    assert config.timeout_policy.command_seconds_after_error is None
+    assert config.timeout_policy.request_seconds_after_error is None
 
 
-def test_load_config_disables_negative_command_timeout_after_error(
+def test_load_config_disables_negative_timeout_after_error(
     monkeypatch,
 ) -> None:
-    monkeypatch.setenv("ROCQ_LSP_COMMAND_TIMEOUT_AFTER_ERROR", "-1")
+    monkeypatch.setenv("ROCQ_LSP_TIMEOUT_AFTER_ERROR", "-1")
 
     config = load_config()
 
-    assert config.timeout_policy.command_seconds_after_error is None
+    assert config.timeout_policy.request_seconds_after_error is None
 
 
-def test_load_config_treats_empty_command_timeout_after_error_as_default(
+def test_load_config_treats_empty_timeout_after_error_as_default(
     monkeypatch,
 ) -> None:
-    monkeypatch.setenv("ROCQ_LSP_COMMAND_TIMEOUT_AFTER_ERROR", "")
+    monkeypatch.setenv("ROCQ_LSP_TIMEOUT_AFTER_ERROR", "")
 
     config = load_config()
 
     assert (
-        config.timeout_policy.command_seconds_after_error
-        == DEFAULT_COMMAND_TIMEOUT_AFTER_ERROR_SECONDS
+        config.timeout_policy.request_seconds_after_error
+        == DEFAULT_TIMEOUT_AFTER_ERROR_SECONDS
     )
 
 

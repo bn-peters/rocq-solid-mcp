@@ -169,7 +169,7 @@ def _timeout_policy(scenario: dict[str, Any]) -> TimeoutPolicy:
         request_seconds=policy.get("request_seconds", 30),
         cancel_grace_seconds=policy.get("cancel_grace_seconds", 5),
         command_seconds=policy.get("command_seconds"),
-        command_seconds_after_error=policy.get("command_seconds_after_error"),
+        request_seconds_after_error=policy.get("request_seconds_after_error"),
     )
 
 
@@ -217,8 +217,8 @@ async def _run_steps(
             result = await manager.check_file(
                 str(path),
                 command_timeout_seconds=step.get("command_timeout_seconds"),
-                command_timeout_after_error_seconds=step.get(
-                    "command_timeout_after_error_seconds"
+                timeout_after_error_seconds=step.get(
+                    "timeout_after_error_seconds"
                 ),
                 overall_timeout_seconds=step.get("overall_timeout_seconds"),
                 long_running_seconds=step.get("long_running_seconds", 3),
@@ -279,10 +279,8 @@ def _step_record(step: dict[str, Any]) -> dict[str, Any]:
         record["file"] = step["file"]
     if "command_timeout_seconds" in step:
         record["command_timeout_seconds"] = step["command_timeout_seconds"]
-    if "command_timeout_after_error_seconds" in step:
-        record["command_timeout_after_error_seconds"] = step[
-            "command_timeout_after_error_seconds"
-        ]
+    if "timeout_after_error_seconds" in step:
+        record["timeout_after_error_seconds"] = step["timeout_after_error_seconds"]
     return record
 
 

@@ -2,7 +2,7 @@
   "timeout_policy": {
     "request_seconds": 15,
     "cancel_grace_seconds": 2,
-    "command_seconds_after_error": 0
+    "request_seconds_after_error": 0
   },
   "steps": [
     {
@@ -14,10 +14,10 @@
       "long_running_seconds": 0
     },
     {
-      "label": "per-call override re-enables the after-error fast exit",
+      "label": "per-call override re-enables the after-error deadline",
       "action": "check",
       "file": "src/zero.v",
-      "command_timeout_after_error_seconds": 2,
+      "timeout_after_error_seconds": 2,
       "max_seconds": 10,
       "long_running_seconds": 0
     }

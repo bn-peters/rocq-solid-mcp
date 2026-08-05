@@ -111,14 +111,14 @@ class RocqLspManager:
         self,
         file: str,
         command_timeout_seconds: float | None = None,
-        command_timeout_after_error_seconds: float | None = None,
+        timeout_after_error_seconds: float | None = None,
         overall_timeout_seconds: float | None = None,
         long_running_seconds: float | None = DEFAULT_LONG_RUNNING_SECONDS,
         clear_cache: bool = False,
     ) -> CheckResult:
         command_timeout = self._effective_command_timeout(command_timeout_seconds)
-        command_timeout_after_error = self._effective_command_timeout_after_error(
-            command_timeout_after_error_seconds
+        timeout_after_error = self._effective_timeout_after_error(
+            timeout_after_error_seconds
         )
         overall_timeout = self._effective_overall_timeout(overall_timeout_seconds)
         long_running_threshold = self._effective_long_running_threshold(
@@ -179,7 +179,7 @@ class RocqLspManager:
                 session_key,
                 path,
                 command_timeout,
-                command_timeout_after_error,
+                timeout_after_error,
                 overall_timeout,
                 long_running_threshold,
             )
@@ -301,7 +301,7 @@ class RocqLspManager:
         session_key: Path,
         path: Path,
         command_timeout: float | None,
-        command_timeout_after_error: float | None,
+        timeout_after_error: float | None,
         overall_timeout: float | None,
         long_running_threshold: float | None,
     ) -> CheckResult:
@@ -337,7 +337,7 @@ class RocqLspManager:
                 timeout=overall_timeout,
                 hard_timeout_grace=self.config.timeout_policy.cancel_grace_seconds,
                 command_timeout=command_timeout,
-                command_timeout_after_error=command_timeout_after_error,
+                timeout_after_error=timeout_after_error,
                 goals="Str",
                 content=content,
             )
@@ -378,7 +378,7 @@ class RocqLspManager:
                     timeout_kind=get_document_result.timeout_kind or "request",
                     timed_out_range=get_document_result.timed_out_range,
                     command_timeout=command_timeout,
-                    command_timeout_after_error=command_timeout_after_error,
+                    timeout_after_error=timeout_after_error,
                     overall_timeout=overall_timeout,
                 )
             return CheckResult.from_diagnostics(
@@ -411,7 +411,7 @@ class RocqLspManager:
                 timeout_kind=exc.timeout_kind,
                 timed_out_range=exc.timed_out_range,
                 command_timeout=command_timeout,
-                command_timeout_after_error=command_timeout_after_error,
+                timeout_after_error=timeout_after_error,
                 overall_timeout=overall_timeout,
             )
             await self._reset_session(session_key)
@@ -624,11 +624,11 @@ class RocqLspManager:
             return None
         return value
 
-    def _effective_command_timeout_after_error(
+    def _effective_timeout_after_error(
         self, override: float | None
     ) -> float | None:
         value = (
-            self.config.timeout_policy.command_seconds_after_error
+            self.config.timeout_policy.request_seconds_after_error
             if override is None
             else override
         )
@@ -656,7 +656,7 @@ class RocqLspManager:
         timeout_kind: str,
         timed_out_range: dict[str, Any] | None,
         command_timeout: float | None,
-        command_timeout_after_error: float | None,
+        timeout_after_error: float | None,
         overall_timeout: float | None,
     ) -> TimeoutContext:
         return TimeoutContext.from_manager_state(
@@ -669,10 +669,8 @@ class RocqLspManager:
             command_timeout_seconds=(
                 command_timeout if timeout_kind == "command" else None
             ),
-            command_timeout_after_error_seconds=(
-                command_timeout_after_error
-                if timeout_kind == "command_after_error"
-                else None
+            timeout_after_error_seconds=(
+                timeout_after_error if timeout_kind == "after_error" else None
             ),
             timed_out_range=timed_out_range,
         )
