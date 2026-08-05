@@ -1,0 +1,16 @@
+{
+  "timeout_policy": {
+    "request_seconds": 30,
+    "cancel_grace_seconds": 2,
+    "command_seconds_after_error": 5
+  },
+  "steps": [
+    {
+      "label": "errors followed by fast sentences complete without timeout",
+      "action": "check",
+      "file": "src/completes.v",
+      "max_seconds": 15,
+      "long_running_seconds": 0
+    }
+  ]
+}

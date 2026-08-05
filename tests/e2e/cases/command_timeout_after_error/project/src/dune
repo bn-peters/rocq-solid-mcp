@@ -1,0 +1,3 @@
+(rocq.theory
+ (name AfterError)
+ (generate_project_file))

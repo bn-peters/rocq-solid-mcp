@@ -90,6 +90,7 @@ async def test_check_tool_reports_errors_only_with_configured_limit(
     assert manager.check_kwargs == {
         "file": str(source),
         "command_timeout_seconds": None,
+        "command_timeout_after_error_seconds": None,
         "long_running_seconds": 48.0,
         "clear_cache": False,
     }

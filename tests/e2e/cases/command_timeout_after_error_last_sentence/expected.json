@@ -1,0 +1,42 @@
+[
+  {
+    "step": "after an error the final sentence is also cancelled",
+    "action": "check",
+    "file": "src/last.v",
+    "result": {
+      "status": "timeout",
+      "file": "last.v",
+      "counts": {
+        "errors": 1
+      },
+      "diagnostics": [
+        {
+          "level": "error",
+          "message": "Tactic failure: BROKEN.",
+          "location": "9:3 to 9:17",
+          "sentence": "fail \"BROKEN\".",
+          "proof_name": "broken"
+        }
+      ],
+      "timed_out": true,
+      "timeout_context": {
+        "operation": "coq/getDocument",
+        "timeout_kind": "command_after_error",
+        "request_timeout_seconds": 60.0,
+        "cancel_grace_seconds": 2,
+        "checked_until": "13:7",
+        "latest_processing_range": "13:7 to 15:1",
+        "next_unchecked": {
+          "location": "14:1",
+          "line": "sleep 30."
+        },
+        "command_timeout_after_error_seconds": 2,
+        "timed_out_range": "14:1 to 14:10",
+        "timed_out_command": {
+          "location": "14:1",
+          "line": "sleep 30."
+        }
+      }
+    }
+  }
+]

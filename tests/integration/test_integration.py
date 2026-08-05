@@ -26,6 +26,7 @@ async def test_valid_file_checks_with_zero_errors(tmp_path: Path) -> None:
             timeout_policy=TimeoutPolicy(
                 request_seconds=30,
                 cancel_grace_seconds=5,
+                command_seconds_after_error=None,
             ),
             max_errors=1000000,
             workspace=tmp_path,
@@ -53,6 +54,7 @@ async def test_missing_variable_names_report_multiple_errors(tmp_path: Path) -> 
             timeout_policy=TimeoutPolicy(
                 request_seconds=30,
                 cancel_grace_seconds=5,
+                command_seconds_after_error=None,
             ),
             max_errors=1000000,
             workspace=tmp_path,
@@ -79,6 +81,7 @@ async def test_file_change_rechecks_and_reports_failure_proof_state(
             timeout_policy=TimeoutPolicy(
                 request_seconds=30,
                 cancel_grace_seconds=5,
+                command_seconds_after_error=None,
             ),
             max_errors=1000000,
             workspace=tmp_path,
@@ -140,6 +143,7 @@ async def test_run_at_search_returns_feedback(tmp_path: Path) -> None:
             timeout_policy=TimeoutPolicy(
                 request_seconds=30,
                 cancel_grace_seconds=5,
+                command_seconds_after_error=None,
             ),
             max_errors=1000000,
             workspace=tmp_path,
@@ -173,6 +177,7 @@ async def test_run_at_reports_warning_feedback(tmp_path: Path) -> None:
             timeout_policy=TimeoutPolicy(
                 request_seconds=30,
                 cancel_grace_seconds=5,
+                command_seconds_after_error=None,
             ),
             max_errors=1000000,
             workspace=tmp_path,
@@ -208,6 +213,7 @@ async def test_run_at_can_run_require_before_check(tmp_path: Path) -> None:
             timeout_policy=TimeoutPolicy(
                 request_seconds=30,
                 cancel_grace_seconds=5,
+                command_seconds_after_error=None,
             ),
             max_errors=1000000,
             workspace=tmp_path,
@@ -238,6 +244,7 @@ async def test_run_at_reports_command_failure(tmp_path: Path) -> None:
             timeout_policy=TimeoutPolicy(
                 request_seconds=30,
                 cancel_grace_seconds=5,
+                command_seconds_after_error=None,
             ),
             max_errors=1000000,
             workspace=tmp_path,

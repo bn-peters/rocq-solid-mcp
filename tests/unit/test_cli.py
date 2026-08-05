@@ -58,6 +58,7 @@ def test_check_prints_formatted_json_without_cli_limits(
     assert manager.check_kwargs == {
         "file": str(source),
         "command_timeout_seconds": 0,
+        "command_timeout_after_error_seconds": 0,
         "overall_timeout_seconds": 0,
         "long_running_seconds": 0,
     }

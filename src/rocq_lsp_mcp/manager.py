@@ -111,11 +111,15 @@ class RocqLspManager:
         self,
         file: str,
         command_timeout_seconds: float | None = None,
+        command_timeout_after_error_seconds: float | None = None,
         overall_timeout_seconds: float | None = None,
         long_running_seconds: float | None = DEFAULT_LONG_RUNNING_SECONDS,
         clear_cache: bool = False,
     ) -> CheckResult:
         command_timeout = self._effective_command_timeout(command_timeout_seconds)
+        command_timeout_after_error = self._effective_command_timeout_after_error(
+            command_timeout_after_error_seconds
+        )
         overall_timeout = self._effective_overall_timeout(overall_timeout_seconds)
         long_running_threshold = self._effective_long_running_threshold(
             long_running_seconds
@@ -175,6 +179,7 @@ class RocqLspManager:
                 session_key,
                 path,
                 command_timeout,
+                command_timeout_after_error,
                 overall_timeout,
                 long_running_threshold,
             )
@@ -296,6 +301,7 @@ class RocqLspManager:
         session_key: Path,
         path: Path,
         command_timeout: float | None,
+        command_timeout_after_error: float | None,
         overall_timeout: float | None,
         long_running_threshold: float | None,
     ) -> CheckResult:
@@ -331,6 +337,7 @@ class RocqLspManager:
                 timeout=overall_timeout,
                 hard_timeout_grace=self.config.timeout_policy.cancel_grace_seconds,
                 command_timeout=command_timeout,
+                command_timeout_after_error=command_timeout_after_error,
                 goals="Str",
                 content=content,
             )
@@ -362,21 +369,17 @@ class RocqLspManager:
             )
             timeout_context = None
             if request_timed_out:
-                timeout_context = TimeoutContext.from_manager_state(
+                timeout_context = self._build_timeout_context(
+                    session=session,
+                    uri=uri,
+                    version=version,
                     content=content,
                     document=completed_doc,
-                    progress=session.notifications.latest_file_progress(uri, version),
-                    cancel_grace_seconds=(
-                        self.config.timeout_policy.cancel_grace_seconds
-                    ),
                     timeout_kind=get_document_result.timeout_kind or "request",
-                    request_timeout_seconds=overall_timeout,
-                    command_timeout_seconds=(
-                        command_timeout
-                        if get_document_result.timeout_kind == "command"
-                        else None
-                    ),
                     timed_out_range=get_document_result.timed_out_range,
+                    command_timeout=command_timeout,
+                    command_timeout_after_error=command_timeout_after_error,
+                    overall_timeout=overall_timeout,
                 )
             return CheckResult.from_diagnostics(
                 status="timeout" if request_timed_out else "complete",
@@ -399,17 +402,17 @@ class RocqLspManager:
                 uri, version
             )
             diagnostics = build_diagnostics(raw_diagnostics, None, content=content)
-            timeout_context = TimeoutContext.from_manager_state(
+            timeout_context = self._build_timeout_context(
+                session=session,
+                uri=uri,
+                version=version,
                 content=content,
                 document=None,
-                progress=session.notifications.latest_file_progress(uri, version),
-                cancel_grace_seconds=self.config.timeout_policy.cancel_grace_seconds,
                 timeout_kind=exc.timeout_kind,
-                request_timeout_seconds=overall_timeout,
-                command_timeout_seconds=(
-                    command_timeout if exc.timeout_kind == "command" else None
-                ),
                 timed_out_range=exc.timed_out_range,
+                command_timeout=command_timeout,
+                command_timeout_after_error=command_timeout_after_error,
+                overall_timeout=overall_timeout,
             )
             await self._reset_session(session_key)
             return CheckResult.from_diagnostics(
@@ -612,11 +615,26 @@ class RocqLspManager:
         return replacement
 
     def _effective_command_timeout(self, override: float | None) -> float | None:
-        if override is None:
-            return self.config.timeout_policy.command_seconds
-        if override <= 0:
+        value = (
+            self.config.timeout_policy.command_seconds
+            if override is None
+            else override
+        )
+        if value is None or value <= 0:
             return None
-        return override
+        return value
+
+    def _effective_command_timeout_after_error(
+        self, override: float | None
+    ) -> float | None:
+        value = (
+            self.config.timeout_policy.command_seconds_after_error
+            if override is None
+            else override
+        )
+        if value is None or value <= 0:
+            return None
+        return value
 
     def _effective_overall_timeout(self, override: float | None) -> float | None:
         if override is None:
@@ -626,6 +644,38 @@ class RocqLspManager:
         if override <= 0:
             return None
         return bounded_overall_timeout_seconds(override)
+
+    def _build_timeout_context(
+        self,
+        *,
+        session: RocqLspSession,
+        uri: str,
+        version: int,
+        content: str,
+        document: dict[str, Any] | None,
+        timeout_kind: str,
+        timed_out_range: dict[str, Any] | None,
+        command_timeout: float | None,
+        command_timeout_after_error: float | None,
+        overall_timeout: float | None,
+    ) -> TimeoutContext:
+        return TimeoutContext.from_manager_state(
+            content=content,
+            document=document,
+            progress=session.notifications.latest_file_progress(uri, version),
+            cancel_grace_seconds=self.config.timeout_policy.cancel_grace_seconds,
+            timeout_kind=timeout_kind,
+            request_timeout_seconds=overall_timeout,
+            command_timeout_seconds=(
+                command_timeout if timeout_kind == "command" else None
+            ),
+            command_timeout_after_error_seconds=(
+                command_timeout_after_error
+                if timeout_kind == "command_after_error"
+                else None
+            ),
+            timed_out_range=timed_out_range,
+        )
 
     def _effective_long_running_threshold(self, override: float | None) -> float | None:
         if override is None:

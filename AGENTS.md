@@ -15,11 +15,13 @@ string.
   With no arguments it starts the MCP server. `bens-rocq-mcp check
   path/to/file.v` runs a one-shot check through `RocqLspManager` and prints
   formatted JSON with no diagnostic message limit, no request timeout, no
-  per-sentence command timeout, and no long-running command reporting.
+  per-sentence command timeout (including the after-error command timeout),
+  and no long-running command reporting.
 - `src/rocq_lsp_mcp/server.py` defines the FastMCP server, the lifespan-managed
   `RocqLspManager`, and the MCP tools
   `rocq_check_file(file: str,
   command_timeout_seconds: float | None = None,
+  command_timeout_after_error_seconds: float | None = None,
   clear_cache: bool = False)` and
   `rocq_run_at(file: str, commands: str, line: int,
   character: int = 1)`.
@@ -40,7 +42,9 @@ string.
   long-running command reporting, stores `$/coq/executionInformation` by
   URI/version for command timeout watchdogs and executed-range filtering, and
   lets callers wait briefly for diagnostics, performance data, or execution
-  changes for a requested document version.
+  changes for a requested document version. It also exposes
+  `has_error_diagnostic`/`wait_for_error_diagnostic` (exact document version
+  only) for the after-error command timeout.
 - `src/rocq_lsp_mcp/pipeline.py` normalizes raw diagnostics into compact
   internal `Diagnostic` models. It attaches the source sentence and proof
   states by matching sentence ranges, merges supplemental `proof/goals` results
@@ -100,7 +104,8 @@ timeout, leaving room for `ROCQ_LSP_HARD_TIMEOUT_GRACE`, when callers want
 partial timeout results back.
 For `command_timeout_seconds`, `None` uses `ROCQ_LSP_COMMAND_TIMEOUT`, which
 defaults to 5 seconds, `0` disables the command watchdog for that call, and
-positive values enable it. The server reports `long_running_commands` for
+positive values enable it. `command_timeout_after_error_seconds` overrides
+`ROCQ_LSP_COMMAND_TIMEOUT_AFTER_ERROR` per call with the same convention. The server reports `long_running_commands` for
 commands that actually ran during check and took at least 80% of
 the configured request timeout. `clear_cache=True` kills and replaces the
 cached `coq-lsp` process for the requested file before sending `didOpen`, so
@@ -208,6 +213,27 @@ partial-result deadline for check and `run_at` calls. MCP host cancellation is a
 harder outer abort: the server sends `$/cancelRequest` to `coq-lsp` and may reset
 the file session, but the client may already have abandoned the result.
 
+`ROCQ_LSP_COMMAND_TIMEOUT_AFTER_ERROR` adds a separate per-sentence timeout
+that takes over once the watchdog observes the first error diagnostic for the
+current document version. It gives checks a fast exit after errors while still
+reporting later errors in large files: post-error sentences that finish within
+the after-error timeout keep checking, and the first slower one is cancelled.
+After an error it replaces `ROCQ_LSP_COMMAND_TIMEOUT` entirely, applies even
+when the normal watchdog is disabled, and also covers the final sentence that
+the normal watchdog exempts (after an error, a bounded exit matters more than
+attributing end-of-file finalization time precisely). Such cancellations
+return `status: "timeout"` with `timeout_kind: "command_after_error"` and
+`command_timeout_after_error_seconds` in the timeout context. The variable
+defaults to 10 seconds; `0` or negative values disable the feature, and a
+set-but-empty value falls back to the default like the unset case. With the
+defaults (5-second normal command timeout, 10-second after-error timeout),
+post-error sentences get more headroom than pre-error ones while the exit
+stays bounded, including at the otherwise-exempt final sentence. The check
+tool's `command_timeout_after_error_seconds` argument overrides the variable
+for one call with the same convention as `command_timeout_seconds` (`None`
+uses the default, `0` disables, positive enables); the feature applies only
+to check calls, not `run_at`.
+
 For `Attempt to save an incomplete proof` diagnostics, the `Qed.` sentence can
 carry only the save error while the open goal is attached to the previous proof
 span. The manager issues a best-effort `proof/goals` request with `mode="Prev"`
@@ -237,6 +263,9 @@ Timeout and cancellation handling has three layers:
   MCP tool timeout.
 - `ROCQ_LSP_COMMAND_TIMEOUT` is an optional per-sentence watchdog during
   `coq/getDocument`; unset or non-positive values disable it.
+  `ROCQ_LSP_COMMAND_TIMEOUT_AFTER_ERROR` (default 10 seconds) replaces it for
+  the rest of a check once the first error diagnostic is observed;
+  non-positive values disable it.
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE` is the extra wait after sending
   `$/cancelRequest`, including cleanup after host-level MCP cancellation.
 
@@ -256,6 +285,10 @@ The prototype reads these environment variables:
 - `ROCQ_LSP_HARD_TIMEOUT_GRACE`, default `5`
 - `ROCQ_LSP_COMMAND_TIMEOUT`, default `5`; set `0` to disable per-sentence
   command timeout by default
+- `ROCQ_LSP_COMMAND_TIMEOUT_AFTER_ERROR`, default `10`; positive values
+  replace the per-sentence command timeout after the first error diagnostic
+  of a check, `0` or negative values disable it, and an empty value falls
+  back to the default
 - `ROCQ_LSP_MESSAGE_LIMIT`, default `10`; values above `50` are capped
 - `ROCQ_LSP_MAX_ERRORS`, default `1000000`
 - `ROCQ_LSP_WORKSPACE`, optional workspace override
@@ -339,11 +372,15 @@ still depends on the GitLab runner having the local cache available.
   `applied` heuristic ignoring `Entering directory`/`Leaving directory` stderr
   noise and coqdep `.theory.d` regeneration, and `run_at` triggering the dune
   build (including its failure and cache-restart paths) the same way `check` does.
+  It also covers threading the after-error command timeout to the client
+  (non-positive policy values and per-call overrides disabling it) and the
+  `command_after_error` timeout context.
 - `tests/unit/test_config.py` covers command construction and environment
   configuration.
 - `tests/unit/test_notifications.py` covers diagnostic notification storage,
   file-progress storage for timeout context, execution-info storage for command
-  timeout, clearing, waiting, fallback behavior, and ignored notifications.
+  timeout, error-diagnostic observation for the after-error command timeout,
+  clearing, waiting, fallback behavior, and ignored notifications.
 - `tests/unit/test_pipeline.py` covers proof-state attachment and agent-facing
   diagnostic filtering.
 - `tests/unit/test_pretty.py` covers readable rendering of rocq-lsp Pp structures
@@ -368,7 +405,9 @@ still depends on the GitLab runner having the local cache available.
   (write a brand-new file that must not already exist), `append`, `replace`,
   `check`, or `run_at`. Under dune, `_infer_workspace` resolves to the theory
   subdirectory, so the transcript `file` field is a basename. Scenario files may
-  define a top-level `timeout_policy` for timeout-specific coverage. Scenario check and
+  define a top-level `timeout_policy` for timeout-specific coverage, including
+  `command_seconds_after_error` for the after-error per-sentence timeout.
+  Scenario check and
   `run_at` steps may include `min_seconds` or `max_seconds` timing assertions
   for cache-sensitive behavior; timings are asserted by the harness but omitted
   from promoted transcripts. Scenario check steps may also include
@@ -389,6 +428,21 @@ still depends on the GitLab runner having the local cache available.
   check tool call's per-call `command_timeout_seconds` override.
   `command_timeout` uses the same local `sleep` tactic with a long global
   timeout and short command timeout to cover per-sentence cancellation.
+  `command_timeout_after_error_zero` covers the disable semantics: a zero
+  after-error timeout leaves the post-error slow proof running until the
+  request deadline (`timeout_kind: "request"`), and a per-call
+  `command_timeout_after_error_seconds` override on the next check re-enables
+  the fast exit (`timeout_kind: "command_after_error"`).
+  `command_timeout_after_error` covers the positive after-error timeout
+  replacing a longer normal command timeout: a slow-but-passing proof
+  survives the normal watchdog, two fast errors are both reported, and the
+  trailing slow proof is cancelled quickly with
+  `timeout_kind: "command_after_error"`.
+  `command_timeout_after_error_completes` checks that errors followed by only
+  fast sentences complete without any after-error cancellation.
+  `command_timeout_after_error_last_sentence` checks that after an error the
+  after-error timeout also cancels the document's final sentence, which the
+  normal watchdog exempts.
   `request_timeout_resume_and_error_cache` covers repeated soft partial-result
   timeouts resuming from cached progress while preserving an earlier error
   diagnostic, including the final cached successful check.

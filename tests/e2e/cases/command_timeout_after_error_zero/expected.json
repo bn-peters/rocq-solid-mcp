@@ -1,0 +1,77 @@
+[
+  {
+    "step": "zero after-error timeout is disabled until the request deadline",
+    "action": "check",
+    "file": "src/zero.v",
+    "result": {
+      "status": "timeout",
+      "file": "zero.v",
+      "counts": {
+        "errors": 1
+      },
+      "diagnostics": [
+        {
+          "level": "error",
+          "message": "Tactic failure: BROKEN.",
+          "location": "14:3 to 14:17",
+          "sentence": "fail \"BROKEN\".",
+          "proof_name": "broken"
+        }
+      ],
+      "timed_out": true,
+      "timeout_context": {
+        "operation": "coq/getDocument",
+        "timeout_kind": "request",
+        "request_timeout_seconds": 15.0,
+        "cancel_grace_seconds": 2,
+        "checked_until": "18:7",
+        "latest_processing_range": "18:7 to 22:1",
+        "next_unchecked": {
+          "location": "19:3",
+          "line": "sleep 30."
+        }
+      }
+    }
+  },
+  {
+    "step": "per-call override re-enables the after-error fast exit",
+    "action": "check",
+    "file": "src/zero.v",
+    "command_timeout_after_error_seconds": 2,
+    "result": {
+      "status": "timeout",
+      "file": "zero.v",
+      "counts": {
+        "errors": 1
+      },
+      "diagnostics": [
+        {
+          "level": "error",
+          "message": "Tactic failure: BROKEN.",
+          "location": "14:3 to 14:17",
+          "sentence": "fail \"BROKEN\".",
+          "proof_name": "broken"
+        }
+      ],
+      "timed_out": true,
+      "timeout_context": {
+        "operation": "coq/getDocument",
+        "timeout_kind": "command_after_error",
+        "request_timeout_seconds": 15.0,
+        "cancel_grace_seconds": 2,
+        "checked_until": "18:7",
+        "latest_processing_range": "18:7 to 22:1",
+        "next_unchecked": {
+          "location": "19:3",
+          "line": "sleep 30."
+        },
+        "command_timeout_after_error_seconds": 2,
+        "timed_out_range": "19:3 to 19:12",
+        "timed_out_command": {
+          "location": "19:3",
+          "line": "sleep 30."
+        }
+      }
+    }
+  }
+]

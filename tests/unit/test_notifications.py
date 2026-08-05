@@ -108,6 +108,86 @@ async def test_notification_store_clears_versioned_diagnostics() -> None:
     assert await store.wait_for_diagnostics("file:///Demo.v", 3, settle_seconds=0) == []
 
 
+def test_notification_store_reports_error_diagnostics_by_exact_version() -> None:
+    store = NotificationStore()
+
+    store.handle(
+        "textDocument/publishDiagnostics",
+        {
+            "uri": "file:///Demo.v",
+            "version": 3,
+            "diagnostics": [{"message": "bad", "severity": 1}],
+        },
+    )
+
+    assert store.has_error_diagnostic("file:///Demo.v", 3) is True
+    # Stale errors from another document version must not count.
+    assert store.has_error_diagnostic("file:///Demo.v", 4) is False
+
+
+def test_notification_store_ignores_non_error_diagnostics() -> None:
+    store = NotificationStore()
+
+    store.handle(
+        "textDocument/publishDiagnostics",
+        {
+            "uri": "file:///Demo.v",
+            "version": 3,
+            "diagnostics": [
+                {"message": "warned", "severity": 2},
+                {"message": "noted", "severity": 3},
+            ],
+        },
+    )
+
+    assert store.has_error_diagnostic("file:///Demo.v", 3) is False
+
+
+@pytest.mark.asyncio
+async def test_notification_store_waits_for_error_diagnostic() -> None:
+    store = NotificationStore()
+
+    async def publish_soon() -> None:
+        await asyncio.sleep(0.01)
+        store.handle(
+            "textDocument/publishDiagnostics",
+            {
+                "uri": "file:///Demo.v",
+                "version": 3,
+                "diagnostics": [{"message": "bad", "severity": 1}],
+            },
+        )
+
+    publisher = asyncio.create_task(publish_soon())
+    try:
+        await asyncio.wait_for(
+            store.wait_for_error_diagnostic("file:///Demo.v", 3), timeout=5
+        )
+    finally:
+        await publisher
+
+
+@pytest.mark.asyncio
+async def test_notification_store_wait_for_error_diagnostic_ignores_warnings() -> None:
+    store = NotificationStore()
+
+    store.handle(
+        "textDocument/publishDiagnostics",
+        {
+            "uri": "file:///Demo.v",
+            "version": 3,
+            "diagnostics": [{"message": "warned", "severity": 2}],
+        },
+    )
+
+    waiter = asyncio.create_task(store.wait_for_error_diagnostic("file:///Demo.v", 3))
+    await asyncio.sleep(0.01)
+    assert not waiter.done()
+    waiter.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await waiter
+
+
 def test_notification_store_returns_versioned_file_progress() -> None:
     store = NotificationStore()
     progress = file_progress(version=3)

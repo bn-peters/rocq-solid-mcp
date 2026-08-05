@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 DEFAULT_COMMAND_TIMEOUT_SECONDS = 5.0
+DEFAULT_COMMAND_TIMEOUT_AFTER_ERROR_SECONDS = 10.0
 DEFAULT_MESSAGE_LIMIT = 10
 MAX_MESSAGE_LIMIT = 50
 DEFAULT_OVERALL_TIMEOUT_SECONDS = 55
@@ -16,6 +17,12 @@ class TimeoutPolicy:
     request_seconds: float = DEFAULT_OVERALL_TIMEOUT_SECONDS
     cancel_grace_seconds: float = 5.0
     command_seconds: float | None = DEFAULT_COMMAND_TIMEOUT_SECONDS
+    # Per-sentence timeout used instead of command_seconds once the first
+    # error diagnostic has been observed. None or a non-positive value
+    # disables it.
+    command_seconds_after_error: float | None = (
+        DEFAULT_COMMAND_TIMEOUT_AFTER_ERROR_SECONDS
+    )
 
 
 @dataclass(frozen=True)
@@ -36,7 +43,15 @@ def _float_env(name: str, default: str) -> float:
 
 
 def _optional_positive_float_env(name: str, default: str = "0") -> float | None:
-    value = float(os.environ.get(name, default))
+    """Read an optional float where non-positive values disable the setting.
+
+    A set-but-empty variable falls back to the default, matching the unset
+    case, instead of failing to parse.
+    """
+    raw = os.environ.get(name, default)
+    if not raw.strip():
+        raw = default
+    value = float(raw)
     if value <= 0:
         return None
     return value
@@ -78,6 +93,10 @@ def load_config() -> RocqLspConfig:
             cancel_grace_seconds=_float_env("ROCQ_LSP_HARD_TIMEOUT_GRACE", "5"),
             command_seconds=_optional_positive_float_env(
                 "ROCQ_LSP_COMMAND_TIMEOUT", str(DEFAULT_COMMAND_TIMEOUT_SECONDS)
+            ),
+            command_seconds_after_error=_optional_positive_float_env(
+                "ROCQ_LSP_COMMAND_TIMEOUT_AFTER_ERROR",
+                str(DEFAULT_COMMAND_TIMEOUT_AFTER_ERROR_SECONDS),
             ),
         ),
         max_errors=_int_env("ROCQ_LSP_MAX_ERRORS", "1000000"),

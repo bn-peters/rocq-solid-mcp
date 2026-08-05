@@ -1,0 +1,120 @@
+[
+  {
+    "step": "check reports both errors then cancels the slow proof quickly",
+    "action": "check",
+    "file": "src/after_error.v",
+    "result": {
+      "status": "timeout",
+      "file": "after_error.v",
+      "counts": {
+        "errors": 2
+      },
+      "diagnostics": [
+        {
+          "level": "error",
+          "message": "Tactic failure: SECOND.",
+          "location": "21:3 to 21:17",
+          "sentence": "fail \"SECOND\".",
+          "proof_name": "also_broken"
+        },
+        {
+          "level": "error",
+          "message": "Tactic failure: FIRST.",
+          "location": "16:3 to 16:16",
+          "sentence": "fail \"FIRST\".",
+          "proof_name": "broken"
+        }
+      ],
+      "timed_out": true,
+      "timeout_context": {
+        "operation": "coq/getDocument",
+        "timeout_kind": "command_after_error",
+        "request_timeout_seconds": 60.0,
+        "cancel_grace_seconds": 2,
+        "checked_until": "25:7",
+        "latest_processing_range": "25:7 to 29:1",
+        "next_unchecked": {
+          "location": "26:3",
+          "line": "sleep 30."
+        },
+        "command_timeout_after_error_seconds": 2,
+        "timed_out_range": "26:3 to 26:12",
+        "timed_out_command": {
+          "location": "26:3",
+          "line": "sleep 30."
+        }
+      }
+    }
+  },
+  {
+    "step": "cached recheck reports the same errors quickly",
+    "action": "check",
+    "file": "src/after_error.v",
+    "result": {
+      "status": "timeout",
+      "file": "after_error.v",
+      "counts": {
+        "errors": 2
+      },
+      "diagnostics": [
+        {
+          "level": "error",
+          "message": "Tactic failure: SECOND.",
+          "location": "21:3 to 21:17",
+          "sentence": "fail \"SECOND\".",
+          "proof_name": "also_broken"
+        },
+        {
+          "level": "error",
+          "message": "Tactic failure: FIRST.",
+          "location": "16:3 to 16:16",
+          "sentence": "fail \"FIRST\".",
+          "proof_name": "broken"
+        }
+      ],
+      "timed_out": true,
+      "timeout_context": {
+        "operation": "coq/getDocument",
+        "timeout_kind": "command_after_error",
+        "request_timeout_seconds": 60.0,
+        "cancel_grace_seconds": 2,
+        "checked_until": "25:7",
+        "latest_processing_range": "25:7 to 29:1",
+        "next_unchecked": {
+          "location": "26:3",
+          "line": "sleep 30."
+        },
+        "command_timeout_after_error_seconds": 2,
+        "timed_out_range": "26:3 to 26:12",
+        "timed_out_command": {
+          "location": "26:3",
+          "line": "sleep 30."
+        }
+      }
+    }
+  },
+  {
+    "step": "fix the first error",
+    "action": "replace",
+    "file": "src/after_error.v"
+  },
+  {
+    "step": "fix the second error",
+    "action": "replace",
+    "file": "src/after_error.v"
+  },
+  {
+    "step": "remove the slow tactic",
+    "action": "replace",
+    "file": "src/after_error.v"
+  },
+  {
+    "step": "clean recheck completes",
+    "action": "check",
+    "file": "src/after_error.v",
+    "result": {
+      "status": "complete",
+      "file": "after_error.v"
+    }
+  }
+]

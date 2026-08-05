@@ -14,6 +14,9 @@ from .config import rocq_lsp_command, rocq_lsp_settings
 from .notifications import NotificationStore
 
 
+TimeoutKind = Literal["request", "command", "command_after_error"]
+
+
 class RocqLspResponseError(RuntimeError):
     def __init__(self, error: dict[str, Any]) -> None:
         self.error = error
@@ -25,7 +28,7 @@ class RocqLspHardTimeout(TimeoutError):
         self,
         message: str,
         *,
-        timeout_kind: Literal["request", "command"] = "request",
+        timeout_kind: TimeoutKind = "request",
         timed_out_range: dict[str, Any] | None = None,
     ) -> None:
         self.timeout_kind = timeout_kind
@@ -45,7 +48,7 @@ class RocqLspUnavailableError(RuntimeError):
 class GetDocumentResult:
     document: dict[str, Any]
     timed_out: bool = False
-    timeout_kind: Literal["request", "command"] | None = None
+    timeout_kind: TimeoutKind | None = None
     timed_out_range: dict[str, Any] | None = None
 
 
@@ -232,15 +235,21 @@ class RocqLspClient:
         timeout: float | None,
         hard_timeout_grace: float,
         command_timeout: float | None = None,
+        command_timeout_after_error: float | None = None,
         goals: str | None = None,
         content: str | None = None,
     ) -> GetDocumentResult:
+        if command_timeout is not None and command_timeout <= 0:
+            command_timeout = None
+        if command_timeout_after_error is not None and command_timeout_after_error <= 0:
+            command_timeout_after_error = None
         request_id = self._reserve_request()
         future = self._pending[request_id]
         self.restart_required_after_external_cancellation = False
         command_state: dict[str, Any] = {
             "timed_out": False,
             "range": None,
+            "timeout_kind": None,
         }
         watchdog: asyncio.Task[None] | None = None
         params: dict[str, Any] = {"textDocument": {"uri": uri, "version": version}}
@@ -254,13 +263,14 @@ class RocqLspClient:
                 "params": params,
             }
         )
-        if command_timeout is not None and command_timeout > 0:
+        if command_timeout is not None or command_timeout_after_error is not None:
             watchdog = asyncio.create_task(
                 self._command_timeout_watchdog(
                     uri=uri,
                     version=version,
                     request_id=request_id,
                     command_timeout=command_timeout,
+                    command_timeout_after_error=command_timeout_after_error,
                     command_state=command_state,
                     content=content,
                 )
@@ -305,9 +315,7 @@ class RocqLspClient:
                 raw = future.result()
                 self._pending.pop(request_id, None)
                 if command_state["timed_out"] and "error" in raw:
-                    return self._get_document_timeout_result(
-                        raw, command_state["range"]
-                    )
+                    return self._get_document_timeout_result(raw, command_state)
                 return GetDocumentResult(document=self._result_or_raise(raw))
 
             await watchdog
@@ -315,16 +323,17 @@ class RocqLspClient:
                 raw = future.result()
                 self._pending.pop(request_id, None)
                 if "error" in raw:
-                    return self._get_document_timeout_result(
-                        raw, command_state["range"]
-                    )
+                    return self._get_document_timeout_result(raw, command_state)
                 return GetDocumentResult(document=self._result_or_raise(raw))
+            timeout_kind, timeout_seconds = self._command_timeout_details(
+                command_state, command_timeout, command_timeout_after_error
+            )
             return await self._wait_for_cancelled_get_document(
                 request_id=request_id,
                 future=future,
                 hard_timeout_grace=hard_timeout_grace,
-                timeout_kind="command",
-                timeout_seconds=command_timeout or 0,
+                timeout_kind=timeout_kind,
+                timeout_seconds=timeout_seconds,
                 timed_out_range=command_state["range"],
             )
 
@@ -347,43 +356,115 @@ class RocqLspClient:
         uri: str,
         version: int,
         request_id: int,
-        command_timeout: float,
+        command_timeout: float | None,
+        command_timeout_after_error: float | None,
         command_state: dict[str, Any],
         content: str | None,
     ) -> None:
-        after_sequence = self.notifications.latest_execution_sequence(uri, version)
+        notifications = self.notifications
+        after_sequence = notifications.latest_execution_sequence(uri, version)
         active_range: dict[str, Any] | None = None
-        while True:
-            is_final_sentence = _range_reaches_end_of_content(content, active_range)
-            update = await self.notifications.wait_for_execution_info(
-                uri,
-                version,
-                after_sequence=after_sequence,
-                timeout=(
-                    command_timeout
-                    if active_range is not None and not is_final_sentence
-                    else None
-                ),
-            )
-            if update is None:
-                command_state["timed_out"] = True
-                command_state["range"] = active_range
-                await self.notify("$/cancelRequest", {"id": request_id})
-                return
+        watch_errors = command_timeout_after_error is not None
+        error_seen = False
+        exec_task: asyncio.Task[tuple[int, dict[str, Any]] | None] | None = None
+        error_task: asyncio.Task[None] | None = None
 
-            after_sequence, params = update
-            range_ = params.get("range") if isinstance(params, dict) else None
-            active_range = range_ if isinstance(range_, dict) else None
+        async def cancel_request(
+            timed_out_range: dict[str, Any] | None, *, timeout_kind: TimeoutKind
+        ) -> None:
+            command_state["timed_out"] = True
+            command_state["range"] = timed_out_range
+            command_state["timeout_kind"] = timeout_kind
+            await self.notify("$/cancelRequest", {"id": request_id})
+
+        try:
+            while True:
+                if watch_errors and not error_seen:
+                    error_seen = notifications.has_error_diagnostic(uri, version)
+                if error_seen:
+                    # After the first error the after-error timeout replaces
+                    # the normal per-sentence timeout. It also applies to the
+                    # final sentence, which the normal watchdog exempts: after
+                    # an error a bounded exit matters more than attributing
+                    # end-of-file finalization time precisely.
+                    wait_timeout: float | None = command_timeout_after_error
+                else:
+                    is_final_sentence = _range_reaches_end_of_content(
+                        content, active_range
+                    )
+                    wait_timeout = (
+                        command_timeout
+                        if active_range is not None and not is_final_sentence
+                        else None
+                    )
+
+                if exec_task is None or exec_task.done():
+                    exec_task = asyncio.create_task(
+                        notifications.wait_for_execution_info(
+                            uri,
+                            version,
+                            after_sequence=after_sequence,
+                            timeout=None,
+                        )
+                    )
+                waiters: set[asyncio.Task[Any]] = {exec_task}
+                if watch_errors and not error_seen:
+                    if error_task is None or error_task.done():
+                        error_task = asyncio.create_task(
+                            notifications.wait_for_error_diagnostic(uri, version)
+                        )
+                    waiters.add(error_task)
+
+                done, _ = await asyncio.wait(
+                    waiters,
+                    timeout=wait_timeout,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if not done:
+                    await cancel_request(
+                        active_range,
+                        timeout_kind=(
+                            "command_after_error" if error_seen else "command"
+                        ),
+                    )
+                    return
+                if exec_task in done:
+                    update = exec_task.result()
+                    if update is not None:
+                        after_sequence, params = update
+                        range_ = (
+                            params.get("range") if isinstance(params, dict) else None
+                        )
+                        active_range = range_ if isinstance(range_, dict) else None
+                if error_task is not None and error_task in done:
+                    error_seen = True
+        finally:
+            for task in (exec_task, error_task):
+                if task is not None and not task.done():
+                    task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await task
+
+    @staticmethod
+    def _command_timeout_details(
+        command_state: dict[str, Any],
+        command_timeout: float | None,
+        command_timeout_after_error: float | None,
+    ) -> tuple[TimeoutKind, float]:
+        kind: TimeoutKind = command_state.get("timeout_kind") or "command"
+        if kind == "command_after_error":
+            return kind, command_timeout_after_error or 0
+        return kind, command_timeout or 0
 
     def _get_document_timeout_result(
-        self, raw: dict[str, Any], timed_out_range: dict[str, Any] | None
+        self, raw: dict[str, Any], command_state: dict[str, Any]
     ) -> GetDocumentResult:
         document = {} if "error" in raw else self._result_or_raise(raw)
         return GetDocumentResult(
             document=document,
             timed_out=True,
-            timeout_kind="command",
-            timed_out_range=timed_out_range,
+            timeout_kind=command_state.get("timeout_kind") or "command",
+            timed_out_range=command_state["range"],
         )
 
     async def _wait_for_cancelled_get_document(
@@ -392,7 +473,7 @@ class RocqLspClient:
         request_id: int,
         future: asyncio.Future[dict[str, Any]],
         hard_timeout_grace: float,
-        timeout_kind: Literal["request", "command"],
+        timeout_kind: TimeoutKind,
         timeout_seconds: float,
         timed_out_range: dict[str, Any] | None,
     ) -> GetDocumentResult:

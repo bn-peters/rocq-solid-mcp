@@ -1,0 +1,44 @@
+[
+  {
+    "step": "errors followed by fast sentences complete without timeout",
+    "action": "check",
+    "file": "src/completes.v",
+    "result": {
+      "status": "complete",
+      "file": "completes.v",
+      "counts": {
+        "errors": 2
+      },
+      "diagnostics": [
+        {
+          "level": "error",
+          "message": "Tactic failure: FIRST.",
+          "location": "6:3 to 6:16",
+          "sentence": "fail \"FIRST\".",
+          "proof_name": "first_broken",
+          "proof_state": {
+            "goals": [
+              {
+                "conclusion": "True"
+              }
+            ]
+          }
+        },
+        {
+          "level": "error",
+          "message": "Tactic failure: SECOND.",
+          "location": "16:3 to 16:17",
+          "sentence": "fail \"SECOND\".",
+          "proof_name": "second_broken",
+          "proof_state": {
+            "goals": [
+              {
+                "conclusion": "True"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]

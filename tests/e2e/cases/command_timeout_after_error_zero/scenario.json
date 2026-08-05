@@ -1,0 +1,25 @@
+{
+  "timeout_policy": {
+    "request_seconds": 15,
+    "cancel_grace_seconds": 2,
+    "command_seconds_after_error": 0
+  },
+  "steps": [
+    {
+      "label": "zero after-error timeout is disabled until the request deadline",
+      "action": "check",
+      "file": "src/zero.v",
+      "min_seconds": 10,
+      "max_seconds": 24,
+      "long_running_seconds": 0
+    },
+    {
+      "label": "per-call override re-enables the after-error fast exit",
+      "action": "check",
+      "file": "src/zero.v",
+      "command_timeout_after_error_seconds": 2,
+      "max_seconds": 10,
+      "long_running_seconds": 0
+    }
+  ]
+}

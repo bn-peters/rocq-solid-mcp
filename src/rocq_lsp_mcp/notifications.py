@@ -123,6 +123,24 @@ class NotificationStore:
                 continue
             return None
 
+    def has_error_diagnostic(self, uri: str, version: int) -> bool:
+        # Exact-version lookup only: stale errors from a previous document
+        # version must not trigger the after-error command timeout.
+        diagnostics = self._diagnostics.get((uri, version), [])
+        return any(
+            isinstance(diagnostic, dict) and diagnostic.get("severity") == 1
+            for diagnostic in diagnostics
+        )
+
+    async def wait_for_error_diagnostic(self, uri: str, version: int) -> None:
+        key = (uri, version)
+        event = self._diagnostic_events.setdefault(key, asyncio.Event())
+        while True:
+            event.clear()
+            if self.has_error_diagnostic(uri, version):
+                return
+            await event.wait()
+
     async def wait_for_diagnostics(
         self, uri: str, version: int, settle_seconds: float = 0.25
     ) -> list[dict[str, Any]]:

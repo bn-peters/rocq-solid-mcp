@@ -42,6 +42,17 @@ async def rocq_check_file(
             ),
         ),
     ] = None,
+    command_timeout_after_error_seconds: Annotated[
+        float | None,
+        Field(
+            description=(
+                "Per Rocq sentence watchdog once the first error has been "
+                "reported; it replaces the normal sentence watchdog for the "
+                "rest of the check. None uses the server default, 0 disables "
+                "it, and positive values bound post-error sentences."
+            ),
+        ),
+    ] = None,
     clear_cache: Annotated[
         bool,
         Field(
@@ -73,6 +84,7 @@ async def rocq_check_file(
     result = await manager.check_file(
         file,
         command_timeout_seconds=command_timeout_seconds,
+        command_timeout_after_error_seconds=command_timeout_after_error_seconds,
         long_running_seconds=_long_running_alert_threshold(
             manager.config.timeout_policy.request_seconds
         ),
