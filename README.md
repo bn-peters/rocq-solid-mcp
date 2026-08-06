@@ -2,7 +2,7 @@
 
 *I'm accepting better name proposals.*
 
-*Join us on the [Iris Mattermost]*:
+*Join us on the Iris Mattermost*:
 1. Go to the [GitLab log-in page](https://gitlab.mpi-sws.org/users/sign_in) and select the "GitHub" button, then log in with your Github account.
 2. Log in to Mattermost; this should use your GitLab login.
 3. Join the [Ben's Rocq MCP](https://mattermost.mpi-sws.org/iris/channels/bens-rocq-mcp) channel.
