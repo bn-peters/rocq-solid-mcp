@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -108,6 +110,57 @@ async def test_start_reports_missing_opam_launcher(
     assert "required executable 'opam'" in message
     assert "Tried command: opam exec -- coq-lsp" in message
     assert "ROCQ_LSP_USE_OPAM=0" in message
+
+
+@pytest.mark.asyncio
+async def test_read_message_accepts_headers_before_content_length(tmp_path: Path) -> None:
+    client = client_with_store(tmp_path, NotificationStore())
+    payload = {"jsonrpc": "2.0", "id": 1, "result": {"large": "x" * 100_000}}
+    body = json.dumps(payload).encode("utf-8")
+    reader = asyncio.StreamReader()
+    reader.feed_data(
+        b"Content-Type: application/vscode-jsonrpc; charset=utf-8\r\n"
+        + f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
+        + body
+    )
+    reader.feed_eof()
+    client.process = SimpleNamespace(stdout=reader)  # type: ignore[assignment]
+
+    assert await client._read_message() == payload
+
+
+@pytest.mark.asyncio
+async def test_reader_failure_poisoned_client_rejects_next_send(tmp_path: Path) -> None:
+    client = client_with_store(tmp_path, NotificationStore())
+    reader = asyncio.StreamReader()
+    reader.feed_data(b"Content-Type: application/json\r\n\r\n")
+    reader.feed_eof()
+    client.process = SimpleNamespace(stdout=reader, stdin=object())  # type: ignore[assignment]
+    pending = asyncio.get_running_loop().create_future()
+    client._pending[1] = pending
+
+    await client._reader_loop()
+
+    with pytest.raises(RocqLspProcessExited, match="Missing Content-Length"):
+        await pending
+    with pytest.raises(RocqLspProcessExited, match="Missing Content-Length"):
+        await client._send({"jsonrpc": "2.0", "method": "test"})
+
+
+@pytest.mark.asyncio
+async def test_stderr_drain_handles_long_line_without_readline_limit(
+    tmp_path: Path,
+) -> None:
+    client = client_with_store(tmp_path, NotificationStore())
+    reader = asyncio.StreamReader(limit=64 * 1024)
+    long_line = b"x" * 200_000
+    reader.feed_data(long_line)
+    reader.feed_eof()
+    client.process = SimpleNamespace(stderr=reader)  # type: ignore[assignment]
+
+    await client._drain_stderr()
+
+    assert "".join(client.stderr_lines) == long_line.decode("ascii")
 
 
 @pytest.mark.asyncio

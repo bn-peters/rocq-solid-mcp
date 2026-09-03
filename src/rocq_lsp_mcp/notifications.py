@@ -33,18 +33,23 @@ class NotificationStore:
             self._handle_execution_info(params)
 
     def clear(self, uri: str, version: int) -> None:
-        self._diagnostics.pop((uri, version), None)
-        self._diagnostic_events.pop((uri, version), None)
-        self._file_progress.pop((uri, version), None)
-        self._file_perf_data.pop((uri, version), None)
-        self._perf_events.pop((uri, version), None)
-        self._execution_info.pop((uri, version), None)
-        self._execution_ranges.pop((uri, version), None)
-        self._execution_events.pop((uri, version), None)
-        if self._latest_progress_versions_by_uri.get(uri) == version:
-            self._latest_progress_versions_by_uri.pop(uri, None)
-        if self._latest_perf_versions_by_uri.get(uri) == version:
-            self._latest_perf_versions_by_uri.pop(uri, None)
+        # A session serializes calls for one URI, so starting a new version makes
+        # all notification payloads and waiter events for older versions stale.
+        for mapping in (
+            self._diagnostics,
+            self._diagnostic_events,
+            self._file_progress,
+            self._file_perf_data,
+            self._perf_events,
+            self._execution_info,
+            self._execution_ranges,
+            self._execution_events,
+        ):
+            for key in [key for key in mapping if key[0] == uri]:
+                mapping.pop(key, None)
+        self._latest_versions_by_uri.pop(uri, None)
+        self._latest_progress_versions_by_uri.pop(uri, None)
+        self._latest_perf_versions_by_uri.pop(uri, None)
 
     def _clear_stale_perf_data(self, uri: str, version: int | None) -> None:
         for key in list(self._file_perf_data):

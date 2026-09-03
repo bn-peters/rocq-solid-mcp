@@ -176,10 +176,11 @@ process as if `clear_cache=True` had been set.
   process cleanup.
 - `notifications.py` stores diagnostics, latest file-progress notifications,
   file performance data, and sentence execution notifications published by
-  `coq-lsp`.
+  `coq-lsp`, discarding older state whenever a new document version starts.
 - `pipeline.py` converts raw diagnostics plus source sentence and proof-state
   data into internal `Diagnostic` models without deciding what the MCP response
-  should include.
+  should include. It normalizes proof states only for spans referenced by a
+  diagnostic, avoiding work proportional to every proof span in large files.
 - `models.py` holds internal result models, `TimeoutContext`, and the
   `RenderOptions`-driven render step that applies agent-facing filtering,
   error-only check rendering, message limits, location formatting, timeout

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import codecs
 import json
 import os
 import shlex
@@ -15,6 +16,7 @@ from .notifications import NotificationStore
 
 
 TimeoutKind = Literal["request", "command", "after_error"]
+STDERR_CHUNK_SIZE = 64 * 1024
 
 
 class RocqLspResponseError(RuntimeError):
@@ -108,11 +110,13 @@ class RocqLspClient:
         self._pending: dict[int, asyncio.Future[dict[str, Any]]] = {}
         self._reader_task: asyncio.Task[None] | None = None
         self._stderr_task: asyncio.Task[None] | None = None
+        self._reader_failure: RocqLspProcessExited | None = None
         self.stderr_lines: list[str] = []
         self.restart_required_after_external_cancellation = False
 
     async def start(self) -> None:
         self._ensure_launcher_available()
+        self._reader_failure = None
         try:
             self.process = await asyncio.create_subprocess_exec(
                 *self.command,
@@ -560,6 +564,8 @@ class RocqLspClient:
         return request_id
 
     async def _send(self, message: dict[str, Any]) -> None:
+        if self._reader_failure is not None:
+            raise self._reader_failure
         process = self.process
         if process is None or process.stdin is None:
             raise RocqLspProcessExited("coq-lsp is not running")
@@ -578,9 +584,15 @@ class RocqLspClient:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
+            failure = (
+                exc
+                if isinstance(exc, RocqLspProcessExited)
+                else RocqLspProcessExited(f"coq-lsp JSON-RPC reader failed: {exc}")
+            )
+            self._reader_failure = failure
             for future in self._pending.values():
                 if not future.done():
-                    future.set_exception(exc)
+                    future.set_exception(failure)
 
     async def _read_message(self) -> dict[str, Any] | None:
         process = self.process
@@ -588,25 +600,32 @@ class RocqLspClient:
             raise RocqLspProcessExited("coq-lsp is not running")
 
         content_length: int | None = None
+        saw_header = False
         while True:
             line = await process.stdout.readline()
             if line == b"":
-                return None
-            line = line.strip()
-            if not line:
+                if not saw_header:
+                    return None
+                raise RocqLspProcessExited("coq-lsp stdout closed during headers")
+            if line in (b"\r\n", b"\n"):
+                if saw_header:
+                    break
                 continue
-            name, _, value = line.decode("ascii", errors="replace").partition(":")
+            saw_header = True
+            name, separator, value = line.decode(
+                "ascii", errors="replace"
+            ).rstrip("\r\n").partition(":")
+            if not separator:
+                raise ValueError("Malformed JSON-RPC header from coq-lsp")
             if name.lower() == "content-length":
+                if content_length is not None:
+                    raise ValueError("Duplicate Content-Length header from coq-lsp")
                 content_length = int(value.strip())
-            break
-
-        while True:
-            line = await process.stdout.readline()
-            if line in (b"\r\n", b"\n", b""):
-                break
 
         if content_length is None:
             raise ValueError("Missing Content-Length header from coq-lsp")
+        if content_length < 0:
+            raise ValueError("Negative Content-Length header from coq-lsp")
 
         body = await process.stdout.readexactly(content_length)
         return json.loads(body.decode("utf-8"))
@@ -644,13 +663,30 @@ class RocqLspClient:
         process = self.process
         if process is None or process.stderr is None:
             return
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        pending = ""
         try:
-            while line := await process.stderr.readline():
-                self.stderr_lines.append(line.decode("utf-8", errors="replace").rstrip())
-                if len(self.stderr_lines) > 200:
-                    del self.stderr_lines[:100]
+            while chunk := await process.stderr.read(STDERR_CHUNK_SIZE):
+                pending += decoder.decode(chunk)
+                lines = pending.split("\n")
+                pending = lines.pop()
+                for line in lines:
+                    self._append_stderr_line(line.rstrip("\r"))
+                # A diagnostic need not contain a newline. Store fragments so
+                # draining never depends on asyncio's line-length limit.
+                if len(pending) >= STDERR_CHUNK_SIZE:
+                    self._append_stderr_line(pending)
+                    pending = ""
+            pending += decoder.decode(b"", final=True)
+            if pending:
+                self._append_stderr_line(pending.rstrip("\r"))
         except asyncio.CancelledError:
             raise
+
+    def _append_stderr_line(self, line: str) -> None:
+        self.stderr_lines.append(line)
+        if len(self.stderr_lines) > 200:
+            del self.stderr_lines[:100]
 
     @staticmethod
     def _result_or_raise(raw: dict[str, Any]) -> dict[str, Any]:

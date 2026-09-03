@@ -44,14 +44,17 @@ string.
   lets callers wait briefly for diagnostics, performance data, or execution
   changes for a requested document version. It also exposes
   `has_error_diagnostic`/`wait_for_error_diagnostic` (exact document version
-  only) for the after-error deadline.
+  only) for the after-error deadline. Starting a new document version clears
+  all older notification payloads and waiter events for that URI.
 - `src/rocq_lsp_mcp/pipeline.py` normalizes raw diagnostics into compact
   internal `Diagnostic` models. It attaches the source sentence and proof
-  states by matching sentence ranges, merges supplemental `proof/goals` results
+  states by matching sentence ranges, normalizing only spans referenced by a
+  diagnostic, and merges supplemental `proof/goals` results
   for incomplete proof saves, and leaves response filtering and truncation to
   the render step.
 - `src/rocq_lsp_mcp/rocq_client.py` is the manual stdio JSON-RPC client for
-  `coq-lsp`. It handles `Content-Length` framing, `initialize`, server
+  `coq-lsp`. It handles order-independent `Content-Length` framing, chunked
+  stderr draining, reader-failure session invalidation, `initialize`, server
   requests, `coq/getDocument`, `proof/goals`, `petanque/run_at_point`,
   soft request deadlines, host cancellation cleanup, optional per-command
   watchdog cancellation with the after-error deadline, process cleanup, and
