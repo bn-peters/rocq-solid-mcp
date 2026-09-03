@@ -164,6 +164,36 @@ async def test_stderr_drain_handles_long_line_without_readline_limit(
 
 
 @pytest.mark.asyncio
+async def test_process_failure_message_reports_signal_and_recent_stderr(
+    tmp_path: Path,
+) -> None:
+    client = client_with_store(tmp_path, NotificationStore())
+    client.process = SimpleNamespace(returncode=-9)  # type: ignore[assignment]
+    client.stderr_lines = [f"line {index}" for index in range(25)]
+
+    message = await client.process_failure_message(
+        RocqLspProcessExited("coq-lsp stdout closed")
+    )
+
+    assert message.startswith(
+        "coq-lsp stdout closed. coq-lsp exited with signal SIGKILL (9). stderr:\n"
+    )
+    assert "line 4\n" not in message
+    assert "line 5\n" in message
+    assert message.endswith("line 24")
+
+
+@pytest.mark.asyncio
+async def test_process_failure_message_reports_exit_code(tmp_path: Path) -> None:
+    client = client_with_store(tmp_path, NotificationStore())
+    client.process = SimpleNamespace(returncode=2)  # type: ignore[assignment]
+
+    message = await client.process_failure_message(ConnectionResetError("broken pipe"))
+
+    assert message == "broken pipe. coq-lsp exited with code 2"
+
+
+@pytest.mark.asyncio
 async def test_request_get_document_does_not_timeout_when_commands_advance(
     tmp_path: Path,
 ) -> None:

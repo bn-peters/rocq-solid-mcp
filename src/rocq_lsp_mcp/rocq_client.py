@@ -4,6 +4,7 @@ import asyncio
 import codecs
 import json
 import os
+import signal
 import shlex
 import shutil
 from contextlib import suppress
@@ -688,6 +689,30 @@ class RocqLspClient:
         if len(self.stderr_lines) > 200:
             del self.stderr_lines[:100]
 
+    async def process_failure_message(self, exc: BaseException) -> str:
+        """Add child exit status and recent stderr to a transport failure."""
+        await self._collect_process_stderr()
+        message = str(exc)
+        process = self.process
+        returncode = process.returncode if process is not None else None
+        if returncode is not None:
+            if returncode < 0:
+                signal_number = -returncode
+                try:
+                    signal_name = signal.Signals(signal_number).name
+                except ValueError:
+                    signal_name = "unknown signal"
+                message += (
+                    f". coq-lsp exited with signal {signal_name} "
+                    f"({signal_number})"
+                )
+            else:
+                message += f". coq-lsp exited with code {returncode}"
+        stderr = "\n".join(self.stderr_lines[-20:]).strip()
+        if stderr:
+            message += f". stderr:\n{stderr}"
+        return message
+
     @staticmethod
     def _result_or_raise(raw: dict[str, Any]) -> dict[str, Any]:
         if "error" in raw:
@@ -728,7 +753,7 @@ class RocqLspClient:
         return f"Unable to start coq-lsp: {reason}. Tried command: {tried}. {advice}"
 
     async def _startup_failure_message(self, exc: Exception) -> str:
-        await self._collect_startup_stderr()
+        await self._collect_process_stderr()
         message = (
             "Unable to start coq-lsp: the server exited or failed during "
             f"initialization. Tried command: {shlex.join(self.command)}. "
@@ -744,7 +769,7 @@ class RocqLspClient:
         )
         return message
 
-    async def _collect_startup_stderr(self) -> None:
+    async def _collect_process_stderr(self) -> None:
         process = self.process
         if process is not None and process.returncode is None:
             with suppress(Exception):

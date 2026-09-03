@@ -64,6 +64,7 @@ class FakeClient:
         self.closed = False
         self.pending_cleared = False
         self.hard_timeout = False
+        self.process_failure_message_text: str | None = None
 
     async def notify_document_opened(
         self, file_path: Path, content: str, version: int
@@ -188,6 +189,10 @@ class FakeClient:
 
     async def kill_server(self) -> None:
         self.killed = True
+
+    async def process_failure_message(self, exc: BaseException) -> str:
+        self.events.append("process_failure_message")
+        return self.process_failure_message_text or str(exc)
 
     async def close(self) -> None:
         self.closed = True
@@ -1742,6 +1747,10 @@ async def test_check_file_resets_session_when_process_exits(tmp_path: Path) -> N
     source.write_text("Check nat.\n", encoding="utf-8")
     notifications = SpyNotificationStore()
     client = FakeClient(notifications)
+    client.process_failure_message_text = (
+        "coq-lsp stdout closed. coq-lsp exited with signal SIGKILL (9). "
+        "stderr:\nFatal error: out of memory"
+    )
     manager = FakeManager(client, notifications, tmp_path)
 
     async def dead_get_document(**kwargs: Any) -> GetDocumentResult:
@@ -1753,7 +1762,8 @@ async def test_check_file_resets_session_when_process_exits(tmp_path: Path) -> N
 
     assert result.status == "failed"
     assert result.restarted is True
-    assert "coq-lsp stdout closed" in (result.message or "")
+    assert result.message == client.process_failure_message_text
+    assert "process_failure_message" in client.events
     assert client.pending_cleared is True
     assert client.killed is True
     assert source.resolve() not in manager._sessions
@@ -1765,6 +1775,9 @@ async def test_run_at_resets_session_when_process_exits(tmp_path: Path) -> None:
     source.write_text("Check nat.\n", encoding="utf-8")
     notifications = SpyNotificationStore()
     client = FakeClient(notifications)
+    client.process_failure_message_text = (
+        "broken pipe. coq-lsp exited with code 2. stderr:\nFatal error"
+    )
     manager = FakeManager(client, notifications, tmp_path)
 
     async def dead_run_at(**kwargs: Any) -> tuple[dict[str, Any], bool]:
@@ -1776,6 +1789,8 @@ async def test_run_at_resets_session_when_process_exits(tmp_path: Path) -> None:
 
     assert result.status == "failed"
     assert result.restarted is True
+    assert result.message == client.process_failure_message_text
+    assert "process_failure_message" in client.events
     assert client.pending_cleared is True
     assert client.killed is True
     assert source.resolve() not in manager._sessions

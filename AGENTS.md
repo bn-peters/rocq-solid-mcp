@@ -58,7 +58,9 @@ string.
   requests, `coq/getDocument`, `proof/goals`, `petanque/run_at_point`,
   soft request deadlines, host cancellation cleanup, optional per-command
   watchdog cancellation with the after-error deadline, process cleanup, and
-  dispatches notifications to `NotificationStore`.
+  dispatches notifications to `NotificationStore`. Mid-request process-exit
+  failures include the child exit code or POSIX signal and the last 20 captured
+  stderr lines when available.
 - `src/rocq_lsp_mcp/pretty.py` converts rocq-lsp serialized pretty-print trees
   such as `Pp_glue`, `Pp_box`, and `Pp_print_break` into readable text, then
   normalizes proof-state payloads into compact agent-facing JSON. Goal
@@ -280,8 +282,9 @@ so the next call starts with a fresh `coq-lsp`. Hard-timeout responses still
 include timeout context built from any latest progress notification observed
 before the session reset. If the `coq-lsp` process dies mid-request (a broken
 pipe or closed stdout), the manager likewise resets the session and returns
-`status: "failed"` with `restarted` set, so the next call starts fresh instead
-of reusing the dead process.
+`status: "failed"` with `restarted` set, its exit code or POSIX signal, and the
+last 20 stderr lines when available, so the next call starts fresh instead of
+reusing the dead process.
 
 ## Configuration
 
