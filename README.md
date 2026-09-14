@@ -22,6 +22,9 @@ The MCP exposes two tools:
 
 ## Installation
 
+Ben's Rocq MCP appears to be more stable on OCaml 5 than on OCaml 4.
+Consider upgrading if you're experiencing crashes.
+
 This package depends on a patched version of `coq-lsp`. It is compatible with
 Rocq 9.0, 9.1, and 9.2. To install it:
 ```bash
