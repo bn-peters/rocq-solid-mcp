@@ -463,6 +463,7 @@ class RocqLspManager:
                 uri, version
             )
             diagnostics = build_diagnostics(raw_diagnostics, None, content=content)
+            message = await client.process_failure_message(exc)
             await self._reset_session(session_key)
             return CheckResult.from_diagnostics(
                 status="failed",
@@ -473,7 +474,7 @@ class RocqLspManager:
                 completed=None,
                 diagnostics=diagnostics,
                 restarted=True,
-                message=str(exc),
+                message=message,
             )
         except Exception as exc:
             raw_diagnostics = await session.notifications.wait_for_diagnostics(
@@ -582,6 +583,7 @@ class RocqLspManager:
         except (RocqLspProcessExited, ConnectionError) as exc:
             # The coq-lsp process died mid-request; reset so the next call
             # starts a fresh process.
+            message = await client.process_failure_message(exc)
             await self._reset_session(session_key)
             return RunAtResult.from_feedback(
                 status="failed",
@@ -593,7 +595,7 @@ class RocqLspManager:
                 version=version,
                 feedback=[],
                 restarted=True,
-                message=str(exc),
+                message=message,
             )
         except Exception as exc:
             return RunAtResult.from_feedback(

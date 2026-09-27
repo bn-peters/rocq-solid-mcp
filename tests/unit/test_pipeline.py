@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import pytest
+
+import rocq_lsp_mcp.pipeline as pipeline
 from rocq_lsp_mcp.pipeline import build_diagnostics
 
 
@@ -72,6 +75,36 @@ def test_build_diagnostics_falls_back_to_diagnostic_range() -> None:
 
     assert result[0].sentence == "exact"
     assert result[0].proof_state == {"goals": [{"conclusion": "Foo"}]}
+
+
+def test_build_diagnostics_normalizes_only_diagnostic_proof_states(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    wanted_range = _range(0, 4)
+    unused_range = _range(5, 9)
+    normalized: list[Any] = []
+    original = pipeline.normalize_proof_state
+
+    def spy(value: Any) -> Any:
+        normalized.append(value)
+        return original(value)
+
+    monkeypatch.setattr(pipeline, "normalize_proof_state", spy)
+    wanted_goals = {"goals": [{"info": {}, "hyps": [], "ty": "Wanted"}]}
+    unused_goals = {"goals": [{"info": {}, "hyps": [], "ty": "Unused"}]}
+
+    result = build_diagnostics(
+        [{"range": wanted_range, "message": "bad", "severity": 1}],
+        {
+            "spans": [
+                {"range": unused_range, "goals": unused_goals},
+                {"range": wanted_range, "goals": wanted_goals},
+            ]
+        },
+    )
+
+    assert normalized == [wanted_goals]
+    assert result[0].proof_state == {"goals": [{"conclusion": "Wanted"}]}
 
 
 def test_build_diagnostics_merges_supplemental_incomplete_proof_goals() -> None:

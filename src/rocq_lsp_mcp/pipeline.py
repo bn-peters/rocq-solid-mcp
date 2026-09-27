@@ -14,7 +14,10 @@ def build_diagnostics(
     content: str | None = None,
     supplemental_proof_states: dict[str, Any] | None = None,
 ) -> list[Diagnostic]:
-    proof_states = _proof_states_by_range(document)
+    diagnostic_range_keys = {
+        _range_key(_diagnostic_sentence_range(diagnostic)) for diagnostic in raw
+    }
+    proof_states = _proof_states_by_range(document, diagnostic_range_keys)
     _merge_supplemental_proof_states(proof_states, supplemental_proof_states)
     diagnostics: list[Diagnostic] = []
     for diagnostic in raw:
@@ -33,7 +36,10 @@ def build_diagnostics(
     return diagnostics
 
 
-def _proof_states_by_range(document: dict[str, Any] | None) -> dict[str, Any]:
+def _proof_states_by_range(
+    document: dict[str, Any] | None,
+    wanted_range_keys: set[str],
+) -> dict[str, Any]:
     if not document:
         return {}
     states: dict[str, Any] = {}
@@ -43,9 +49,12 @@ def _proof_states_by_range(document: dict[str, Any] | None) -> dict[str, Any]:
         goals = span.get("goals")
         range_ = span.get("range")
         if goals is not None and isinstance(range_, dict):
+            key = _range_key(range_)
+            if key not in wanted_range_keys:
+                continue
             normalized = normalize_proof_state(goals)
             if not is_empty_value(normalized):
-                states[_range_key(range_)] = normalized
+                states[key] = normalized
     return states
 
 

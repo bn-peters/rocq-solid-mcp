@@ -179,10 +179,11 @@ process as if `clear_cache=True` had been set.
   process cleanup.
 - `notifications.py` stores diagnostics, latest file-progress notifications,
   file performance data, and sentence execution notifications published by
-  `coq-lsp`.
+  `coq-lsp`, discarding older state whenever a new document version starts.
 - `pipeline.py` converts raw diagnostics plus source sentence and proof-state
   data into internal `Diagnostic` models without deciding what the MCP response
-  should include.
+  should include. It normalizes proof states only for spans referenced by a
+  diagnostic, avoiding work proportional to every proof span in large files.
 - `models.py` holds internal result models, `TimeoutContext`, and the
   `RenderOptions`-driven render step that applies agent-facing filtering,
   error-only check rendering, message limits, location formatting, timeout
@@ -209,6 +210,11 @@ file is found, the file's parent directory is used. Each requested file gets
 its own cached `coq-lsp` process, while the process still starts as
 `opam exec -- coq-lsp` with `cwd` set to the inferred workspace so local opam
 switches select the matching Rocq and `coq-lsp` versions.
+
+If `coq-lsp` exits or closes its transport during a check or `run_at` request,
+the failed response includes its exit code (or POSIX signal) and the last 20
+captured stderr lines when available. The manager then drops the dead session,
+so `restarted: true` indicates that the next request will start a fresh process.
 
 Before a check or `run_at` call, the manager tries to detect dune-based Rocq
 projects. If

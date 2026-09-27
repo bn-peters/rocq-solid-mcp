@@ -218,6 +218,32 @@ def test_notification_store_clears_versioned_file_progress() -> None:
 
 
 @pytest.mark.asyncio
+async def test_notification_store_clear_removes_all_stale_uri_versions() -> None:
+    store = NotificationStore()
+    uri = "file:///Demo.v"
+    other_uri = "file:///Other.v"
+    for version in (None, 2, 3):
+        store.handle(
+            "textDocument/publishDiagnostics",
+            {"uri": uri, "version": version, "diagnostics": [{"message": version}]},
+        )
+        store.handle("$/coq/fileProgress", file_progress(version=version))
+    store.handle(
+        "textDocument/publishDiagnostics",
+        {"uri": other_uri, "version": 1, "diagnostics": [{"message": "other"}]},
+    )
+
+    store.clear(uri, 4)
+
+    assert not any(key[0] == uri for key in store._diagnostics)
+    assert not any(key[0] == uri for key in store._file_progress)
+    assert await store.wait_for_diagnostics(uri, 4, settle_seconds=0) == []
+    assert await store.wait_for_diagnostics(other_uri, 1, settle_seconds=0) == [
+        {"message": "other"}
+    ]
+
+
+@pytest.mark.asyncio
 async def test_notification_store_returns_versioned_file_perf_data() -> None:
     store = NotificationStore()
     perf_data = file_perf_data(version=3)
