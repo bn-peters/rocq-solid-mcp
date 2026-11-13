@@ -5,8 +5,8 @@ from typing import Any
 
 import pytest
 
-import rocq_lsp_mcp.pipeline as pipeline
-from rocq_lsp_mcp.pipeline import build_diagnostics
+import rocq_solid_mcp.pipeline as pipeline
+from rocq_solid_mcp.pipeline import build_diagnostics
 
 
 def test_build_diagnostics_attaches_proof_state_by_sentence_range() -> None:

@@ -7,19 +7,19 @@ from typing import Any
 
 import pytest
 
-from rocq_lsp_mcp.config import (
+from rocq_solid_mcp.config import (
     MAX_OVERALL_TIMEOUT_SECONDS,
     RocqLspConfig,
     TimeoutPolicy,
 )
-from rocq_lsp_mcp.manager import (
+from rocq_solid_mcp.manager import (
     DuneBuildResult,
     RocqLspManager,
     _dune_reported_build_actions,
 )
-from rocq_lsp_mcp.models import RenderOptions
-from rocq_lsp_mcp.notifications import NotificationStore
-from rocq_lsp_mcp.rocq_client import (
+from rocq_solid_mcp.models import RenderOptions
+from rocq_solid_mcp.notifications import NotificationStore
+from rocq_solid_mcp.rocq_client import (
     GetDocumentResult,
     RocqLspHardTimeout,
     RocqLspProcessExited,
@@ -27,7 +27,7 @@ from rocq_lsp_mcp.rocq_client import (
     RocqLspUnavailableError,
     language_id_for_path,
 )
-from rocq_lsp_mcp.session import RocqLspSession
+from rocq_solid_mcp.session import RocqLspSession
 
 
 class FakeClient:

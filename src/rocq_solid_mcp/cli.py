@@ -47,7 +47,7 @@ async def _check(file: str, output: TextIO) -> int:
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="bens-rocq-mcp")
+    parser = argparse.ArgumentParser(prog="rocq-solid-mcp")
     subcommands = parser.add_subparsers(dest="command", required=True)
 
     check = subcommands.add_parser(

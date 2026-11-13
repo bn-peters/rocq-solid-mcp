@@ -133,7 +133,7 @@ class RocqLspClient:
                 "initialize",
                 {
                     "processId": os.getpid(),
-                    "clientInfo": {"name": "bens-rocq-mcp"},
+                    "clientInfo": {"name": "rocq-solid-mcp"},
                     "rootPath": str(self.workspace),
                     "rootUri": self.workspace.as_uri(),
                     "workspaceFolders": [

@@ -1,4 +1,4 @@
-"""Prototype MCP server for Rocq interaction via rocq-lsp."""
+"""RocqSolid: an MCP server for Rocq proof development via rocq-lsp."""
 
 from .manager import RocqLspManager
 from .models import CheckResult

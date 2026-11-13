@@ -10,9 +10,9 @@ from typing import Any
 
 import pytest
 
-from rocq_lsp_mcp.config import RocqLspConfig, TimeoutPolicy
-from rocq_lsp_mcp.manager import RocqLspManager
-from rocq_lsp_mcp.models import RunAtResult, CheckResult
+from rocq_solid_mcp.config import RocqLspConfig, TimeoutPolicy
+from rocq_solid_mcp.manager import RocqLspManager
+from rocq_solid_mcp.models import RunAtResult, CheckResult
 
 CASES_DIR = Path(__file__).parent / "cases"
 

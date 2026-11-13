@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from rocq_lsp_mcp.notifications import NotificationStore
+from rocq_solid_mcp.notifications import NotificationStore
 
 
 def file_progress(version: int | None = 3) -> dict[str, object]:

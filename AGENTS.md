@@ -1,8 +1,8 @@
-# bens-rocq-mcp Guide
+# RocqSolid (rocq-solid-mcp) Guide
 
 It is the duty of the agent to keep AGENTS.md and README.md up to date.
 
-This package is a Python MCP prototype for checking Rocq files and running
+This package (`rocq-solid-mcp` on PyPI, MIT-licensed) is a Python MCP server for checking Rocq files and running
 one-off Rocq commands through persistent file-scoped `coq-lsp` sessions.
 Checking returns compact structured diagnostics and, when available, the source
 sentence plus proof-state context for the sentence that produced an error.
@@ -11,13 +11,15 @@ string.
 
 ## Package Layout
 
-- `src/rocq_lsp_mcp/cli.py` defines the `bens-rocq-mcp` console entry point.
-  With no arguments it starts the MCP server. `bens-rocq-mcp check
+- `src/rocq_solid_mcp/cli.py` defines the `rocq-solid-mcp` console entry point
+  (also installed under the legacy name `bens-rocq-mcp`; keep both in
+  `pyproject.toml`). With no arguments it starts the MCP server.
+  `rocq-solid-mcp check
   path/to/file.v` runs a one-shot check through `RocqLspManager` and prints
   formatted JSON with no diagnostic message limit, no request timeout, no
   per-sentence command timeout, no after-error deadline, and no long-running
   command reporting.
-- `src/rocq_lsp_mcp/server.py` defines the FastMCP server, the lifespan-managed
+- `src/rocq_solid_mcp/server.py` defines the FastMCP server, the lifespan-managed
   `RocqLspManager`, and the MCP tools
   `rocq_check_file(file: str,
   command_timeout_seconds: float | None = None,
@@ -26,16 +28,16 @@ string.
   `rocq_run_at(file: str, commands: str, line: int,
   character: int = 1)`.
   Tool handlers render internal result models before returning MCP output.
-- `src/rocq_lsp_mcp/manager.py` is the orchestration layer. It resolves files,
+- `src/rocq_solid_mcp/manager.py` is the orchestration layer. It resolves files,
   infers workspaces from `_RocqProject` or `_CoqProject`, keeps cached
   sessions per resolved file path, evicts idle sessions, reads files, routes
   check and `run_at` requests, and converts outcomes into `CheckResult` or
   `RunAtResult`.
-- `src/rocq_lsp_mcp/session.py` owns the lifecycle for one file-scoped,
+- `src/rocq_solid_mcp/session.py` owns the lifecycle for one file-scoped,
   workspace-backed `coq-lsp` session. It starts and stops the client, keeps
   the session lock, tracks document versions, and owns the session
   `NotificationStore`.
-- `src/rocq_lsp_mcp/notifications.py` stores LSP notification state. It handles
+- `src/rocq_solid_mcp/notifications.py` stores LSP notification state. It handles
   `textDocument/publishDiagnostics`, tracks latest diagnostic versions by URI,
   stores latest `$/coq/fileProgress` payloads by URI/version for timeout
   context, stores `$/coq/filePerfData` payloads by URI/version for
@@ -46,13 +48,13 @@ string.
   `has_error_diagnostic`/`wait_for_error_diagnostic` (exact document version
   only) for the after-error deadline. Starting a new document version clears
   all older notification payloads and waiter events for that URI.
-- `src/rocq_lsp_mcp/pipeline.py` normalizes raw diagnostics into compact
+- `src/rocq_solid_mcp/pipeline.py` normalizes raw diagnostics into compact
   internal `Diagnostic` models. It attaches the source sentence and proof
   states by matching sentence ranges, normalizing only spans referenced by a
   diagnostic, and merges supplemental `proof/goals` results
   for incomplete proof saves, and leaves response filtering and truncation to
   the render step.
-- `src/rocq_lsp_mcp/rocq_client.py` is the manual stdio JSON-RPC client for
+- `src/rocq_solid_mcp/rocq_client.py` is the manual stdio JSON-RPC client for
   `coq-lsp`. It handles order-independent `Content-Length` framing, chunked
   stderr draining, reader-failure session invalidation, `initialize`, server
   requests, `coq/getDocument`, `proof/goals`, `petanque/run_at_point`,
@@ -61,11 +63,11 @@ string.
   dispatches notifications to `NotificationStore`. Mid-request process-exit
   failures include the child exit code or POSIX signal and the last 20 captured
   stderr lines when available.
-- `src/rocq_lsp_mcp/pretty.py` converts rocq-lsp serialized pretty-print trees
+- `src/rocq_solid_mcp/pretty.py` converts rocq-lsp serialized pretty-print trees
   such as `Pp_glue`, `Pp_box`, and `Pp_print_break` into readable text, then
   normalizes proof-state payloads into compact agent-facing JSON. Goal
   hypotheses are rendered as strings like `H : True` or `n := 0 : nat`.
-- `src/rocq_lsp_mcp/models.py` contains the internal Pydantic result models,
+- `src/rocq_solid_mcp/models.py` contains the internal Pydantic result models,
   `TimeoutContext`, and `RenderOptions`. Internal models keep normalized raw
   ranges, document metadata, diagnostics, source sentences, proof states,
   long-running command data, and timeout state.
@@ -82,14 +84,14 @@ string.
   lack `proof_name`. Rendering caps returned error diagnostics at 10 by default
   with a hard cap of 50, and includes compact `timeout_context` only for
   timeout results.
-- `src/rocq_lsp_mcp/config.py` loads environment configuration, defines
+- `src/rocq_solid_mcp/config.py` loads environment configuration, defines
   `TimeoutPolicy`, builds the `opam exec -- coq-lsp` command, and builds the
   `coq-lsp` initialization settings. `send_execinfo` is enabled so per-call
   command timeouts can be used without restarting sessions, and
   `send_perf_data` is enabled so check calls can report long-running
   commands.
 
-The prototype intentionally talks to `coq-lsp` directly. Do not reintroduce an
+The server intentionally talks to `coq-lsp` directly. Do not reintroduce an
 LSP client library unless the user explicitly asks for that direction.
 The main source of documentation on `coq-lsp` is the upstream protocol guide:
 https://github.com/rocq-community/rocq-lsp/blob/main/etc/doc/PROTOCOL.md
@@ -288,7 +290,7 @@ reusing the dead process.
 
 ## Configuration
 
-The prototype reads these environment variables:
+The server reads these environment variables:
 
 - `ROCQ_LSP_BINARY`, default `coq-lsp`
 - `ROCQ_LSP_USE_OPAM`, default `1`; set to `0` to run the binary directly
@@ -310,7 +312,7 @@ The prototype reads these environment variables:
 - `ROCQ_LSP_DUNE_TIMEOUT`, default `55`, capped at `3600`; limits each dune
   detection or dependency-build command
 
-The prototype is intentionally not security-hardened. Do not add path sandboxing
+The server is intentionally not security-hardened. Do not add path sandboxing
 or command restrictions unless the task specifically asks for it.
 
 ## Development Commands
@@ -358,22 +360,25 @@ invoke `rocq` and generate `_RocqProject`. The deprecated `(using coq ...)` /
 `(coq.theory ...)` build language shells out to `coqc` and therefore fails in
 this switch.
 
-## GitLab CI
+## CI and Releases
 
-The GitLab pipeline lives entirely in `.gitlab-ci.yml`; do not move CI setup
-into an auxiliary script unless the user explicitly asks for that. The pipeline
-runs `make test` in a matrix over `rocq-core` 9.0.0, 9.1.0, and 9.2.0. Each job
-uses `ocaml/opam:ubuntu-24.04-ocaml-5.2`, adds the `coq-released` and `bpeters`
-opam repositories, installs native apt prerequisites including
-`build-essential`, `libgmp-dev`, `m4`, and `pkg-config`, installs the pinned
-`rocq-core` plus unconstrained `rocq-stdlib` and `bens-rocq-lsp`, creates
-`.venv/`, installs `.[dev]`, and then relies on the existing Makefile so tests
-run through `opam exec -- .venv/bin/python`. The pipeline caches pip downloads
-under `.cache/pip/` per branch and caches a project-local opam root under
-`.cache/opam/rocq-${ROCQ_CORE_VERSION}/` with a separate cache key for each
-Rocq version in the matrix. The cached opam root is initialized as a bare root
-and uses a `default` switch pinned to `ocaml-base-compiler.5.2.0`; cache reuse
-still depends on the GitLab runner having the local cache available.
+CI lives in `.github/workflows/ci.yml`; do not move CI setup into an auxiliary
+script unless the user explicitly asks for that. The `unit` job runs
+`tests/unit` on Python 3.11 through 3.14 without any Rocq toolchain. The
+`test` job runs `make test` in a matrix over `rocq-core` 9.0.0, 9.1.1, and
+9.2.0: it sets up OCaml 5.2 with `ocaml/setup-ocaml` (which also caches the
+opam root), adds the `coq-released` and `rocq-solid`
+(https://github.com/bn-peters/rocq-solid-mcp-opam) opam repositories, installs
+the pinned `rocq-core` plus unconstrained `rocq-stdlib` and
+`rocq-solid-mcp-lsp`, creates `.venv/` with `uv`, installs `.[dev]`, and then
+relies on the existing Makefile so tests run through
+`opam exec -- .venv/bin/python`.
+
+`.github/workflows/release.yml` publishes to PyPI via trusted publishing when a
+tag `vX.Y.Z` is pushed; it fails if the tag does not match `version` in
+`pyproject.toml`. The patched rocq-lsp lives on the `rocq-solid-9.x` branches of
+https://github.com/bn-peters/rocq-lsp and is packaged as `rocq-solid-mcp-lsp` in
+the opam repository above.
 
 ## Test Suite
 

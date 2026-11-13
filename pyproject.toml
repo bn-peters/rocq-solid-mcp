@@ -1,12 +1,32 @@
 [project]
-name = "bens-rocq-mcp"
-version = "0.1.0"
-description = "Prototype MCP server for cached Rocq checking via rocq-lsp"
-license = "Apache-2.0"
-requires-python = ">=3.12"
+name = "rocq-solid-mcp"
+version = "1.0.0"
+description = "RocqSolid: an MCP server for Rocq proof development, backed by rocq-lsp"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Benjamin Peters" }]
+requires-python = ">=3.11"
+keywords = ["rocq", "coq", "mcp", "proof assistant", "lsp", "agent"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
-    "fastmcp>=3.2.0",
-    "pydantic>=2.0",
+    "fastmcp>=4.1,<5",
+    "pydantic>=2.13,<3",
 ]
 
 [project.optional-dependencies]
@@ -16,11 +36,18 @@ dev = [
     "pytest-xdist>=3.6",
 ]
 
+[project.urls]
+Homepage = "https://github.com/bn-peters/rocq-solid-mcp"
+Repository = "https://github.com/bn-peters/rocq-solid-mcp"
+Issues = "https://github.com/bn-peters/rocq-solid-mcp/issues"
+
 [project.scripts]
-bens-rocq-mcp = "rocq_lsp_mcp.cli:main"
+rocq-solid-mcp = "rocq_solid_mcp.cli:main"
+# Legacy name from before the rename; kept so existing configurations work.
+bens-rocq-mcp = "rocq_solid_mcp.cli:main"
 
 [build-system]
-requires = ["setuptools>=68.0"]
+requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
@@ -28,4 +55,5 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests/unit", "tests/integration", "tests/e2e"]

@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  unit:
+    name: Unit tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv venv .venv
+      - run: uv pip install -e ".[dev]"
+      - run: .venv/bin/python -m pytest -q -n auto tests/unit
+
+  test:
+    name: Full test suite (Rocq ${{ matrix.rocq }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        rocq: ["9.0.0", "9.1.1", "9.2.0"]
+    env:
+      OPAMCONFIRMLEVEL: unsafe-yes
+      OPAMYES: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: "5.2"
+          opam-repositories: |
+            default: https://github.com/ocaml/opam-repository.git
+            coq-released: https://coq.inria.fr/opam/released
+            rocq-solid: https://github.com/bn-peters/rocq-solid-mcp-opam.git
+      - run: opam install "rocq-core=${{ matrix.rocq }}" rocq-stdlib rocq-solid-mcp-lsp
+      - run: opam exec -- rocq --version && opam exec -- coq-lsp --version
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+      - run: uv venv .venv
+      - run: uv pip install -e ".[dev]"
+      - run: make test

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from rocq_lsp_mcp.config import RocqLspConfig, TimeoutPolicy
-from rocq_lsp_mcp.manager import RocqLspManager
+from rocq_solid_mcp.config import RocqLspConfig, TimeoutPolicy
+from rocq_solid_mcp.manager import RocqLspManager
 
 pytestmark = pytest.mark.skipif(
     shutil.which("opam") is None

@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from rocq_lsp_mcp.notifications import NotificationStore
-from rocq_lsp_mcp.rocq_client import (
+from rocq_solid_mcp.notifications import NotificationStore
+from rocq_solid_mcp.rocq_client import (
     RocqLspClient,
     RocqLspHardTimeout,
     RocqLspProcessExited,

@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from rocq_lsp_mcp import cli
-from rocq_lsp_mcp.models import CheckResult, Diagnostic
+from rocq_solid_mcp import cli
+from rocq_solid_mcp.models import CheckResult, Diagnostic
 
 
 class FakeManager:

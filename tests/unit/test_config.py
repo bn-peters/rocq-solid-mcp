@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from rocq_lsp_mcp.config import (
+from rocq_solid_mcp.config import (
     DEFAULT_COMMAND_TIMEOUT_SECONDS,
     DEFAULT_MESSAGE_LIMIT,
     DEFAULT_OVERALL_TIMEOUT_SECONDS,

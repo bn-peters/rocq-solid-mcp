@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from rocq_lsp_mcp.config import DEFAULT_MESSAGE_LIMIT, MAX_MESSAGE_LIMIT
-from rocq_lsp_mcp.models import (
+from rocq_solid_mcp.config import DEFAULT_MESSAGE_LIMIT, MAX_MESSAGE_LIMIT
+from rocq_solid_mcp.models import (
     RunAtResult,
     CheckResult,
     Diagnostic,

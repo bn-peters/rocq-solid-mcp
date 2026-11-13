@@ -8,8 +8,8 @@ from typing import Any, get_args, get_type_hints
 import pytest
 from pydantic.fields import FieldInfo
 
-from rocq_lsp_mcp.models import RunAtResult, CheckResult, Diagnostic
-from rocq_lsp_mcp.server import rocq_check_file, rocq_run_at
+from rocq_solid_mcp.models import RunAtResult, CheckResult, Diagnostic
+from rocq_solid_mcp.server import rocq_check_file, rocq_run_at
 
 
 class FakeManager:

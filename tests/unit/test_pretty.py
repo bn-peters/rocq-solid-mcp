@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from rocq_lsp_mcp.pretty import normalize_proof_state, pp_to_text
+from rocq_solid_mcp.pretty import normalize_proof_state, pp_to_text
 
 
 def test_pp_to_text_handles_common_rocq_lsp_nodes() -> None:

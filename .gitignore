@@ -12,3 +12,6 @@ _opam
 uv.lock
 .venv
 .codex
+dist/
+build/
+.venv-new
