@@ -129,7 +129,7 @@ All optional; defaults in parentheses.
 Join us on the Iris Mattermost!
 1. Go to the [GitLab log-in page](https://gitlab.mpi-sws.org/users/sign_in) and select the "GitHub" button, then log in with your GitHub account.
 2. Log in to Mattermost; this should use your GitLab login.
-3. Join the [RocqSolid](https://mattermost.mpi-sws.org/iris/channels/bens-rocq-mcp) channel.
+3. Join the [RocqSolid MCP](https://mattermost.mpi-sws.org/iris/channels/rocq-solid-mcp) channel.
 
 If you notice that your agent misbehaves with this MCP, please let us know! It
 would be particularly helpful if you could share your transcripts.
@@ -147,3 +147,5 @@ make test
 To release a new version, bump `version` in `pyproject.toml` and push a tag
 `vX.Y.Z`. The `release` GitHub workflow builds the package and publishes it to
 PyPI.
+
+To update `rocq-solid-mcp-lsp`, push new version tags to the repository, update the `opam` repository, and push the `opam` repository both got GitHub and GitLab.
